@@ -1,0 +1,144 @@
+<?php
+
+namespace App\Http\Controllers\Saas;
+
+use App\Http\Controllers\Controller;
+use App\Models\Emitente;
+use App\Services\Nfse\Certificado;
+use App\Support\Documento;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
+
+class EmitenteController extends Controller
+{
+    public function index()
+    {
+        $this->authorize('consultar');
+
+        return view('emitentes.index', ['emitentes' => Emitente::orderBy('razao_social')->get()]);
+    }
+
+    public function criar()
+    {
+        $this->authorize('gerenciar-emitentes');
+
+        return view('emitentes.form', ['emitente' => new Emitente(['serie_dps' => '00001', 'ambiente' => 2])]);
+    }
+
+    /**
+     * Lê o certificado enviado e devolve CNPJ, razão social e validade, para a tela preencher sozinha.
+     * Não grava nada: o arquivo só é guardado quando o usuário salva o emitente.
+     */
+    public function lerCertificado(Request $request)
+    {
+        $this->authorize('gerenciar-emitentes');
+
+        $request->validate(['certificado' => ['required', 'file', 'max:100'], 'certificado_senha' => ['required', 'string']], [
+            'certificado.required' => 'Escolha o arquivo do certificado.',
+            'certificado_senha.required' => 'Digite a senha do certificado.',
+        ]);
+
+        try {
+            $cert = new Certificado($request->file('certificado')->get(), $request->input('certificado_senha'));
+        } catch (RuntimeException) {
+            return response()->json(['message' => 'Não conseguimos abrir o certificado. Confira a senha e se o arquivo é um certificado A1 (.pfx ou .p12).'], 422);
+        }
+
+        $valido = $cert->validoAte();
+
+        return response()->json([
+            'razao_social' => $cert->razaoSocialProvavel(),
+            'cnpj'         => $cert->cnpjProvavel() ? Documento::formatar($cert->cnpjProvavel()) : null,
+            'valido_ate'   => $valido?->format('d/m/Y'),
+            'vencido'      => (bool) $valido?->isPast(),
+        ]);
+    }
+
+    public function editar(Emitente $emitente)
+    {
+        $this->authorize('gerenciar-emitentes');
+
+        return view('emitentes.form', compact('emitente'));
+    }
+
+    public function store(Request $request)
+    {
+        $this->authorize('gerenciar-emitentes');
+
+        return $this->salvar($request, new Emitente());
+    }
+
+    public function update(Request $request, Emitente $emitente)
+    {
+        $this->authorize('gerenciar-emitentes');
+
+        return $this->salvar($request, $emitente);
+    }
+
+    private function salvar(Request $request, Emitente $emitente)
+    {
+        $novo = ! $emitente->exists;
+
+        $dados = $request->validate([
+            'cnpj'                => ['required', fn ($a, $v, $f) => Documento::valido($v) && strlen(preg_replace('/\D/', '', $v)) === 14 ?: $f('CNPJ inválido.')],
+            'razao_social'        => ['required', 'string', 'max:255'],
+            'inscricao_municipal' => ['nullable', 'string', 'max:15'],
+            'codigo_municipio'    => ['required', 'digits:7'],
+            'op_simples_nacional' => ['required', 'in:1,2,3'],
+            'regime_apuracao_sn'  => ['nullable', 'required_if:op_simples_nacional,3', 'in:1,2,3'],
+            'regime_especial'     => ['required', 'in:0,1,2,3,4,5,6,9'],
+            'aliquota_simples'    => ['nullable', 'required_if:op_simples_nacional,3', 'numeric', 'between:0,100'],
+            'tributos_aprox'      => ['nullable', 'required_if:op_simples_nacional,1', 'array'],
+            'tributos_aprox.*'    => ['numeric', 'between:0,100'],
+            'serie_dps'           => ['required', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
+            'ambiente'            => ['required', 'in:1,2'],
+            'certificado'         => [$novo ? 'required' : 'nullable', 'file', 'max:100'],
+            'certificado_senha'   => ['required_with:certificado', 'nullable', 'string'],
+        ]);
+
+        $dados['cnpj'] = preg_replace('/\D/', '', $dados['cnpj']);
+        $dados['serie_dps'] = str_pad($dados['serie_dps'], 5, '0', STR_PAD_LEFT);
+
+        // Produção só depois de ter emitido em homologação (evita nota fiscal real por engano)
+        if ((int) $dados['ambiente'] === 1 && ! $emitente->notas()->where('status', 'emitida')->exists()) {
+            throw ValidationException::withMessages(['ambiente' => 'Emita ao menos uma nota em produção restrita antes de ativar produção.']);
+        }
+
+        $pfx = $request->file('certificado')?->get();
+        $cert = null;
+
+        if ($pfx) {
+            try {
+                $cert = new Certificado($pfx, $dados['certificado_senha']);
+            } catch (RuntimeException $e) {
+                throw ValidationException::withMessages(['certificado' => $e->getMessage()]);
+            }
+
+            if ($cert->validoAte()?->isPast()) {
+                throw ValidationException::withMessages(['certificado' => 'Certificado vencido (E1203).']);
+            }
+            if (($cnpjCert = $cert->cnpjProvavel()) && $cnpjCert !== $dados['cnpj']) {
+                throw ValidationException::withMessages(['certificado' => "O certificado é do CNPJ {$cnpjCert}, não do emitente."]);
+            }
+        }
+
+        DB::transaction(function () use ($emitente, $dados, $pfx, $cert) {
+            $emitente->fill(collect($dados)->except(['certificado', 'certificado_senha'])->all());
+            $emitente->save();
+
+            if ($pfx) {
+                $emitente->update([
+                    'certificado_arquivo'  => Certificado::guardar($emitente, $pfx),
+                    'certificado_senha'    => $dados['certificado_senha'],
+                    'certificado_validade' => $cert->validoAte(),
+                ]);
+            }
+        });
+
+        return $novo
+            ? redirect()->route('inicio')->with('ok', 'Empresa cadastrada. Agora é só importar a sua primeira planilha.')
+            : redirect()->route('emitentes.index')->with('ok', 'Empresa atualizada.');
+    }
+}

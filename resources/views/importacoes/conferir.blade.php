@@ -1,0 +1,273 @@
+<x-app-layout titulo="Conferir importação">
+    @php
+        $lendo = in_array($importacao->status, ['pendente', 'lendo'], true);
+        $falhou = $importacao->status === 'falhou';
+        $emTeste = $importacao->emitente->ambiente == 2;
+        $fmt = fn ($n) => number_format($n, 0, ',', '.');
+    @endphp
+
+    <div class="max-w-[1160px] mx-auto px-4 sm:px-8 py-8 space-y-6">
+        <div class="space-y-3">
+            <a href="{{ route('importacoes.index') }}" class="link text-sm">← Importações</a>
+            <h1 class="text-3xl font-semibold">Nova importação</h1>
+            <x-passos :atual="$lendo || $falhou ? 1 : 2" />
+        </div>
+
+        <div class="card p-4 sm:px-5 flex flex-wrap items-center gap-4">
+            <span class="w-11 h-11 rounded-lg bg-brand-100 text-ok-800 flex items-center justify-center font-mono text-xs font-medium" aria-hidden="true">{{ strtoupper(pathinfo($importacao->arquivo_nome, PATHINFO_EXTENSION)) }}</span>
+            <div class="flex-1 min-w-[200px]">
+                <div class="font-medium">{{ $importacao->arquivo_nome }}</div>
+                <div class="text-[13px] text-ink-600">
+                    @if ($lendo) lendo as linhas…
+                    @elseif ($falhou) não foi possível ler
+                    @else {{ $fmt($total) }} linhas lidas · {{ $importacao->emitente->razao_social }}
+                    @endif
+                </div>
+            </div>
+            @can('emitir')<a href="{{ route('importacoes.editar', $importacao) }}" class="btn btn-sm">Editar em tabela</a>@endcan
+            @unless ($importacao->reprocessada_de_id)<a href="{{ route('importacoes.criar') }}" class="btn btn-sm">Trocar arquivo</a>@endunless
+        </div>
+
+        @if ($falhou)
+            <div class="card p-6 border-warn-200 bg-warn-50">
+                <h2 class="text-lg font-semibold text-warn-900">Não conseguimos ler esta planilha</h2>
+                <p class="mt-1 text-[15px] text-warn-800">{{ $importacao->erro }}</p>
+                <div class="mt-4 flex gap-3 flex-wrap">
+                    <a href="{{ route('importacoes.modelo') }}" class="btn btn-sm">Baixar planilha modelo</a>
+                    <a href="{{ route('importacoes.criar') }}" class="btn btn-primary btn-sm">Enviar outro arquivo</a>
+                </div>
+            </div>
+
+        @elseif ($lendo)
+            <div class="card p-10 text-center"
+                 x-data x-init="const t = setInterval(async () => { const r = await fetch('{{ route('importacoes.progresso', $importacao) }}', { headers: { Accept: 'application/json' } }); if (r.ok) { const d = await r.json(); if (!['pendente','lendo'].includes(d.status)) { clearInterval(t); location.reload(); } } }, 2000)">
+                <div class="mx-auto w-10 h-10 rounded-full border-4 border-brand-100 border-t-brand-600 animate-spin" role="status" aria-label="Lendo a planilha"></div>
+                <h2 class="mt-4 text-lg font-semibold">Lendo e conferindo a sua planilha…</h2>
+                <p class="mt-1 text-[15px] text-ink-700">Isso leva alguns segundos. Nada é emitido nem cobrado nesta etapa.</p>
+            </div>
+
+        @else
+        <div class="flex flex-wrap gap-6 items-start">
+
+            <div class="flex-[999_1_620px] min-w-0 space-y-5">
+                <div class="card p-5 sm:p-6 space-y-4">
+                    <h2 class="text-xl font-semibold">
+                        @if ($prontas && $qtdInvalidas) Encontramos {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota pronta' : 'notas prontas' }} e {{ $fmt($qtdInvalidas) }} com problema
+                        @elseif ($prontas) Tudo certo: {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota pronta' : 'notas prontas' }} para emitir
+                        @else Nenhuma nota pronta ainda: {{ $fmt($qtdInvalidas) }} com problema
+                        @endif
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                        <div class="rounded-xl bg-ok-50 border border-brand-200 p-4"><div class="font-mono text-3xl font-semibold text-ok-800">{{ $fmt($prontas) }}</div><div class="text-sm font-medium text-ok-800">prontas para emitir</div></div>
+                        <div class="rounded-xl {{ $qtdInvalidas ? 'bg-warn-50 border-warn-200' : 'bg-chao border-linha' }} border p-4"><div class="font-mono text-3xl font-semibold {{ $qtdInvalidas ? 'text-warn-800' : '' }}">{{ $fmt($qtdInvalidas) }}</div><div class="text-sm font-medium {{ $qtdInvalidas ? 'text-warn-800' : 'text-ink-700' }}">precisam de correção</div></div>
+                        <div class="rounded-xl bg-chao border border-linha p-4"><div class="font-mono text-2xl font-semibold leading-9">R$ {{ number_format($somaValores, 2, ',', '.') }}</div><div class="text-sm font-medium text-ink-700">soma das notas prontas</div></div>
+                    </div>
+
+                    <div class="rounded-lg bg-chao px-4 py-3.5 text-sm leading-relaxed text-ink-900">
+                        <b>Custo:</b> {{ $fmt($prontas) }} {{ $prontas === 1 ? 'crédito será reservado' : 'créditos serão reservados' }}.
+                        Você tem <b class="font-mono">{{ $fmt($saldo) }}</b>@unless ($semSaldo) e fica com <b class="font-mono">{{ $fmt($saldoDepois) }}</b>@endunless.
+                        Nota recusada ou que falhar devolve o crédito.
+                    </div>
+                    @if ($semSaldo && $prontas)
+                        <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3.5 text-sm text-amber-900">
+                            <b>Saldo insuficiente para tudo.</b> Se você enviar agora, as primeiras {{ $fmt(max($saldo, 0)) }} saem e as outras {{ $fmt($prontas - max($saldo, 0)) }} ficam <b>aguardando crédito</b>, voltando sozinhas depois da recarga.
+                            @can('comprar-creditos')<a href="{{ route('creditos.index') }}" class="link ms-1">Recarregar antes</a>@endcan
+                        </div>
+                    @endif
+
+                    <div class="border-t border-gray-200 pt-4">
+                        <h3 class="text-sm font-semibold mb-2">Depois de enviar</h3>
+                        <ul class="grid sm:grid-cols-3 gap-x-6 gap-y-2 text-sm text-ink-700">
+                            <li class="flex gap-2"><span class="text-brand-600" aria-hidden="true">●</span>As notas saem em segundo plano, cerca de {{ config('nfse.limite_por_minuto', 60) }} por minuto.</li>
+                            <li class="flex gap-2"><span class="text-brand-600" aria-hidden="true">●</span>Você pode fechar a página.</li>
+                            <li class="flex gap-2"><span class="text-brand-600" aria-hidden="true">●</span>O que precisar de você aparece no Início.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                @if ($qtdInvalidas)
+                <div class="card pt-5 pb-2">
+                    <div class="px-5 sm:px-6 pb-3">
+                        <h2 class="text-lg font-semibold">Corrija agora, sem enviar a planilha de novo</h2>
+                        <p class="text-sm text-ink-600 mt-1">Cada linha mostra o que está errado. Edite o campo e confirme.</p>
+                    </div>
+                    @foreach ($invalidas as $n)
+                        @php $ex = $n->explicacao; @endphp
+                        <form method="POST" action="{{ route('notas.corrigir', $n) }}" class="px-5 sm:px-6 py-4 tabela-linha grid grid-cols-1 md:grid-cols-[64px_minmax(0,1.1fr)_minmax(0,1.6fr)_auto] gap-3 md:gap-4 md:items-end">
+                            @csrf @method('PATCH')
+                            <span class="font-mono text-[13px] text-ink-600 md:pb-3">linha {{ $n->linha_planilha }}</span>
+                            <div class="md:pb-1.5">
+                                <div class="font-medium text-sm">{{ $n->tomador_nome ?: '(sem nome)' }}</div>
+                                <div class="text-[13px] text-warn-800">{{ $ex['o_que_aconteceu'] }}</div>
+                            </div>
+                            <div class="grid gap-2.5">
+                                @foreach ($ex['campos'] as $campo)
+                                    @php $valorAtual = match ($campo) {
+                                        'data_competencia' => $n->data_competencia?->format('d/m/Y'),
+                                        'valor' => $n->valor > 0 ? number_format($n->valor, 2, ',', '') : '',
+                                        default => $n->{$campo},
+                                    }; @endphp
+                                    <label class="text-xs text-ink-600">{{ \App\Support\ExplicacaoErro::ROTULOS[$campo] }}
+                                        <input name="{{ $campo }}" value="{{ $valorAtual }}" class="mt-1 block w-full min-h-[40px] rounded-lg border-gray-400 text-sm font-mono focus:border-brand-600 focus:ring-brand-600">
+                                    </label>
+                                @endforeach
+                            </div>
+                            <button class="btn btn-sm">Confirmar</button>
+                        </form>
+                    @endforeach
+                    @if ($qtdInvalidas > $invalidas->count())
+                        <div class="px-5 sm:px-6 py-3.5 tabela-linha text-sm text-ink-700">Mais {{ $fmt($qtdInvalidas - $invalidas->count()) }} linhas com problema. Corrija estas e a lista se renova.</div>
+                    @endif
+                </div>
+                @endif
+
+            </div>
+
+            <aside class="flex-[1_1_300px] min-w-0 space-y-4">
+                <form method="POST" action="{{ route('importacoes.enviar', $importacao) }}" class="card p-5 space-y-4">
+                    @csrf
+                    <h2 class="text-base font-semibold">Resumo do envio</h2>
+                    <div class="text-sm"><div class="text-xs text-ink-600">Empresa que emite</div><div class="font-medium">{{ $importacao->emitente->razao_social }}</div></div>
+                    @if ($emTeste)
+                        <div class="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-[13px] leading-snug text-amber-900"><b>Modo teste.</b> As notas não têm valor fiscal.</div>
+                    @endif
+
+                    @if ($qtdInvalidas && $prontas)
+                        <fieldset class="space-y-2.5">
+                            <legend class="text-sm font-semibold mb-2">O que enviar?</legend>
+                            <label class="flex gap-2.5 items-start border-[1.5px] border-brand-600 bg-brand-50 rounded-lg p-3 text-sm leading-snug cursor-pointer">
+                                <input type="radio" name="modo" value="enviar_prontas" checked class="mt-1 text-brand-600 focus:ring-brand-600">
+                                <span><b>Só as {{ $fmt($prontas) }} prontas</b> <span class="text-xs font-semibold text-ok-800">recomendado</span><br><span class="text-ink-600">As {{ $fmt($qtdInvalidas) }} com problema ficam esperando você corrigir.</span></span>
+                            </label>
+                            <label class="flex gap-2.5 items-start border border-gray-300 rounded-lg p-3 text-sm leading-snug cursor-pointer">
+                                <input type="radio" name="modo" value="corrigir_antes" class="mt-1 text-brand-600 focus:ring-brand-600">
+                                <span><b>Corrigir tudo antes</b><br><span class="text-ink-600">Não enviamos nada agora.</span></span>
+                            </label>
+                        </fieldset>
+                    @endif
+
+                    @can('emitir')
+                        <button class="btn btn-primary btn-lg w-full" @disabled(! $prontas)>Enviar {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota' : 'notas' }} →</button>
+                    @endcan
+                    <a href="{{ route('importacoes.index') }}" class="block text-center text-sm text-ink-700">Cancelar</a>
+                </form>
+            </aside>
+        </div>
+
+        {{-- Listagem em largura total (fora das duas colunas) para conferir sem rolar para o lado --}}
+        <section class="card pt-5 overflow-hidden" id="linhas">
+            <div class="px-5 sm:px-6 pb-3 space-y-3">
+                <div>
+                    <h2 class="text-lg font-semibold">Todas as linhas da planilha</h2>
+                    <p class="text-sm text-ink-600 mt-1">Confira o que será emitido. Use <b>Editar</b> para ajustar qualquer linha antes de enviar.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    @foreach (['todas' => ['Todas', $total], 'prontas' => ['Prontas', $prontas], 'problemas' => ['Com problema', $qtdInvalidas]] as $chave => [$rotulo, $qtd])
+                        <a href="{{ route('importacoes.conferir', [$importacao, 'ver' => $chave]) }}#linhas" @class(['inline-flex items-center gap-1.5 min-h-[40px] px-3.5 rounded-full border text-sm no-underline', 'bg-ink-900 text-white border-ink-900' => $ver === $chave, 'bg-white text-ink-900 border-gray-300 hover:bg-gray-50' => $ver !== $chave])>{{ $rotulo }} <span class="opacity-80">{{ $fmt($qtd) }}</span></a>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- overflow-x-auto só como rede de segurança em telas pequenas; em tela larga a tabela cabe inteira --}}
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[920px] table-fixed text-sm">
+                    <colgroup>
+                        <col class="w-[64px]"><col class="w-[112px]"><col class="w-[27%]"><col class="w-[104px]"><col><col class="w-[124px]"><col class="w-[124px]"><col class="w-[100px]">
+                    </colgroup>
+                    <thead class="text-left text-xs uppercase tracking-wide text-ink-600 bg-chao/60 border-y border-linha">
+                        <tr>
+                            <th class="ps-5 sm:ps-6 pe-3 py-3 font-medium">Linha</th>
+                            <th class="pe-3 py-3 font-medium">Situação</th>
+                            <th class="pe-3 py-3 font-medium">Cliente</th>
+                            <th class="pe-3 py-3 font-medium">Serviço</th>
+                            <th class="pe-3 py-3 font-medium">Descrição</th>
+                            <th class="pe-5 py-3 font-medium text-right">Valor</th>
+                            <th class="pe-3 py-3 font-medium">Competência</th>
+                            <th class="pe-5 sm:pe-6 py-3 font-medium"><span class="sr-only">Ação</span></th>
+                        </tr>
+                    </thead>
+                    @forelse ($linhas as $l)
+                        @php
+                            $problema = $l->status === \App\Enums\StatusNota::Invalida;
+                            $comErro = (int) old('_nota') === $l->id;   // a edição falhou na validação: reabre com o que a pessoa digitou
+                            $v = fn ($campo, $atual) => $comErro ? old($campo) : $atual;
+                            $entrada = 'mt-1 block w-full min-h-[40px] rounded-lg border-gray-400 text-sm focus:border-brand-600 focus:ring-brand-600';
+                        @endphp
+                        <tbody x-data="{ editando: {{ $comErro ? 'true' : 'false' }} }" id="linha-{{ $l->id }}">
+                            <tr @class(['tabela-linha align-middle', 'bg-warn-50' => $problema, 'hover:bg-gray-50' => ! $problema]) x-show="!editando">
+                                <td class="ps-5 sm:ps-6 pe-3 py-3.5 font-mono text-ink-600">{{ $l->linha_planilha }}</td>
+                                <td class="pe-3 py-3.5 whitespace-nowrap">
+                                    @if ($problema)<span class="pill bg-warn-100 text-warn-800">Com problema</span>
+                                    @else<span class="pill bg-ok-100 text-ok-800">Pronta</span>@endif
+                                </td>
+                                <td class="pe-4 py-3.5">
+                                    <div class="font-medium truncate" title="{{ $l->tomador_nome }}">{{ $l->tomador_nome }}</div>
+                                    <div class="text-xs text-ink-600 mt-0.5 truncate"><span class="font-mono">{{ \App\Support\Documento::formatar($l->tomador_documento) }}</span>@if ($l->tomador_email) · {{ $l->tomador_email }}@endif</div>
+                                </td>
+                                <td class="pe-3 py-3.5 whitespace-nowrap">
+                                    <div class="font-mono text-[13px]">{{ $l->codigo_servico }}</div>
+                                    @if ($l->codigo_nbs)<div class="font-mono text-xs text-ink-600">NBS {{ $l->codigo_nbs }}</div>@endif
+                                </td>
+                                <td class="pe-4 py-3.5 text-ink-900 leading-snug">{{ $l->descricao }}</td>
+                                <td class="pe-5 py-3.5 font-mono text-right whitespace-nowrap">R$ {{ number_format($l->valor, 2, ',', '.') }}</td>
+                                <td class="pe-3 py-3.5 whitespace-nowrap text-ink-700">{{ $l->data_competencia?->format('d/m/Y') }}</td>
+                                <td class="pe-4 sm:pe-5 py-2 text-right whitespace-nowrap">
+                                    @can('emitir')<button type="button" class="inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" @click="editando = true" aria-label="Editar a linha {{ $l->linha_planilha }}"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Editar</button>@endcan
+                                </td>
+                            </tr>
+                            @if ($problema && $l->erros)
+                                <tr class="bg-warn-50" x-show="!editando"><td></td><td></td><td colspan="6" class="pb-3 pe-6 text-[13px] text-warn-800">{{ implode(' ', (array) $l->erros) }}</td></tr>
+                            @endif
+
+                            @can('emitir')
+                            <tr x-show="editando" x-cloak class="bg-brand-50 border-t border-brand-200">
+                                <td colspan="8" class="px-5 sm:px-6 py-4">
+                                    <form method="POST" action="{{ route('notas.corrigir', $l) }}" class="space-y-3">
+                                        @csrf @method('PATCH')
+                                        <input type="hidden" name="_nota" value="{{ $l->id }}">
+                                        <div class="font-medium text-sm">Editando a linha {{ $l->linha_planilha }} <span class="text-ink-600 font-normal">· a mudança vale só para o envio; sua planilha original não é alterada.</span></div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                            <label class="text-xs text-ink-600">CPF ou CNPJ do cliente
+                                                <input name="tomador_documento" value="{{ $v('tomador_documento', \App\Support\Documento::formatar($l->tomador_documento)) }}" class="{{ $entrada }} font-mono">
+                                            </label>
+                                            <label class="text-xs text-ink-600 lg:col-span-2">Nome ou razão social
+                                                <input name="tomador_nome" value="{{ $v('tomador_nome', $l->tomador_nome) }}" class="{{ $entrada }}">
+                                            </label>
+                                            <label class="text-xs text-ink-600">E-mail
+                                                <input name="tomador_email" value="{{ $v('tomador_email', $l->tomador_email) }}" class="{{ $entrada }}">
+                                            </label>
+                                            <label class="text-xs text-ink-600">Código de serviço (6 dígitos)
+                                                <input name="codigo_servico" value="{{ $v('codigo_servico', $l->codigo_servico) }}" class="{{ $entrada }} font-mono">
+                                            </label>
+                                            <label class="text-xs text-ink-600">NBS (9 dígitos, opcional)
+                                                <input name="codigo_nbs" value="{{ $v('codigo_nbs', $l->codigo_nbs) }}" class="{{ $entrada }} font-mono">
+                                            </label>
+                                            <label class="text-xs text-ink-600">Valor (R$)
+                                                <input name="valor" value="{{ $v('valor', $l->valor > 0 ? number_format($l->valor, 2, ',', '') : '') }}" class="{{ $entrada }} font-mono">
+                                            </label>
+                                            <label class="text-xs text-ink-600">Competência (dd/mm/aaaa)
+                                                <input name="data_competencia" value="{{ $v('data_competencia', $l->data_competencia?->format('d/m/Y')) }}" class="{{ $entrada }} font-mono">
+                                            </label>
+                                            <label class="text-xs text-ink-600 sm:col-span-2 lg:col-span-4">Descrição do serviço
+                                                <textarea name="descricao" rows="2" class="{{ $entrada }}">{{ $v('descricao', $l->descricao) }}</textarea>
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <button class="btn btn-primary btn-sm">Salvar linha</button>
+                                            <button type="button" class="btn btn-sm" @click="editando = false">Cancelar</button>
+                                        </div>
+                                    </form>
+                                </td>
+                            </tr>
+                            @endcan
+                        </tbody>
+                    @empty
+                        <tbody><tr class="tabela-linha"><td colspan="8" class="px-6 py-8 text-center text-ink-700">Nenhuma linha neste filtro.</td></tr></tbody>
+                    @endforelse
+                </table>
+            </div>
+            @if ($linhas->hasPages())<div class="px-5 sm:px-6 py-3 border-t border-gray-200">{{ $linhas->links() }}</div>@endif
+        </section>
+        @endif
+    </div>
+</x-app-layout>

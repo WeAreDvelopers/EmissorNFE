@@ -1,0 +1,238 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Enums\StatusNota;
+use App\Http\Requests\ImportarPlanilhaRequest;
+use App\Jobs\EnviarImportacaoJob;
+use App\Jobs\ProcessarImportacaoJob;
+use App\Models\Emitente;
+use App\Models\Importacao;
+use App\Models\NotaFiscal;
+use App\Services\Creditos\CarteiraService;
+use App\Services\Nfse\EnvioDeNotas;
+use App\Support\ExplicacaoErro;
+use App\Support\Tenancy\ContaAtual;
+use Illuminate\Http\Request;
+
+class ImportacaoController extends Controller
+{
+    public function __construct(private ContaAtual $contaAtual) {}
+
+    /** Lista de lotes, com resumo por lote e os números do topo. */
+    public function index()
+    {
+        $this->authorize('consultar');
+        $importacoes = Importacao::with('emitente')->latest()->paginate(20);
+
+        $resumos = NotaFiscal::whereIn('importacao_id', $importacoes->pluck('id'))
+            ->selectRaw('importacao_id, status, count(*) as total')
+            ->groupBy('importacao_id', 'status')->get()
+            ->groupBy('importacao_id')
+            ->map(fn ($linhas) => collect(StatusNota::cases())->mapWithKeys(
+                fn ($s) => [$s->value => (int) ($linhas->firstWhere('status', $s->value)->total ?? 0)]
+            )->all());
+
+        return view('importacoes.index', compact('importacoes', 'resumos'));
+    }
+
+    /** Passo 1: escolher o arquivo. */
+    public function criar()
+    {
+        $this->authorize('emitir');
+
+        return view('importacoes.criar', [
+            'emitentes' => Emitente::where('ativo', true)->orderBy('razao_social')->get(),
+        ]);
+    }
+
+    /** Recebe a planilha, guarda e manda LER (não emite nada ainda). Responde na hora. */
+    public function store(ImportarPlanilhaRequest $request)
+    {
+        $this->authorize('emitir');
+
+        $arquivo = $request->file('planilha');
+        $hash = hash_file('sha256', $arquivo->getRealPath());
+
+        // Mesma planilha já enviada para este emitente? Bloqueia, a não ser que o usuário confirme.
+        $repetida = Importacao::where('emitente_id', $request->emitente_id)->where('arquivo_hash', $hash)->first();
+        if ($repetida && ! $request->boolean('confirmar_repetida')) {
+            return back()->withInput()->withErrors([
+                'planilha' => "Esta planilha já foi enviada em {$repetida->created_at->format('d/m/Y H:i')}. Enviar de novo gera notas em dobro.",
+            ])->with('pedir_confirmacao_repetida', true);
+        }
+
+        $importacao = Importacao::create([
+            'emitente_id'     => $request->emitente_id,   // já validado como emitente da conta ativa
+            'user_id'         => $request->user()?->id,
+            'arquivo_nome'    => $arquivo->getClientOriginalName(),
+            'arquivo_caminho' => $arquivo->store('importacoes'),
+            'arquivo_hash'    => $hash,
+            'status'          => 'pendente',
+        ]);
+
+        ProcessarImportacaoJob::dispatch($importacao);
+
+        return redirect()->route('importacoes.conferir', $importacao);
+    }
+
+    /** Passo 2: conferir. Mostra o que está pronto, o que tem problema e quanto vai custar, antes de gastar crédito. */
+    public function conferir(Request $request, Importacao $importacao, CarteiraService $creditos)
+    {
+        $this->authorize('consultar');
+
+        // Já enviada? Vai direto para o acompanhamento.
+        if (in_array($importacao->status, ['enviando', 'enviada', 'concluida'], true)) {
+            return redirect()->route('importacoes.show', $importacao);
+        }
+
+        $importacao->load('emitente');
+        $resumo = $importacao->resumo();
+        $saldo = $creditos->saldo($this->contaAtual->id())->disponivel;
+        $prontas = $resumo['rascunho'];
+
+        $invalidas = NotaFiscal::with('emitente')
+            ->where('importacao_id', $importacao->id)->where('status', StatusNota::Invalida)
+            ->orderBy('linha_planilha')->limit(20)->get()
+            ->each(fn ($n) => $n->explicacao = ExplicacaoErro::para($n));
+
+        // Todas as linhas da planilha, com todas as colunas, para o usuário conferir o que vai ser emitido
+        $ver = $request->query('ver', 'todas');
+        $linhas = $importacao->notas()->orderBy('linha_planilha');
+        match ($ver) {
+            'prontas'   => $linhas->where('status', StatusNota::Rascunho),
+            'problemas' => $linhas->where('status', StatusNota::Invalida),
+            default     => null,
+        };
+
+        return view('importacoes.conferir', [
+            'linhas'     => $linhas->paginate(50, pageName: 'pagina')->withQueryString(),
+            'ver'        => $ver,
+            'importacao' => $importacao,
+            'prontas'    => $prontas,
+            'invalidas'  => $invalidas,
+            'qtdInvalidas' => $resumo['invalida'],
+            'saldo'      => $saldo,
+            'saldoDepois' => $saldo - $prontas,
+            'semSaldo'   => $saldo < $prontas,
+            'total'      => array_sum($resumo),
+            'somaValores' => (float) NotaFiscal::where('importacao_id', $importacao->id)->where('status', StatusNota::Rascunho)->sum('valor'),
+        ]);
+    }
+
+    /** Passo 3: enviar. Só agora o crédito é reservado e as notas entram na fila. */
+    public function enviar(Request $request, Importacao $importacao)
+    {
+        $this->authorize('emitir');
+        abort_unless($importacao->status === 'conferir', 422, 'Esta importação não está aguardando conferência.');
+
+        if ($request->input('modo') === 'corrigir_antes') {
+            return back()->with('ok', 'Tudo bem. Nada foi enviado. Corrija as linhas e envie quando quiser.');
+        }
+
+        abort_if($importacao->resumo()['rascunho'] === 0, 422, 'Não há notas prontas para enviar.');
+
+        $importacao->update(['status' => 'enviando']);
+        EnviarImportacaoJob::dispatch($importacao);
+
+        return redirect()->route('importacoes.show', $importacao)
+            ->with('ok', 'Notas enviadas para emissão. Você pode fechar a página: avisamos quando terminar.');
+    }
+
+    /** Acompanhamento do lote. */
+    public function show(Request $request, Importacao $importacao)
+    {
+        $this->authorize('consultar');
+
+        // Ainda não enviada: o lugar certo é a conferência
+        if (in_array($importacao->status, ['pendente', 'lendo', 'conferir'], true)) {
+            return redirect()->route('importacoes.conferir', $importacao);
+        }
+
+        $importacao->load('emitente');
+        $resumo = $importacao->resumo();
+        $filtro = $request->query('filtro', 'todas');
+
+        $consulta = $importacao->notas()->orderBy('linha_planilha');
+        match ($filtro) {
+            'emitidas'  => $consulta->where('status', StatusNota::Emitida),
+            'andamento' => $consulta->whereIn('status', StatusNota::andamento()),
+            'atencao'   => $consulta->whereIn('status', StatusNota::atencao()),
+            default     => null,
+        };
+        $notas = $consulta->paginate(30)->withQueryString();
+
+        $selecionada = $request->integer('nota')
+            ? NotaFiscal::with('emitente')->where('importacao_id', $importacao->id)->find($request->integer('nota'))
+            : null;
+
+        $andamento = $resumo['pendente'] + $resumo['enviando'] + $resumo['aguardando_credito'];
+        $limite = max((int) config('nfse.limite_por_minuto', 60), 1);
+
+        return view('importacoes.show', [
+            'importacao'  => $importacao,
+            'resumo'      => $resumo,
+            'filtro'      => $filtro,
+            'notas'       => $notas,
+            'selecionada' => $selecionada,
+            'total'       => array_sum($resumo) - $resumo['rascunho'],
+            'andamento'   => $andamento,
+            'atencao'     => $resumo['invalida'] + $resumo['rejeitada'] + $resumo['falhou'],
+            'minutos'     => (int) ceil(($resumo['pendente'] + $resumo['enviando']) / $limite),
+        ]);
+    }
+
+    /** JSON para atualizar a tela sem recarregar (polling). */
+    public function progresso(Importacao $importacao)
+    {
+        return response()->json([
+            'status' => $importacao->status,
+            'total'  => $importacao->total_linhas,
+            'resumo' => $importacao->resumo(),
+        ]);
+    }
+
+    /** Reenvia uma nota que falhou por erro técnico (mesmo número de DPS). */
+    public function reenviar(NotaFiscal $nota, EnvioDeNotas $envio)
+    {
+        $this->authorize('emitir');
+        abort_unless($nota->status === StatusNota::Falhou, 422, 'Só notas com falha técnica podem ser reenviadas.');
+
+        $envio->enviarNota($nota);
+
+        return back()->with('ok', $nota->fresh()->status === StatusNota::AguardandoCredito
+            ? "Linha {$nota->linha_planilha} vai para a fila assim que houver crédito."
+            : "Linha {$nota->linha_planilha} reenviada.");
+    }
+
+    /** Reenvia de uma vez todas as notas que falharam por instabilidade. */
+    public function reenviarFalhas(Importacao $importacao, EnvioDeNotas $envio)
+    {
+        $this->authorize('emitir');
+
+        $qtd = 0;
+        $importacao->notas()->where('status', StatusNota::Falhou)->eachById(function (NotaFiscal $nota) use ($envio, &$qtd) {
+            $envio->enviarNota($nota);
+            $qtd++;
+        });
+
+        return back()->with('ok', $qtd ? "{$qtd} notas reenviadas." : 'Não há notas para reenviar.');
+    }
+
+    /** Planilha modelo (CSV com ; e BOM para abrir certo no Excel brasileiro). */
+    public function modelo()
+    {
+        $this->authorize('consultar');
+
+        $linhas = [
+            ['tomador_documento', 'tomador_nome', 'tomador_email', 'codigo_servico', 'codigo_nbs', 'descricao', 'valor', 'data_competencia'],
+            ['12.345.678/0001-95', 'Padaria Bom Grão Ltda', 'financeiro@exemplo.com.br', '010701', '', 'Manutenção do site - outubro', '1500,00', now()->format('d/m/Y')],
+        ];
+        $csv = "\xEF\xBB\xBF".collect($linhas)->map(fn ($l) => implode(';', $l))->implode("\r\n")."\r\n";
+
+        return response($csv, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="modelo-notas.csv"',
+        ]);
+    }
+}
