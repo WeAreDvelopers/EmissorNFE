@@ -20,9 +20,18 @@ class ValidadorLinha
     ];
 
     /** Limpa formatação comum de planilha (pontos, traços, R$, vírgula decimal, data do Excel). */
-    public static function normalizar(array $l): array
+    public static function normalizar(array $l, ?Emitente $emitente = null): array
     {
         $soDigitos = fn ($v) => preg_replace('/\D/', '', (string) $v);
+
+        // Planilha sem código de serviço: usa o padrão da empresa (só em linha que tem outros dados)
+        $codigo = $soDigitos($l['codigo_servico'] ?? '');
+        if (trim($codigo, '0') === '' && $emitente?->codigo_servico_padrao) {
+            $outros = collect($l)->except(['codigo_servico', 'codigo_nbs'])->filter(fn ($v) => trim((string) $v) !== '');
+            if ($outros->isNotEmpty()) {
+                $codigo = $emitente->codigo_servico_padrao;
+            }
+        }
 
         $valor = trim((string) ($l['valor'] ?? ''));
         $valor = str_replace(['R$', ' '], '', $valor);
@@ -41,7 +50,7 @@ class ValidadorLinha
             'tomador_documento' => $soDigitos($l['tomador_documento'] ?? ''),
             'tomador_nome'      => trim((string) ($l['tomador_nome'] ?? '')),
             'tomador_email'     => trim((string) ($l['tomador_email'] ?? '')) ?: null,
-            'codigo_servico'    => str_pad($soDigitos($l['codigo_servico'] ?? ''), 6, '0', STR_PAD_LEFT),
+            'codigo_servico'    => str_pad($codigo, 6, '0', STR_PAD_LEFT),
             'codigo_nbs'        => $soDigitos($l['codigo_nbs'] ?? '') ?: null,
             'descricao'         => trim((string) ($l['descricao'] ?? '')),
             'valor'             => $valor,
@@ -59,7 +68,12 @@ class ValidadorLinha
             ],
             'tomador_nome'      => ['required', 'string', 'max:300'],
             'tomador_email'     => ['nullable', 'email', 'max:80'],
-            'codigo_servico'    => ['required', 'digits:6'],
+            'codigo_servico'    => [
+                'bail', 'required', 'digits:6',
+                fn ($a, $v, $falha) => ListaServicoNacional::existe((string) $v) ?: $falha(
+                    "O código de serviço {$v} não existe na lista nacional de serviços. Use um código de 6 dígitos da lista (ex.: 010701 para manutenção de programas de computação)."
+                ),
+            ],
             'codigo_nbs'        => ['nullable', 'digits:9'],
             'descricao'         => ['required', 'string', 'max:2000'],
             'valor'             => ['required', 'numeric', 'gt:0', 'max:999999999999999.99'],
@@ -71,7 +85,7 @@ class ValidadorLinha
             'tomador_nome.max'            => 'O nome do cliente passou de 300 caracteres.',
             'tomador_email.email'         => 'O e-mail do cliente não parece válido.',
             'tomador_email.max'           => 'O e-mail do cliente passou de 80 caracteres.',
-            'codigo_servico.required'     => 'Falta o código de serviço.',
+            'codigo_servico.required'     => 'Falta o código de serviço (ou defina um código padrão nos dados da empresa).',
             'codigo_servico.digits'       => 'O código de serviço precisa ter 6 dígitos.',
             'codigo_nbs.digits'           => 'O código NBS precisa ter 9 dígitos (ou ficar vazio).',
             'descricao.required'          => 'Falta a descrição do serviço.',

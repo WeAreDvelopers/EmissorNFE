@@ -49,7 +49,7 @@ class ExplicacaoErro
     private static function invalida(NotaFiscal $nota, array $tecnico): array
     {
         // Revalida para saber exatamente quais campos estão errados
-        $dados = ValidadorLinha::normalizar($nota->only(ValidadorLinha::CAMPOS) + ['data_competencia' => $nota->data_competencia?->toDateString()]);
+        $dados = ValidadorLinha::normalizar($nota->only(ValidadorLinha::CAMPOS) + ['data_competencia' => $nota->data_competencia?->toDateString()], $nota->emitente);
         $campos = array_keys(ValidadorLinha::validar($dados, $nota->emitente)->errors()->messages());
 
         return [
@@ -67,7 +67,7 @@ class ExplicacaoErro
         $texto = implode(' | ', $tecnico);
 
         $mapa = [
-            '/E0310/'                        => [['codigo_servico'], 'O código de serviço %codigo% não é aceito pela prefeitura para este CNPJ.', 'Use o código de serviço que seu contador indicou para esta atividade.'],
+            '/E0310/'                        => [['codigo_servico'], 'O código de serviço %codigo% não existe na lista nacional de serviços.', 'Use um código de 6 dígitos da lista nacional (ex.: 010701 para manutenção de programas de computação) ou o que seu contador indicou.'],
             '/E0316/'                        => [['codigo_nbs'], 'O código NBS informado não existe ou não combina com o serviço.', 'Corrija o código NBS ou deixe o campo vazio.'],
             '/E0015/'                        => [['data_competencia'], 'A data de competência não é aceita.', 'Informe uma data de competência que não esteja no futuro.'],
             '/E0080|E0188|E0206/'            => [['tomador_documento'], 'O CPF/CNPJ do cliente foi recusado.', 'Confira o documento do cliente e corrija.'],

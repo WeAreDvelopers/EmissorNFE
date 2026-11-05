@@ -34,7 +34,7 @@ class NotasImport implements ToCollection, WithHeadingRow, WithChunkReading
     {
         foreach ($linhas as $linha) {
             $this->linhaAtual++;
-            $dados = ValidadorLinha::normalizar($linha->toArray());
+            $dados = ValidadorLinha::normalizar($linha->toArray(), $this->importacao->emitente);
 
             // Pula linhas totalmente vazias
             if (! array_filter($dados)) {

@@ -48,7 +48,7 @@ class ReprocessoController extends Controller
                     $dados = ValidadorLinha::normalizar([
                         ...$original->only(ValidadorLinha::CAMPOS),
                         'data_competencia' => $original->data_competencia?->toDateString(),
-                    ]);
+                    ], $emitente);
                     $validador = ValidadorLinha::validar($dados, $emitente);
                     $invalida = $validador->fails();
                     $invalidas += (int) $invalida;
@@ -118,7 +118,7 @@ class ReprocessoController extends Controller
                     continue;
                 }
 
-                $dados = ValidadorLinha::normalizar($campos);
+                $dados = ValidadorLinha::normalizar($campos, $emitente);
                 $validador = ValidadorLinha::validar($dados, $emitente);
                 $invalida = $validador->fails();
 

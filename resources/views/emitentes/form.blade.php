@@ -132,6 +132,7 @@
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+ <x-campo nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" maxlength="6" mono ajuda="Usado nas notas da planilha que vierem sem código de serviço. Ex.: 010701 (manutenção de programas de computação)." />
                         <x-campo nome="serie_dps" rotulo="Série" :valor="$emitente->serie_dps" maxlength="5" mono ajuda="Já vem pronta (00001). Só mude se o seu contador pedir." required />
                         <x-campo nome="ambiente" tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera depois de emitir uma nota em teste.">
                             <option value="2" @selected(old('ambiente', $emitente->ambiente ?? 2) == 2)>Teste (as notas não têm valor fiscal)</option>

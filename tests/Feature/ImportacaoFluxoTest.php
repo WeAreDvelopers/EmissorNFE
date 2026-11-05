@@ -218,7 +218,7 @@ class ImportacaoFluxoTest extends TestCase
 
         $primeira = $notas->first();
         $this->get(route('importacoes.show', [$imp, 'filtro' => 'atencao', 'nota' => $primeira->id]))->assertOk()
-            ->assertSee('Recusada pela prefeitura')->assertSee('não é aceito pela prefeitura')->assertSee('Aplicar também nas outras 2');
+            ->assertSee('Recusada pela prefeitura')->assertSee('não existe na lista nacional de serviços')->assertSee('Aplicar também nas outras 2');
 
         $this->patch(route('notas.corrigir', $primeira), ['codigo_servico' => '171101', 'aplicar_em_todas' => 1])->assertRedirect();
 

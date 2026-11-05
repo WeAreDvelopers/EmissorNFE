@@ -50,7 +50,7 @@ class NotaController extends Controller
         $atuais = $nota->only(ValidadorLinha::CAMPOS);
         $atuais['data_competencia'] = $nota->data_competencia?->toDateString();
 
-        $dados = ValidadorLinha::normalizar([...$atuais, ...$recebidos]);
+        $dados = ValidadorLinha::normalizar([...$atuais, ...$recebidos], $nota->emitente);
         $validador = ValidadorLinha::validar($dados, $nota->emitente);
 
         if ($validador->fails()) {

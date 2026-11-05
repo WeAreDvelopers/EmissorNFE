@@ -12,7 +12,7 @@ class Emitente extends Model
     use PertenceAConta;
 
     protected $fillable = [
-        'conta_id', 'cnpj', 'razao_social', 'inscricao_municipal', 'codigo_municipio',
+        'conta_id', 'cnpj', 'razao_social', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao',
         'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples',
         'tributos_aprox', 'serie_dps', 'ambiente', 'certificado_arquivo', 'certificado_senha',
         'certificado_validade', 'ativo',
