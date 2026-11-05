@@ -63,6 +63,61 @@ class EmitenteCertificadoTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_abre_certificado_com_criptografia_legada_e_guarda_no_formato_moderno(): void
+    {
+        $dir = sys_get_temp_dir().'/pfxlegado-'.bin2hex(random_bytes(4));
+        mkdir($dir);
+        try {
+            $chave = openssl_pkey_new(['private_key_bits' => 2048]);
+            $cert = openssl_csr_sign(openssl_csr_new(['commonName' => 'PADARIA TESTE LTDA:00000000000191'], $chave), null, $chave, 365);
+            openssl_x509_export($cert, $certPem);
+            openssl_pkey_export($chave, $chavePem);
+            file_put_contents("$dir/c.pem", $certPem);
+            file_put_contents("$dir/k.pem", $chavePem);
+
+            $base = ['-export', '-inkey', "$dir/k.pem", '-in', "$dir/c.pem", '-out', "$dir/legado.pfx",
+                '-passout', 'pass:segredo', '-certpbe', 'PBE-SHA1-RC2-40', '-keypbe', 'PBE-SHA1-3DES'];
+            $gerou = false;
+            foreach ([['-legacy'], []] as $extra) { // OpenSSL 1.1 não tem -legacy
+                $p = new \Symfony\Component\Process\Process(['openssl', 'pkcs12', ...$extra, ...$base]);
+                if ($p->run() === 0) {
+                    $gerou = true;
+                    break;
+                }
+            }
+            if (! $gerou) {
+                $this->markTestSkipped('openssl CLI não gera .pfx legado aqui.');
+            }
+            $legado = file_get_contents("$dir/legado.pfx");
+        } finally {
+            array_map('unlink', glob("$dir/*"));
+            rmdir($dir);
+        }
+
+        $c = new \App\Services\Nfse\Certificado($legado, 'segredo');
+
+        $this->assertSame('00000000000191', $c->cnpjProvavel());
+        $this->assertTrue(openssl_pkcs12_read($c->pfx(), $out, 'segredo'), 'o .pfx guardado deve abrir direto no PHP');
+
+        $this->expectException(\RuntimeException::class);
+        new \App\Services\Nfse\Certificado($legado, 'senha-errada');
+    }
+
+    public function test_cadastra_empresa_me_epp_mesmo_com_campos_de_tributos_escondidos_vazios(): void
+    {
+        $this->actingAs($this->usuarioDono())
+            ->post(route('emitentes.store'), [
+                'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
+                'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
+                'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''], // o navegador envia os escondidos
+                'serie_dps' => '1', 'ambiente' => 2,
+                'certificado' => UploadedFile::fake()->createWithContent('c.pfx', $this->pfx('segredo')), 'certificado_senha' => 'segredo',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'op_simples_nacional' => 3]);
+    }
+
     public function test_formulario_da_empresa_renderiza_e_raiz_redireciona(): void
     {
         $this->actingAs($this->usuarioDono())->get(route('emitentes.criar'))->assertOk()

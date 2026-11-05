@@ -16,14 +16,69 @@ class Certificado
 {
     private array $dados = [];
     private array $info = [];
+    private string $pfx;
 
     public function __construct(string $pfxBinario, string $senha)
     {
+        $this->pfx = $pfxBinario;
+
         if (! openssl_pkcs12_read($pfxBinario, $this->dados, $senha)) {
-            throw new RuntimeException('Não foi possível abrir o certificado (senha errada ou .pfx com algoritmo legado — veja o README).');
+            // OpenSSL 3 não abre .pfx com criptografia legada (RC2-40, comum em A1 antigos): converte uma vez.
+            $moderno = self::converterLegado($pfxBinario, $senha);
+
+            if ($moderno === null || ! openssl_pkcs12_read($moderno, $this->dados, $senha)) {
+                throw new RuntimeException('Não foi possível abrir o certificado (senha errada ou arquivo inválido).');
+            }
+            $this->pfx = $moderno;
         }
 
         $this->info = openssl_x509_parse($this->dados['cert']) ?: [];
+    }
+
+    /** .pfx já no formato que o PHP lê (o convertido, se o original era legado). Guardar este. */
+    public function pfx(): string
+    {
+        return $this->pfx;
+    }
+
+    /** Reempacota um .pfx legado com o provider "legacy" do OpenSSL CLI. Senha só por variável de ambiente. */
+    private static function converterLegado(string $pfxBinario, string $senha): ?string
+    {
+        $dir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'pfx-'.bin2hex(random_bytes(8));
+        if (! @mkdir($dir, 0700)) {
+            return null;
+        }
+
+        $env = ['NFSE_PFX_SENHA' => $senha] + (getenv() ?: []);
+        $roda = function (array $cmd) use ($env): bool {
+            $p = new \Symfony\Component\Process\Process($cmd, null, $env, null, 30);
+            $p->run();
+
+            return $p->isSuccessful();
+        };
+
+        try {
+            file_put_contents("$dir/origem.pfx", $pfxBinario);
+            // OpenSSL 3 precisa de -legacy; o 1.1 não conhece a flag e lê o formato antigo sozinho.
+            $ok = false;
+            foreach ([['-legacy'], []] as $extra) {
+                $ok = $roda(['openssl', 'pkcs12', ...$extra, '-in', "$dir/origem.pfx", '-passin', 'env:NFSE_PFX_SENHA',
+                    '-passout', 'env:NFSE_PFX_SENHA', '-out', "$dir/tudo.pem"]);
+                if ($ok) {
+                    break;
+                }
+            }
+            // Algoritmos explícitos: o padrão do OpenSSL 1.1 continua sendo o legado.
+            $ok = $ok && $roda(['openssl', 'pkcs12', '-export', '-certpbe', 'AES-256-CBC', '-keypbe', 'AES-256-CBC', '-macalg', 'sha256',
+                    '-in', "$dir/tudo.pem", '-passin', 'env:NFSE_PFX_SENHA', '-passout', 'env:NFSE_PFX_SENHA', '-out', "$dir/novo.pfx"]);
+
+            return $ok ? (file_get_contents("$dir/novo.pfx") ?: null) : null;
+        } finally {
+            foreach (glob("$dir/*") ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($dir);
+        }
     }
 
     public static function doEmitente(Emitente $emitente): self

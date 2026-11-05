@@ -90,8 +90,10 @@ class EmitenteController extends Controller
             'regime_apuracao_sn'  => ['nullable', 'required_if:op_simples_nacional,3', 'in:1,2,3'],
             'regime_especial'     => ['required', 'in:0,1,2,3,4,5,6,9'],
             'aliquota_simples'    => ['nullable', 'required_if:op_simples_nacional,3', 'numeric', 'between:0,100'],
-            'tributos_aprox'      => ['nullable', 'required_if:op_simples_nacional,1', 'array'],
-            'tributos_aprox.*'    => ['numeric', 'between:0,100'],
+            'tributos_aprox'           => ['nullable', 'array'],
+            'tributos_aprox.federal'   => ['nullable', 'required_if:op_simples_nacional,1', 'numeric', 'between:0,100'],
+            'tributos_aprox.estadual'  => ['nullable', 'required_if:op_simples_nacional,1', 'numeric', 'between:0,100'],
+            'tributos_aprox.municipal' => ['nullable', 'required_if:op_simples_nacional,1', 'numeric', 'between:0,100'],
             'serie_dps'           => ['required', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
             'ambiente'            => ['required', 'in:1,2'],
             'certificado'         => [$novo ? 'required' : 'nullable', 'file', 'max:100'],
@@ -99,6 +101,14 @@ class EmitenteController extends Controller
         ]);
 
         $dados['cnpj'] = preg_replace('/\D/', '', $dados['cnpj']);
+        // Só guarda o que vale para o regime escolhido (os campos escondidos na tela também são enviados, vazios)
+        if ((int) $dados['op_simples_nacional'] !== 1) {
+            $dados['tributos_aprox'] = null;
+        }
+        if ((int) $dados['op_simples_nacional'] !== 3) {
+            $dados['aliquota_simples'] = null;
+            $dados['regime_apuracao_sn'] = null;
+        }
         $dados['serie_dps'] = str_pad($dados['serie_dps'], 5, '0', STR_PAD_LEFT);
 
         // Produção só depois de ter emitido em homologação (evita nota fiscal real por engano)
@@ -130,7 +140,7 @@ class EmitenteController extends Controller
 
             if ($pfx) {
                 $emitente->update([
-                    'certificado_arquivo'  => Certificado::guardar($emitente, $pfx),
+                    'certificado_arquivo'  => Certificado::guardar($emitente, $cert->pfx()),
                     'certificado_senha'    => $dados['certificado_senha'],
                     'certificado_validade' => $cert->validoAte(),
                 ]);
