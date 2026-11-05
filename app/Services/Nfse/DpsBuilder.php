@@ -9,7 +9,7 @@ use DOMElement;
 /**
  * Monta o XML da DPS (Declaração de Prestação de Serviço) — leiaute nacional.
  *
- * Conferido contra o XSD DPS v1.01 (09/02/2026) e as regras do Anexo I v1.01.
+ * Conferido contra o XSD DPS v1.01 de 20/10/2026 (pacote PRODREST) e as regras do Anexo I v1.01 de 20/10/2026.
  * Cobre o caso comum: prestador CNPJ em município conveniado, tomador nacional,
  * ISSQN tributável sem retenção, sem deduções e sem grupo IBS/CBS.
  * Cada DPS é validada contra o XSD antes do envio (ValidadorXsd).
@@ -55,6 +55,7 @@ class DpsBuilder
         $this->el($doc, $inf, 'nDPS', (string) $nota->numero_dps);
         $this->el($doc, $inf, 'dCompet', $nota->data_competencia->format('Y-m-d'));
         $this->el($doc, $inf, 'tpEmit', '1');                // 1 = emitida pelo prestador
+        $this->el($doc, $inf, 'finNFSe', '0');               // 0 = NFS-e regular (obrigatório no leiaute 20261020)
         $this->el($doc, $inf, 'cLocEmi', $p['codigo_municipio']);
 
         // Prestador
@@ -89,10 +90,11 @@ class DpsBuilder
         $this->el($doc, $loc, 'cLocPrestacao', $p['codigo_municipio']);
         $cServ = $this->el($doc, $serv, 'cServ');
         $this->el($doc, $cServ, 'cTribNac', $nota->codigo_servico);
-        $this->el($doc, $cServ, 'xDescServ', $nota->descricao);
         if ($nota->codigo_nbs) {
             $this->el($doc, $cServ, 'cNBS', $nota->codigo_nbs);
         }
+        // Leiaute 20261020: xDescServ vem por último em cServ (após cNBS e cIntContrib)
+        $this->el($doc, $cServ, 'xDescServ', $nota->descricao);
 
         // Valores e tributação
         $valores = $this->el($doc, $inf, 'valores');

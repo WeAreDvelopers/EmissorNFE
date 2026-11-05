@@ -4,6 +4,7 @@ namespace App\Services\Nfse;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -40,10 +41,29 @@ class SefinNacionalClient
         }
 
         if ($resposta->clientError()) {
-            $erros = collect($resposta->json('erros') ?? $resposta->json('erro') ?? [$resposta->body()])
-                ->map(fn ($e) => is_array($e)
-                    ? trim(($e['Codigo'] ?? $e['codigo'] ?? '').' '.($e['Descricao'] ?? $e['descricao'] ?? json_encode($e)))
-                    : (string) $e)
+            Log::warning('SEFIN rejeitou a DPS', [
+                'status' => $resposta->status(),
+                'corpo'  => $resposta->body(),
+            ]);
+
+            // "erro" (singular) vem como objeto único; "erros" como lista.
+            $bruto = $resposta->json('erros') ?? $resposta->json('erro') ?? [$resposta->body()];
+            if (is_array($bruto) && array_is_list($bruto) === false) {
+                $bruto = [$bruto];
+            }
+
+            // O "complemento" traz o motivo real (ex.: elemento que violou o esquema no E1235).
+            $erros = collect($bruto)
+                ->map(function ($e) {
+                    if (! is_array($e)) {
+                        return (string) $e;
+                    }
+
+                    $texto = trim(($e['codigo'] ?? $e['Codigo'] ?? '').' '.($e['descricao'] ?? $e['Descricao'] ?? ''));
+                    $compl = $e['complemento'] ?? $e['Complemento'] ?? null;
+
+                    return $compl ? "{$texto} — {$compl}" : ($texto ?: json_encode($e, JSON_UNESCAPED_UNICODE));
+                })
                 ->values()
                 ->all();
 

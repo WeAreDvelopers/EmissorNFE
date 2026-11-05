@@ -1,16 +1,13 @@
-# XSD oficial da DPS — v1.01 (09/02/2026)
+# XSD oficial da DPS — v1.01 (20/10/2026)
 
-Cópia dos esquemas de `nfse-esquemas_xsd-v1-01-20260209.zip` (gov.br/nfse › Documentação Atual).
+Cópia dos esquemas de `NFSe-ESQUEMAS_XSD-PRODREST-v1.01-20261020` (gov.br/nfse › Documentação Técnica, Homologação/testes).
+Sem ajustes locais: o padrão da série (`TSSerieDPS`) já vem corrigido nesta versão.
 
-## Único ajuste local
+Substitui o pacote `v1.01-20260209`. Mudanças que afetaram a DPS (ver `DpsBuilder`):
 
-`tiposSimples_v1.01.xsd`, tipo `TSSerieDPS`:
+- `finNFSe` passou a ser obrigatório em `infDPS` (entre `tpEmit` e `cLocEmi`); valor `0` = NFS-e regular.
+- `xDescServ` passou a ser o último elemento de `cServ` (após `cNBS` e `cIntContrib`).
 
-- oficial: `<xs:pattern value="^0{0,4}\d{1,5}$"/>`
-- aqui:    `<xs:pattern value="0{0,4}\d{1,5}"/>`
+Sem isso a SEFIN responde E1235 (falha no esquema XML).
 
-Em XML Schema, os padrões já são ancorados e `^`/`$` são caracteres **literais**.
-Com o original, o libxml (PHP) rejeita qualquer série — inclusive `00001`.
-O ajuste não muda o que a série aceita, só faz a validação local funcionar.
-
-Ao baixar uma versão nova do XSD, reaplique o ajuste se o padrão continuar igual.
+Ao baixar uma versão nova, valide uma DPS gerada contra ela (`tests/Feature/DpsXsdTest.php`).
