@@ -18,7 +18,9 @@
         <div class="flex flex-wrap gap-6 items-start">
             <form method="POST" action="{{ route('importacoes.store') }}" enctype="multipart/form-data"
                   class="flex-[999_1_560px] min-w-0 space-y-5"
-                  x-data="{ nome: null, tamanho: null, soltando: false,
+                  data-carregando="Lendo a planilha…"
+                  x-data="{ nome: null, tamanho: null, soltando: false, emitente: '{{ old('emitente_id', $emitentes->first()->id) }}',
+                            logos: @js($emitentes->mapWithKeys(fn ($e) => [$e->id => $e->logo_url])),
                             escolher(f) { if (!f) return; this.nome = f.name; this.tamanho = (f.size / 1024).toFixed(0) + ' KB'; } }">
                 @csrf
 
@@ -29,7 +31,31 @@
                     </div>
                 @endif
 
-                <x-campo nome="emitente_id" tipo="select" rotulo="Empresa que emite">
+                @error('planilha')
+                    {{-- O alerta que não pode passar batido: grande, vermelho e logo acima do arquivo --}}
+                    <div role="alert" x-init="$el.scrollIntoView({ block: 'center', behavior: 'smooth' })"
+                         class="alerta-forte rounded-xl bg-perigo-600 text-white px-5 py-4 flex gap-4 items-start shadow-lg">
+                        <span class="w-10 h-10 shrink-0 rounded-full bg-white/20 flex items-center justify-center" aria-hidden="true">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+                        </span>
+                        <div class="space-y-2.5 min-w-0">
+                            <div class="text-lg font-semibold leading-snug">{{ session('pedir_confirmacao_repetida') ? 'Atenção: esta planilha já foi enviada' : 'Não foi possível usar este arquivo' }}</div>
+                            <p class="text-[15px] leading-relaxed">{{ $message }}</p>
+                            @if (session('pedir_confirmacao_repetida'))
+                                <label class="flex items-center gap-2.5 text-[15px] font-medium bg-white/15 rounded-lg px-3.5 py-3 cursor-pointer">
+                                    <input type="checkbox" name="confirmar_repetida" value="1" class="rounded w-5 h-5 text-perigo-700 focus:ring-white"> Enviar mesmo assim (as notas serão geradas em dobro)
+                                </label>
+                            @endif
+                        </div>
+                    </div>
+                @enderror
+
+                <div x-show="logos[emitente]" x-cloak class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+                    <span class="w-14 h-14 shrink-0 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden"><img :src="logos[emitente]" alt="Logo da empresa" class="max-w-full max-h-full object-contain"></span>
+                    <span class="text-sm text-ink-700">As notas desta importação serão emitidas por esta empresa.</span>
+                </div>
+
+                <x-campo nome="emitente_id" tipo="select" rotulo="Empresa que emite" x-model="emitente">
                     @foreach ($emitentes as $e)
                         <option value="{{ $e->id }}" @selected(old('emitente_id') == $e->id)>{{ $e->razao_social }} · {{ \App\Support\Documento::formatar($e->cnpj) }}</option>
                     @endforeach
@@ -46,12 +72,6 @@
                     <span class="block mt-1 text-[13px] text-ink-600">.xlsx, .xls ou .csv · até 10 MB</span>
                     <input id="planilha" name="planilha" type="file" accept=".xlsx,.xls,.csv" required class="sr-only" x-ref="arquivo" @change="escolher($event.target.files[0])">
                 </label>
-
-                @if (session('pedir_confirmacao_repetida'))
-                    <label class="flex items-center gap-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                        <input type="checkbox" name="confirmar_repetida" value="1" class="rounded"> Enviar mesmo assim (as notas serão geradas em dobro)
-                    </label>
-                @endif
 
                 <div class="flex items-center gap-4">
                     <button class="btn btn-primary btn-lg">Ler e conferir →</button>

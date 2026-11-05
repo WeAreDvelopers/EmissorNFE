@@ -16,7 +16,8 @@
         </div>
 
         <div class="flex flex-wrap items-start gap-5">
-            <section class="card flex-[999_1_620px] min-w-0 pt-4 pb-1.5">
+            @php $versao = md5(json_encode($contagem).'|'.$grupo.'|'.($selecionada?->id).'|'.$notas->getCollection()->map(fn ($n) => $n->id.$n->status->value.$n->updated_at?->timestamp)->implode(',')); @endphp
+            <section class="card flex-[999_1_620px] min-w-0 pt-4 pb-1.5" data-regiao="lista" data-versao="{{ $versao }}">
                 <div class="px-5 sm:px-6 pb-3.5 flex flex-wrap gap-2">
                     @foreach ($grupos as $chave => [$rotulo, $qtd])
                         <a href="{{ route('pendencias', array_filter(['grupo' => $chave])) }}" @class(['inline-flex items-center gap-1.5 min-h-[40px] px-3.5 rounded-full border text-sm no-underline', 'bg-ink-900 text-white border-ink-900' => $grupo === $chave, 'bg-white text-ink-900 border-gray-300 hover:bg-gray-50' => $grupo !== $chave])>{{ $rotulo }} <span class="opacity-80">{{ $f($qtd) }}</span></a>
@@ -33,9 +34,11 @@
                 <div class="px-5 sm:px-6 py-3.5 tabela-linha">{{ $notas->links() }}</div>
             </section>
 
-            @if ($selecionada && $selecionada->status->grupo() === 'atencao')
-                @include('notas._painel', ['nota' => $selecionada, 'fechar' => route('pendencias', array_filter(['grupo' => $grupo]))])
-            @endif
+            <div id="painel-vaga" class="flex-[1_1_380px] min-w-0 max-w-[460px] empty:hidden">
+                @if ($selecionada && $selecionada->status->grupo() === 'atencao')
+                    @include('notas._painel', ['nota' => $selecionada, 'fechar' => route('pendencias', array_filter(['grupo' => $grupo]))])
+                @endif
+            </div>
         </div>
     </div>
 </x-app-layout>

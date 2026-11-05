@@ -9,6 +9,7 @@ export default {
         './resources/views/**/*.blade.php',
         './app/Enums/*.php',   // classes de selo ficam no enum StatusNota
         './app/Models/Importacao.php',
+        './resources/js/**/*.js',
     ],
 
     theme: {
@@ -24,6 +25,7 @@ export default {
                 warn:  { 50: '#FFF6EC', 100: '#FDE9D7', 200: '#F0C9A3', 600: '#D9621A', 800: '#8A3B00', 900: '#5C2A00' },
                 info:  { 100: '#E4EBFB', 500: '#7C9BE0', 800: '#1D3F9E' },
                 ink:   { 900: '#16201B', 700: '#3E4A43', 600: '#4D5A52' },
+                perigo: { 50: '#FDECEC', 200: '#F5B5B5', 600: '#C62828', 700: '#A61E1E', 800: '#8E1B1B' },
                 chao:  '#F4F6F3',
                 linha: '#D9DFD9',
             },

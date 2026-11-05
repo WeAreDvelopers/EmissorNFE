@@ -12,7 +12,9 @@
             cnpj: @js(old('cnpj', \App\Support\Documento::formatar($emitente->cnpj))),
             razao: @js(old('razao_social', $emitente->razao_social)),
             lendo: false, lido: false, erro: null, validade: null, vencido: false,
-            municipio: @js(old('codigo_municipio', $emitente->codigo_municipio)), cidade: null, uf: '', cidades: [],
+            municipio: @js(old('codigo_municipio', $emitente->codigo_municipio)), cidade: null, cidadeNome: '', uf: '', cidades: [],
+            logoNova: null, removerLogo: false,
+            escolherLogo(f) { this.logoNova = f ? URL.createObjectURL(f) : null; if (f) this.removerLogo = false; },
             async ler() {
                 const f = this.$refs.certificado.files[0];
                 if (!f || !this.$refs.senha.value) { this.erro = 'Escolha o arquivo e digite a senha do certificado.'; return; }
@@ -30,9 +32,9 @@
                 if (!this.uf) { this.cidades = []; return; }
                 try { const r = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/' + this.uf + '/municipios?orderBy=nome'); this.cidades = (await r.json()).map(c => ({ id: String(c.id), nome: c.nome })); } catch (e) { this.cidades = []; }
             },
-            escolherCidade(nome) { const c = this.cidades.find(x => x.nome.toLowerCase() === nome.toLowerCase()); if (c) { this.municipio = c.id; this.cidade = c.nome; } },
+            escolherCidade(nome) { const c = this.cidades.find(x => x.nome.toLowerCase() === nome.toLowerCase()); if (c) { this.municipio = c.id; this.cidade = c.nome + ' · ' + this.uf; this.cidadeNome = c.nome; } },
             async init() {
-                if (this.municipio) { try { const r = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios/' + this.municipio); const j = await r.json(); if (j && j.nome) this.cidade = j.nome + ' · ' + j.microrregiao.mesorregiao.UF.sigla; } catch (e) {} }
+                if (this.municipio) { try { const r = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios/' + this.municipio); const j = await r.json(); if (j && j.nome) { const sigla = j.microrregiao.mesorregiao.UF.sigla; this.cidade = j.nome + ' · ' + sigla; this.uf = sigla; this.cidadeNome = j.nome; await this.carregarCidades(); } } catch (e) {} }
             }
          }">
 
@@ -51,8 +53,25 @@
 
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">1. Certificado digital A1 (.pfx ou .p12)</h2>
-                    @if ($emitente->certificado_validade)
-                        <p class="text-sm text-ink-700">Atual: válido até {{ $emitente->certificado_validade->format('d/m/Y') }}. Envie outro só para substituir.</p>
+                    @if ($emitente->certificado_arquivo)
+                        @php
+                            $dias = $emitente->certificadoVenceEmDias();
+                            $vencido = $dias !== null && $dias < 0;
+                            $vencendo = ! $vencido && $dias !== null && $dias <= 30;
+                        @endphp
+                        <div @class(['flex items-center gap-4 rounded-xl border-2 px-4 py-3.5', 'border-brand-600 bg-ok-50' => ! $vencido && ! $vencendo, 'border-amber-400 bg-amber-50' => $vencendo, 'border-warn-600 bg-warn-50' => $vencido]) role="status">
+                            <span @class(['w-11 h-11 shrink-0 rounded-full flex items-center justify-center text-white', 'bg-brand-600' => ! $vencido && ! $vencendo, 'bg-amber-500' => $vencendo, 'bg-warn-600' => $vencido]) aria-hidden="true">
+                                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">@if ($vencido)<path d="M12 8v5M12 17h.01"/>@else<path d="M5 13l4 4L19 7"/>@endif</svg>
+                            </span>
+                            <div class="min-w-0">
+                                <div class="font-semibold text-[15px] text-ink-900">{{ $vencido ? 'Certificado vencido' : 'Certificado já enviado' }}</div>
+                                <div class="text-sm text-ink-700">
+                                    @if ($emitente->certificado_validade)Válido até <b>{{ $emitente->certificado_validade->format('d/m/Y') }}</b>@if ($dias !== null && ! $vencido) · faltam {{ $dias }} {{ $dias === 1 ? 'dia' : 'dias' }}@endif @endif
+                                    · guardado com criptografia
+                                </div>
+                                <div class="text-[13px] text-ink-600 mt-0.5">Não precisa enviar de novo. Escolha outro arquivo abaixo só se quiser substituir.</div>
+                            </div>
+                        </div>
                     @endif
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -82,6 +101,24 @@
                         <x-campo nome="razao_social" rotulo="Razão social" x-model="razao" required />
                         <x-campo nome="inscricao_municipal" rotulo="Inscrição municipal (se tiver)" :valor="$emitente->inscricao_municipal" placeholder="Opcional" />
 
+                        <div class="sm:col-span-2">
+                            <span class="campo-rotulo">Logo da empresa (opcional)</span>
+                            <div class="mt-1 flex flex-wrap items-center gap-4">
+                                <span class="w-16 h-16 shrink-0 rounded-xl border border-gray-300 bg-white flex items-center justify-center overflow-hidden">
+                                    <img x-show="logoNova" x-cloak :src="logoNova" alt="Prévia da logo" class="max-w-full max-h-full object-contain">
+                                    @if ($emitente->logo_url)<img x-show="!logoNova && !removerLogo" src="{{ $emitente->logo_url }}" alt="Logo atual" class="max-w-full max-h-full object-contain">@endif
+                                    <span x-show="!logoNova && ({{ $emitente->logo_url ? 'removerLogo' : 'true' }})" class="text-xs text-ink-600 text-center leading-tight">sem logo</span>
+                                </span>
+                                <div class="flex-1 min-w-[220px] space-y-1.5">
+                                    <input id="logo" name="logo" type="file" accept=".png,.jpg,.jpeg,.webp" @change="escolherLogo($event.target.files[0])" class="campo-entrada py-2 !mt-0">
+                                    @if ($emitente->logo_url)
+                                        <label class="flex items-center gap-2 text-[13px] text-ink-700"><input type="checkbox" name="remover_logo" value="1" x-model="removerLogo" class="rounded text-brand-600 focus:ring-brand-600"> Remover a logo atual</label>
+                                    @endif
+                                    <p class="campo-ajuda !mt-0">PNG, JPG ou WebP, até 2 MB. Aparece na hora de importar as notas.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div>
                             <span class="campo-rotulo">Cidade</span>
                             <div class="mt-1 grid grid-cols-[84px_minmax(0,1fr)] gap-2">
@@ -89,7 +126,7 @@
                                     <option value="">UF</option>
                                     @foreach (['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] as $sigla)<option>{{ $sigla }}</option>@endforeach
                                 </select>
-                                <input list="lista-cidades" placeholder="Digite o nome da cidade" @change="escolherCidade($event.target.value)" class="campo-entrada !mt-0" :disabled="!cidades.length" aria-label="Cidade">
+                                <input list="lista-cidades" x-model="cidadeNome" placeholder="Digite o nome da cidade" @change="escolherCidade($event.target.value)" class="campo-entrada !mt-0" :disabled="!cidades.length" aria-label="Cidade">
                                 <datalist id="lista-cidades"><template x-for="c in cidades" :key="c.id"><option :value="c.nome"></option></template></datalist>
                             </div>
                             <p class="campo-ajuda"><span x-show="cidade" x-text="cidade"></span><span x-show="!cidade">Escolha o estado e depois a cidade.</span> · código IBGE <b class="font-mono" x-text="municipio || '—'"></b></p>

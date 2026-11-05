@@ -17,7 +17,7 @@
                 @forelse ($emitentes as $e)
                     <tr class="tabela-linha">
                         <td class="px-5 py-3 whitespace-nowrap font-mono">{{ \App\Support\Documento::formatar($e->cnpj) }}</td>
-                        <td class="px-5 py-3">{{ $e->razao_social }}</td>
+                        <td class="px-5 py-3"><div class="flex items-center gap-3">@if ($e->logo_url)<span class="w-9 h-9 shrink-0 rounded-md border border-gray-200 bg-white flex items-center justify-center overflow-hidden"><img src="{{ $e->logo_url }}" alt="" class="max-w-full max-h-full object-contain"></span>@endif<span>{{ $e->razao_social }}</span></div></td>
                         <td class="px-5 py-3">@if ($e->ambiente == 1)<span class="pill bg-ok-100 text-ok-800">Produção</span>@else<span class="pill bg-amber-100 text-amber-900">Teste</span>@endif</td>
                         <td class="px-5 py-3 font-mono">{{ $e->serie_dps }}</td>
                         <td class="px-5 py-3">

@@ -22,7 +22,7 @@
                     @if (session('ok'))
                         <div class="rounded-lg bg-ok-50 border border-brand-200 text-ok-800 px-4 py-3 text-sm">{{ session('ok') }}</div>
                     @endif
-                    @if ($errors->any() && ! request()->routeIs('profile.*'))
+                    @if ($errors->any() && ! request()->routeIs('profile.*') && ! request()->routeIs('importacoes.criar'))
                         <div class="rounded-lg bg-warn-50 border border-warn-200 text-warn-900 px-4 py-3 text-sm" role="alert">
                             <ul class="list-disc ps-5">@foreach ($errors->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul>
                         </div>

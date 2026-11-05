@@ -8,11 +8,11 @@
         $filtros = ['todas' => ['Todas', $total], 'emitidas' => ['Emitidas', $resumo['emitida']], 'andamento' => ['Em andamento', $andamento], 'atencao' => ['Precisa de você', $atencao]];
     @endphp
 
-    <div class="max-w-[1240px] mx-auto px-4 sm:px-8 py-7 space-y-6"
-         x-data="{ ativo: {{ $emAndamento && ! $selecionada ? 'true' : 'false' }} }" {{-- com o painel aberto não recarrega: não pode apagar o que a pessoa está digitando --}}
-         x-init="if (ativo) setTimeout(() => location.reload(), 5000)">
+    @php $versao = md5(json_encode($resumo).'|'.$filtro.'|'.($selecionada?->id).'|'.$notas->getCollection()->map(fn ($n) => $n->id.$n->status->value.$n->updated_at?->timestamp)->implode(',')); @endphp
+    <div class="max-w-[1240px] mx-auto px-4 sm:px-8 py-7 space-y-6">
 
-        <div class="space-y-2.5">
+        <div class="space-y-2.5" data-regiao="cabecalho" data-versao="{{ md5(json_encode($resumo)) }}">
+            @if ($emAndamento)<span data-poll hidden></span>@endif {{-- enquanto houver trabalho, a tela se atualiza sozinha (sem recarregar) --}}
             <a href="{{ route('importacoes.index') }}" class="link text-sm">← Importações</a>
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div class="flex flex-wrap items-center gap-3">
@@ -37,7 +37,7 @@
             <div class="text-sm text-ink-600">Enviada {{ $importacao->created_at->isToday() ? 'hoje às '.$importacao->created_at->format('H:i') : 'em '.$importacao->created_at->format('d/m/Y H:i') }}@if ($importacao->emitente) · {{ $importacao->emitente->razao_social }}@endif @if ($emAndamento)· esta tela atualiza sozinha @endif</div>
         </div>
 
-        <div class="card p-5 sm:px-6 space-y-3">
+        <div class="card p-5 sm:px-6 space-y-3" data-regiao="progresso" data-versao="{{ md5(json_encode($resumo)) }}">
             <div class="flex flex-wrap justify-between gap-3 text-[15px]">
                 <b>{{ $f($concluidas) }} de {{ $f($total) }} notas concluídas</b>
                 @if ($minutos > 0)<span class="text-ink-600">Termina em cerca de {{ $minutos }} {{ $minutos === 1 ? 'minuto' : 'minutos' }}</span>@endif
@@ -59,6 +59,7 @@
             @endif
         </div>
 
+        <div data-regiao="atencao" data-versao="{{ md5(json_encode($resumo)) }}">
         @if ($atencao)
             <section class="space-y-3">
                 <h2 class="text-lg font-semibold">Precisa de você · {{ $f($atencao) }}</h2>
@@ -82,16 +83,17 @@
                             <div class="font-semibold">{{ $f($resumo['falhou']) }} não {{ $resumo['falhou'] === 1 ? 'saiu' : 'saíram' }} por instabilidade</div>
                             <div class="text-[13px] text-ink-700 leading-snug">Tentamos várias vezes. Os dados estão certos: é só reenviar.</div>
                             @can('emitir')
-                                <form method="POST" action="{{ route('importacoes.reenviar-falhas', $importacao) }}">@csrf<button class="btn btn-primary btn-sm">Reenviar {{ $resumo['falhou'] === 1 ? 'a nota' : 'as '.$resumo['falhou'] }}</button></form>
+                                <form method="POST" action="{{ route('importacoes.reenviar-falhas', $importacao) }}" data-ajax data-ajax-texto="Reenviando…">@csrf<button class="btn btn-primary btn-sm">Reenviar {{ $resumo['falhou'] === 1 ? 'a nota' : 'as '.$resumo['falhou'] }}</button></form>
                             @endcan
                         </div>
                     @endif
                 </div>
             </section>
         @endif
+        </div>
 
         <div class="flex flex-wrap gap-5 items-start">
-            <section class="card flex-[999_1_620px] min-w-0 pt-4 pb-1.5">
+            <section class="card flex-[999_1_620px] min-w-0 pt-4 pb-1.5" data-regiao="lista" data-versao="{{ $versao }}">
                 <div class="px-5 sm:px-6 pb-3.5 flex flex-wrap gap-2">
                     @foreach ($filtros as $chave => [$rotulo, $qtd])
                         <a href="{{ route('importacoes.show', [$importacao, 'filtro' => $chave]) }}" @class(['inline-flex items-center gap-1.5 min-h-[40px] px-3.5 rounded-full border text-sm no-underline', 'bg-ink-900 text-white border-ink-900' => $filtro === $chave, 'bg-white text-ink-900 border-gray-300 hover:bg-gray-50' => $filtro !== $chave])>{{ $rotulo }} <span class="opacity-80">{{ $f($qtd) }}</span></a>
@@ -108,9 +110,11 @@
                 <div class="px-5 sm:px-6 py-3.5 tabela-linha">{{ $notas->links() }}</div>
             </section>
 
-            @if ($selecionada && $selecionada->status->grupo() === 'atencao')
-                @include('notas._painel', ['nota' => $selecionada, 'fechar' => route('importacoes.show', [$importacao, 'filtro' => $filtro])])
-            @endif
+            <div id="painel-vaga" class="flex-[1_1_380px] min-w-0 max-w-[460px] empty:hidden">
+                @if ($selecionada && $selecionada->status->grupo() === 'atencao')
+                    @include('notas._painel', ['nota' => $selecionada, 'fechar' => route('importacoes.show', [$importacao, 'filtro' => $filtro])])
+                @endif
+            </div>
         </div>
     </div>
 </x-app-layout>

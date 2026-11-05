@@ -15,7 +15,7 @@ class Emitente extends Model
         'conta_id', 'cnpj', 'razao_social', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao',
         'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples',
         'tributos_aprox', 'serie_dps', 'ambiente', 'certificado_arquivo', 'certificado_senha',
-        'certificado_validade', 'ativo',
+        'certificado_validade', 'logo_arquivo', 'ativo',
     ];
 
     protected $casts = [
@@ -45,6 +45,12 @@ class Emitente extends Model
             'aliquota_simples'    => $this->aliquota_simples,
             'tributos_aprox'      => $this->tributos_aprox ?? ['federal' => null, 'estadual' => null, 'municipal' => null],
         ];
+    }
+
+    /** URL pública da logo (pasta storage/app/public/logos, exposta por public/storage). */
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->logo_arquivo ? asset('storage/'.$this->logo_arquivo) : null;
     }
 
     public function certificadoVenceEmDias(): ?int

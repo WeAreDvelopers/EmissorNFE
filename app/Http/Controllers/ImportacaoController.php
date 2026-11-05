@@ -14,6 +14,8 @@ use App\Services\Nfse\EnvioDeNotas;
 use App\Support\ExplicacaoErro;
 use App\Support\Tenancy\ContaAtual;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ImportacaoController extends Controller
 {
@@ -200,9 +202,11 @@ class ImportacaoController extends Controller
 
         $envio->enviarNota($nota);
 
-        return back()->with('ok', $nota->fresh()->status === StatusNota::AguardandoCredito
+        $msg = $nota->fresh()->status === StatusNota::AguardandoCredito
             ? "Linha {$nota->linha_planilha} vai para a fila assim que houver crédito."
-            : "Linha {$nota->linha_planilha} reenviada.");
+            : "Linha {$nota->linha_planilha} reenviada.";
+
+        return request()->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
     }
 
     /** Reenvia de uma vez todas as notas que falharam por instabilidade. */
@@ -216,7 +220,45 @@ class ImportacaoController extends Controller
             $qtd++;
         });
 
-        return back()->with('ok', $qtd ? "{$qtd} notas reenviadas." : 'Não há notas para reenviar.');
+        $msg = $qtd ? "{$qtd} notas reenviadas." : 'Não há notas para reenviar.';
+
+        return request()->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
+    }
+
+    /**
+     * Exclui um lote que não emitiu nada e não está na fila. Os créditos já foram devolvidos
+     * (recusadas/falhas estornam), então a conta fica igual; o histórico de créditos é preservado.
+     */
+    public function excluir(Request $request, Importacao $importacao)
+    {
+        $this->authorize('emitir');
+
+        abort_if($importacao->status === 'lendo', 422, 'Estamos lendo esta planilha agora. Tente excluir em alguns segundos.');
+
+        $bloqueadas = $importacao->notas()
+            ->whereIn('status', [StatusNota::Emitida, StatusNota::Pendente, StatusNota::Enviando, StatusNota::AguardandoCredito])
+            ->count();
+        abort_if($bloqueadas > 0, 422, "Este lote tem {$bloqueadas} ".($bloqueadas === 1 ? 'nota emitida ou na fila' : 'notas emitidas ou na fila').' e não pode ser excluído.');
+
+        $nome = $importacao->arquivo_nome;
+        $caminho = $importacao->arquivo_caminho;
+
+        DB::transaction(function () use ($importacao) {
+            DB::table('movimentos_credito')->whereIn('nota_fiscal_id', $importacao->notas()->select('id'))->update(['nota_fiscal_id' => null]);
+            $importacao->notas()->delete();
+            $importacao->delete();   // lotes reprocessados a partir deste ficam sem origem (nullOnDelete)
+        });
+
+        // O arquivo pode ser compartilhado com um reprocesso: só apaga se ninguém mais usa
+        if ($caminho && ! Importacao::semIsolamento()->where('arquivo_caminho', $caminho)->exists()) {
+            Storage::delete($caminho);
+        }
+
+        $msg = "Importação “{$nome}” excluída.";
+
+        return $request->expectsJson()
+            ? response()->json(['ok' => true, 'mensagem' => $msg])
+            : redirect()->route('importacoes.index')->with('ok', $msg);
     }
 
     /** Planilha modelo (CSV com ; e BOM para abrir certo no Excel brasileiro). */

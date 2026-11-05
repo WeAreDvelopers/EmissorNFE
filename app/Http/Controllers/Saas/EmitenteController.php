@@ -9,6 +9,7 @@ use App\Support\Documento;
 use App\Support\ListaServicoNacional;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -98,6 +99,8 @@ class EmitenteController extends Controller
             'tributos_aprox.municipal' => ['nullable', 'required_if:op_simples_nacional,1', 'numeric', 'between:0,100'],
             'serie_dps'           => ['required', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
             'ambiente'            => ['required', 'in:1,2'],
+            'logo'                => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'remover_logo'        => ['nullable', 'boolean'],
             'certificado'         => [$novo ? 'required' : 'nullable', 'file', 'max:100'],
             'certificado_senha'   => ['required_with:certificado', 'nullable', 'string'],
         ]);
@@ -136,8 +139,17 @@ class EmitenteController extends Controller
             }
         }
 
+        // Logo: troca (envia outra) ou remove; o arquivo antigo é apagado só depois de salvar
+        $logoAntiga = $emitente->logo_arquivo;
+        $novaLogo = $request->file('logo')?->store('logos', 'public');
+        if ($novaLogo) {
+            $dados['logo_arquivo'] = $novaLogo;
+        } elseif ($request->boolean('remover_logo')) {
+            $dados['logo_arquivo'] = null;
+        }
+
         DB::transaction(function () use ($emitente, $dados, $pfx, $cert) {
-            $emitente->fill(collect($dados)->except(['certificado', 'certificado_senha'])->all());
+            $emitente->fill(collect($dados)->except(['certificado', 'certificado_senha', 'logo', 'remover_logo'])->all());
             $emitente->save();
 
             if ($pfx) {
@@ -148,6 +160,10 @@ class EmitenteController extends Controller
                 ]);
             }
         });
+
+        if ($logoAntiga && ($novaLogo || $request->boolean('remover_logo'))) {
+            Storage::disk('public')->delete($logoAntiga);
+        }
 
         return $novo
             ? redirect()->route('inicio')->with('ok', 'Empresa cadastrada. Agora é só importar a sua primeira planilha.')

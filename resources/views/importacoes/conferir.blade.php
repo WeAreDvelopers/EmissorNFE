@@ -13,7 +13,10 @@
             <x-passos :atual="$lendo || $falhou ? 1 : 2" />
         </div>
 
-        <div class="card p-4 sm:px-5 flex flex-wrap items-center gap-4">
+        <div class="card p-4 sm:px-5 flex flex-wrap items-center gap-4" data-regiao="arquivo" data-versao="{{ $total }}-{{ $importacao->status }}">
+            @if ($importacao->emitente->logo_url)
+                <span class="w-12 h-12 shrink-0 rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden"><img src="{{ $importacao->emitente->logo_url }}" alt="Logo de {{ $importacao->emitente->razao_social }}" class="max-w-full max-h-full object-contain"></span>
+            @endif
             <span class="w-11 h-11 rounded-lg bg-brand-100 text-ok-800 flex items-center justify-center font-mono text-xs font-medium" aria-hidden="true">{{ strtoupper(pathinfo($importacao->arquivo_nome, PATHINFO_EXTENSION)) }}</span>
             <div class="flex-1 min-w-[200px]">
                 <div class="font-medium">{{ $importacao->arquivo_nome }}</div>
@@ -26,6 +29,11 @@
             </div>
             @can('emitir')<a href="{{ route('importacoes.editar', $importacao) }}" class="btn btn-sm">Editar em tabela</a>@endcan
             @unless ($importacao->reprocessada_de_id)<a href="{{ route('importacoes.criar') }}" class="btn btn-sm">Trocar arquivo</a>@endunless
+            @can('emitir')
+                <button type="button" class="btn-excluir" data-acao-url="{{ route('importacoes.excluir', $importacao) }}" data-confirmar="Clique de novo para excluir" data-ajax-texto="Excluindo…" data-redireciona="{{ route('importacoes.index') }}">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>Excluir importação
+                </button>
+            @endcan
         </div>
 
         @if ($falhou)
@@ -50,7 +58,7 @@
         <div class="flex flex-wrap gap-6 items-start">
 
             <div class="flex-[999_1_620px] min-w-0 space-y-5">
-                <div class="card p-5 sm:p-6 space-y-4">
+                <div class="card p-5 sm:p-6 space-y-4" data-regiao="resumo" data-versao="{{ $prontas }}-{{ $qtdInvalidas }}-{{ $somaValores }}-{{ $saldo }}">
                     <h2 class="text-xl font-semibold">
                         @if ($prontas && $qtdInvalidas) Encontramos {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota pronta' : 'notas prontas' }} e {{ $fmt($qtdInvalidas) }} com problema
                         @elseif ($prontas) Tudo certo: {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota pronta' : 'notas prontas' }} para emitir
@@ -86,14 +94,27 @@
                 </div>
 
                 @if ($qtdInvalidas)
-                <div class="card pt-5 pb-2">
+                <div class="card pt-5 pb-2" data-lista="corrija">
                     <div class="px-5 sm:px-6 pb-3">
                         <h2 class="text-lg font-semibold">Corrija agora, sem enviar a planilha de novo</h2>
-                        <p class="text-sm text-ink-600 mt-1">Cada linha mostra o que está errado. Edite o campo e confirme.</p>
+                        <p class="text-sm text-ink-600 mt-1">Cada linha mostra o que está errado. Edite o campo e aperte <kbd class="font-mono text-xs border border-gray-300 rounded px-1">Enter</kbd> ou <b>Confirmar</b>: a linha some daqui e a próxima já fica pronta para digitar.</p>
                     </div>
                     @foreach ($invalidas as $n)
-                        @php $ex = $n->explicacao; @endphp
-                        <form method="POST" action="{{ route('notas.corrigir', $n) }}" class="px-5 sm:px-6 py-4 tabela-linha grid grid-cols-1 md:grid-cols-[64px_minmax(0,1.1fr)_minmax(0,1.6fr)_auto] gap-3 md:gap-4 md:items-end">
+                        @php
+                            $ex = $n->explicacao;
+                            $umCampo = count($ex['campos']) === 1 ? $ex['campos'][0] : null;
+                            $valorDe = fn ($campo) => match ($campo) {
+                                'data_competencia' => $n->data_competencia?->format('d/m/Y'),
+                                'valor' => $n->valor > 0 ? number_format($n->valor, 2, ',', '') : '',
+                                default => $n->{$campo},
+                            };
+                            // Outras linhas com o mesmo valor errado no mesmo campo: dá para corrigir todas de uma vez
+                            $mesmoProblema = $umCampo && in_array($umCampo, ['codigo_servico', 'data_competencia', 'tomador_email', 'codigo_nbs'], true)
+                                ? \App\Models\NotaFiscal::where('importacao_id', $importacao->id)->where('status', \App\Enums\StatusNota::Invalida)->where($umCampo, $n->getRawOriginal($umCampo))->whereKeyNot($n->id)->count()
+                                : 0;
+                        @endphp
+                        <form method="POST" action="{{ route('notas.corrigir', $n) }}" data-ajax data-ajax-texto="Salvando…" data-saindo="self" data-item="{{ $n->id }}" id="corrija-{{ $n->id }}"
+                              class="px-5 sm:px-6 py-4 tabela-linha grid grid-cols-1 md:grid-cols-[64px_minmax(0,1.1fr)_minmax(0,1.6fr)_auto] gap-3 md:gap-4 md:items-end">
                             @csrf @method('PATCH')
                             <span class="font-mono text-[13px] text-ink-600 md:pb-3">linha {{ $n->linha_planilha }}</span>
                             <div class="md:pb-1.5">
@@ -102,32 +123,43 @@
                             </div>
                             <div class="grid gap-2.5">
                                 @foreach ($ex['campos'] as $campo)
-                                    @php $valorAtual = match ($campo) {
-                                        'data_competencia' => $n->data_competencia?->format('d/m/Y'),
-                                        'valor' => $n->valor > 0 ? number_format($n->valor, 2, ',', '') : '',
-                                        default => $n->{$campo},
-                                    }; @endphp
                                     <label class="text-xs text-ink-600">{{ \App\Support\ExplicacaoErro::ROTULOS[$campo] }}
-                                        <input name="{{ $campo }}" value="{{ $valorAtual }}" class="mt-1 block w-full min-h-[40px] rounded-lg border-gray-400 text-sm font-mono focus:border-brand-600 focus:ring-brand-600">
+                                        <input name="{{ $campo }}" value="{{ $valorDe($campo) }}" autocomplete="off" class="mt-1 block w-full min-h-[40px] rounded-lg border-gray-400 text-sm font-mono focus:border-brand-600 focus:ring-brand-600">
                                     </label>
                                 @endforeach
+                                @if ($mesmoProblema)
+                                    <input type="hidden" name="campo_aplicar" value="{{ $umCampo }}">
+                                    <label class="flex items-center gap-2 text-[13px] text-ink-700"><input type="checkbox" name="aplicar_em_todas" value="1" class="rounded text-brand-600 focus:ring-brand-600"> Aplicar também nas outras {{ $mesmoProblema }} {{ $mesmoProblema === 1 ? 'linha' : 'linhas' }} com este mesmo valor</label>
+                                @endif
                             </div>
-                            <button class="btn btn-sm">Confirmar</button>
+                            <div class="flex items-center gap-1.5">
+                                <button class="btn btn-sm btn-primary">Confirmar</button>
+                                @can('emitir')
+                                    <button type="button" class="btn-excluir" data-acao-url="{{ route('notas.excluir', $n) }}" data-confirmar="Excluir mesmo?" data-saindo="self" title="Tirar esta linha do lote" aria-label="Excluir a linha {{ $n->linha_planilha }}">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>Excluir
+                                    </button>
+                                @endcan
+                            </div>
                         </form>
                     @endforeach
-                    @if ($qtdInvalidas > $invalidas->count())
-                        <div class="px-5 sm:px-6 py-3.5 tabela-linha text-sm text-ink-700">Mais {{ $fmt($qtdInvalidas - $invalidas->count()) }} linhas com problema. Corrija estas e a lista se renova.</div>
-                    @endif
+                    <div data-lista-fim data-regiao="corrija-mais" data-versao="{{ $qtdInvalidas }}">
+                        @if ($qtdInvalidas > $invalidas->count())
+                            <div class="px-5 sm:px-6 py-3.5 tabela-linha text-sm text-ink-700">Mais {{ $fmt($qtdInvalidas - $invalidas->count()) }} linhas com problema. Corrija estas e a lista se renova.</div>
+                        @endif
+                    </div>
                 </div>
                 @endif
 
             </div>
 
             <aside class="flex-[1_1_300px] min-w-0 space-y-4">
-                <form method="POST" action="{{ route('importacoes.enviar', $importacao) }}" class="card p-5 space-y-4">
+                <form method="POST" action="{{ route('importacoes.enviar', $importacao) }}" class="card p-5 space-y-4" data-regiao="envio" data-versao="{{ $prontas }}-{{ $qtdInvalidas }}-{{ $saldo }}" data-carregando="Enviando…">
                     @csrf
                     <h2 class="text-base font-semibold">Resumo do envio</h2>
-                    <div class="text-sm"><div class="text-xs text-ink-600">Empresa que emite</div><div class="font-medium">{{ $importacao->emitente->razao_social }}</div></div>
+                    <div class="text-sm flex items-center gap-3">
+                        @if ($importacao->emitente->logo_url)<span class="w-12 h-12 shrink-0 rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden"><img src="{{ $importacao->emitente->logo_url }}" alt="" class="max-w-full max-h-full object-contain"></span>@endif
+                        <div><div class="text-xs text-ink-600">Empresa que emite</div><div class="font-medium">{{ $importacao->emitente->razao_social }}</div></div>
+                    </div>
                     @if ($emTeste)
                         <div class="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-[13px] leading-snug text-amber-900"><b>Modo teste.</b> As notas não têm valor fiscal.</div>
                     @endif
@@ -161,7 +193,7 @@
                     <h2 class="text-lg font-semibold">Todas as linhas da planilha</h2>
                     <p class="text-sm text-ink-600 mt-1">Confira o que será emitido. Use <b>Editar</b> para ajustar qualquer linha antes de enviar.</p>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap gap-2" data-regiao="filtros" data-versao="{{ $total }}-{{ $prontas }}-{{ $qtdInvalidas }}-{{ $ver }}">
                     @foreach (['todas' => ['Todas', $total], 'prontas' => ['Prontas', $prontas], 'problemas' => ['Com problema', $qtdInvalidas]] as $chave => [$rotulo, $qtd])
                         <a href="{{ route('importacoes.conferir', [$importacao, 'ver' => $chave]) }}#linhas" @class(['inline-flex items-center gap-1.5 min-h-[40px] px-3.5 rounded-full border text-sm no-underline', 'bg-ink-900 text-white border-ink-900' => $ver === $chave, 'bg-white text-ink-900 border-gray-300 hover:bg-gray-50' => $ver !== $chave])>{{ $rotulo }} <span class="opacity-80">{{ $fmt($qtd) }}</span></a>
                     @endforeach
@@ -172,7 +204,7 @@
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[920px] table-fixed text-sm">
                     <colgroup>
-                        <col class="w-[64px]"><col class="w-[112px]"><col class="w-[27%]"><col class="w-[104px]"><col><col class="w-[124px]"><col class="w-[124px]"><col class="w-[100px]">
+                        <col class="w-[64px]"><col class="w-[112px]"><col class="w-[27%]"><col class="w-[104px]"><col><col class="w-[124px]"><col class="w-[124px]"><col class="w-[210px]">
                     </colgroup>
                     <thead class="text-left text-xs uppercase tracking-wide text-ink-600 bg-chao/60 border-y border-linha">
                         <tr>
@@ -193,7 +225,7 @@
                             $v = fn ($campo, $atual) => $comErro ? old($campo) : $atual;
                             $entrada = 'mt-1 block w-full min-h-[40px] rounded-lg border-gray-400 text-sm focus:border-brand-600 focus:ring-brand-600';
                         @endphp
-                        <tbody x-data="{ editando: {{ $comErro ? 'true' : 'false' }} }" id="linha-{{ $l->id }}">
+                        <tbody x-data="{ editando: {{ $comErro ? 'true' : 'false' }} }" id="linha-{{ $l->id }}" data-regiao="linha-{{ $l->id }}" data-versao="{{ $l->updated_at?->timestamp }}-{{ $l->status->value }}" data-item="t{{ $l->id }}">
                             <tr @class(['tabela-linha align-middle', 'bg-warn-50' => $problema, 'hover:bg-gray-50' => ! $problema]) x-show="!editando">
                                 <td class="ps-5 sm:ps-6 pe-3 py-3.5 font-mono text-ink-600">{{ $l->linha_planilha }}</td>
                                 <td class="pe-3 py-3.5 whitespace-nowrap">
@@ -212,7 +244,8 @@
                                 <td class="pe-5 py-3.5 font-mono text-right whitespace-nowrap">R$ {{ number_format($l->valor, 2, ',', '.') }}</td>
                                 <td class="pe-3 py-3.5 whitespace-nowrap text-ink-700">{{ $l->data_competencia?->format('d/m/Y') }}</td>
                                 <td class="pe-4 sm:pe-5 py-2 text-right whitespace-nowrap">
-                                    @can('emitir')<button type="button" class="inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" @click="editando = true" aria-label="Editar a linha {{ $l->linha_planilha }}"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Editar</button>@endcan
+                                    @can('emitir')<button type="button" class="inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" @click="editando = true" aria-label="Editar a linha {{ $l->linha_planilha }}"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Editar</button>
+                                    <button type="button" class="btn-excluir" data-acao-url="{{ route('notas.excluir', $l) }}" data-confirmar="Excluir mesmo?" data-saindo="self" aria-label="Excluir a linha {{ $l->linha_planilha }}"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>Excluir</button>@endcan
                                 </td>
                             </tr>
                             @if ($problema && $l->erros)
@@ -222,7 +255,7 @@
                             @can('emitir')
                             <tr x-show="editando" x-cloak class="bg-brand-50 border-t border-brand-200">
                                 <td colspan="8" class="px-5 sm:px-6 py-4">
-                                    <form method="POST" action="{{ route('notas.corrigir', $l) }}" class="space-y-3">
+                                    <form method="POST" action="{{ route('notas.corrigir', $l) }}" class="space-y-3" data-ajax data-ajax-texto="Salvando…">
                                         @csrf @method('PATCH')
                                         <input type="hidden" name="_nota" value="{{ $l->id }}">
                                         <div class="font-medium text-sm">Editando a linha {{ $l->linha_planilha }} <span class="text-ink-600 font-normal">· a mudança vale só para o envio; sua planilha original não é alterada.</span></div>

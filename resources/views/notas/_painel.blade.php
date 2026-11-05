@@ -4,13 +4,13 @@
         ? \App\Models\NotaFiscal::where('importacao_id', $nota->importacao_id)->where('status', \App\Enums\StatusNota::Rejeitada)->where('codigo_servico', $nota->codigo_servico)->whereKeyNot($nota->id)->count()
         : 0;
 @endphp
-<aside class="card flex-[1_1_380px] min-w-0 max-w-[460px] p-5 sm:p-6 space-y-4 border-2 border-brand-600" aria-label="Corrigir nota da linha {{ $nota->linha_planilha }}">
+<aside class="card w-full p-5 sm:p-6 space-y-4 border-2 border-brand-600" aria-label="Corrigir nota da linha {{ $nota->linha_planilha }}">
     <div class="flex items-start justify-between gap-3">
         <div>
             <div class="text-[13px] text-ink-600">Linha {{ $nota->linha_planilha }} · {{ $nota->tomador_nome }}</div>
             <h2 class="text-xl font-semibold mt-0.5">{{ $ex['titulo'] }}</h2>
         </div>
-        <a href="{{ $fechar }}" aria-label="Fechar" class="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 hover:bg-gray-50">
+        <a href="{{ $fechar }}" data-fechar aria-label="Fechar" class="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 hover:bg-gray-50">
             <svg class="w-4 h-4 text-ink-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </a>
     </div>
@@ -22,9 +22,9 @@
 
     @can('emitir')
         @if ($ex['reenviar_direto'])
-            <form method="POST" action="{{ route('notas.reenviar', $nota) }}">@csrf<button class="btn btn-primary btn-lg w-full">Reenviar</button></form>
+            <form method="POST" action="{{ route('notas.reenviar', $nota) }}" data-ajax data-ajax-texto="Reenviando…" data-fechar-painel>@csrf<button class="btn btn-primary btn-lg w-full">Reenviar</button></form>
         @elseif ($ex['campos'])
-            <form method="POST" action="{{ route('notas.corrigir', $nota) }}" class="space-y-4">
+            <form method="POST" action="{{ route('notas.corrigir', $nota) }}" class="space-y-4" data-ajax data-ajax-texto="{{ $nota->importacao?->status === 'conferir' ? 'Salvando…' : 'Reenviando…' }}" data-fechar-painel>
                 @csrf @method('PATCH')
                 @foreach ($ex['campos'] as $campo)
                     @php $valorAtual = match ($campo) {

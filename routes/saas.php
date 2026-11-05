@@ -60,6 +60,7 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/importacoes/{importacao}/conferir', [ImportacaoController::class, 'conferir'])->name('importacoes.conferir');
     Route::post('/importacoes/{importacao}/enviar', [ImportacaoController::class, 'enviar'])->name('importacoes.enviar');
     Route::get('/importacoes/{importacao}', [ImportacaoController::class, 'show'])->name('importacoes.show');
+    Route::delete('/importacoes/{importacao}', [ImportacaoController::class, 'excluir'])->name('importacoes.excluir');
     Route::get('/importacoes/{importacao}/progresso', [ImportacaoController::class, 'progresso'])->name('importacoes.progresso');
     Route::post('/importacoes/{importacao}/reenviar-falhas', [ImportacaoController::class, 'reenviarFalhas'])->name('importacoes.reenviar-falhas');
 
@@ -71,6 +72,7 @@ Route::middleware(['auth', 'conta'])->group(function () {
     // Notas que precisam de ação, correção e reenvio
     Route::get('/pendencias', [NotaController::class, 'pendencias'])->name('pendencias');
     Route::patch('/notas/{nota}', [NotaController::class, 'corrigir'])->name('notas.corrigir');
+    Route::delete('/notas/{nota}', [NotaController::class, 'excluir'])->name('notas.excluir');
     Route::post('/notas/{nota}/reenviar', [ImportacaoController::class, 'reenviar'])->name('notas.reenviar');
 });
 

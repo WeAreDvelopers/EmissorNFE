@@ -9,6 +9,7 @@ use App\Services\Nfse\EnvioDeNotas;
 use App\Support\ExplicacaoErro;
 use App\Support\ValidadorLinha;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class NotaController extends Controller
@@ -57,25 +58,38 @@ class NotaController extends Controller
             throw ValidationException::withMessages($validador->errors()->messages());
         }
 
-        $codigoAntigo = $nota->codigo_servico;
+        // "Aplicar nas outras": o mesmo valor, no mesmo campo, nas notas do mesmo lote que tinham o mesmo problema
+        $campoAplicar = $request->input('campo_aplicar', 'codigo_servico');
+        $campoAplicar = in_array($campoAplicar, ValidadorLinha::CAMPOS, true) ? $campoAplicar : 'codigo_servico';
+        $valorAntigo = $nota->getRawOriginal($campoAplicar);
+        $statusInicial = $nota->status;
+
         $nota->update(ValidadorLinha::paraGravar($dados));
 
         $afetadas = collect([$nota]);
+        $importacao = $nota->importacao;
+        $antesDoEnvio = $importacao && $importacao->status === 'conferir';
 
-        // "Aplicar nas N": mesma troca de código de serviço nas outras notas recusadas do mesmo lote
-        if ($request->boolean('aplicar_em_todas') && $codigoAntigo !== $dados['codigo_servico'] && $nota->importacao_id) {
-            NotaFiscal::where('importacao_id', $nota->importacao_id)
-                ->where('status', StatusNota::Rejeitada)
-                ->where('codigo_servico', $codigoAntigo)
+        if ($request->boolean('aplicar_em_todas') && $nota->importacao_id && (string) $valorAntigo !== (string) $dados[$campoAplicar]
+            && in_array($statusInicial, [StatusNota::Rejeitada, StatusNota::Invalida], true)) {
+            NotaFiscal::with('emitente')->where('importacao_id', $nota->importacao_id)
+                ->where('status', $statusInicial)
+                ->where($campoAplicar, $valorAntigo)
                 ->whereKeyNot($nota->id)
-                ->each(function (NotaFiscal $outra) use ($dados, $afetadas) {
-                    $outra->update(['codigo_servico' => $dados['codigo_servico']]);
+                ->each(function (NotaFiscal $outra) use ($dados, $campoAplicar, $afetadas, $statusInicial) {
+                    $outra->update([$campoAplicar => $dados[$campoAplicar]]);
+
+                    if ($statusInicial === StatusNota::Invalida) {
+                        // Só vira pronta se a linha inteira passar na conferência com o valor novo
+                        $d = ValidadorLinha::normalizar([...$outra->only(ValidadorLinha::CAMPOS), 'data_competencia' => $outra->data_competencia?->toDateString()], $outra->emitente);
+                        if (ValidadorLinha::validar($d, $outra->emitente)->fails()) {
+                            return;
+                        }
+                        $outra->update(ValidadorLinha::paraGravar($d));
+                    }
                     $afetadas->push($outra);
                 });
         }
-
-        $importacao = $nota->importacao;
-        $antesDoEnvio = $importacao && $importacao->status === 'conferir';
 
         foreach ($afetadas as $n) {
             if ($antesDoEnvio) {
@@ -88,12 +102,36 @@ class NotaController extends Controller
         $importacao?->recontarInvalidas();
 
         $msg = $antesDoEnvio
-            ? "Linha {$nota->linha_planilha} corrigida."
+            ? ($afetadas->count() > 1 ? "{$afetadas->count()} linhas corrigidas." : "Linha {$nota->linha_planilha} corrigida.")
             : ($afetadas->count() > 1 ? "{$afetadas->count()} notas corrigidas e reenviadas." : "Linha {$nota->linha_planilha} corrigida e reenviada.");
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'mensagem' => $msg, 'notas' => $afetadas->pluck('id')->all()]);
+        }
 
         // Antes do envio volta para a mesma página/filtro da conferência (e à linha editada)
         $destino = $antesDoEnvio ? url()->previous(route('importacoes.conferir', $importacao)) : url()->previous();
 
         return redirect()->to(strtok($destino, '#').($antesDoEnvio ? "#linha-{$nota->id}" : ''))->with('ok', $msg);
+    }
+
+    /** Tira uma linha do lote antes do envio (nunca gastou crédito). */
+    public function excluir(Request $request, NotaFiscal $nota)
+    {
+        $this->authorize('emitir');
+
+        $importacao = $nota->importacao;
+        abort_unless($importacao && $importacao->status === 'conferir'
+            && in_array($nota->status, [StatusNota::Invalida, StatusNota::Rascunho], true), 422, 'Só dá para excluir linhas de um lote que ainda não foi enviado.');
+
+        $linha = $nota->linha_planilha;
+        DB::table('movimentos_credito')->where('nota_fiscal_id', $nota->id)->update(['nota_fiscal_id' => null]);
+        $nota->delete();
+        $importacao->update(['total_linhas' => $importacao->notas()->count()]);
+        $importacao->recontarInvalidas();
+
+        $msg = "Linha {$linha} excluída do lote.";
+
+        return $request->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
     }
 }

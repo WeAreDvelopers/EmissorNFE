@@ -14,7 +14,7 @@
     </div>
     <div class="col-start-2 sm:col-start-auto sm:text-right">
         @if ($precisa)
-            <a href="{{ $href }}" class="font-semibold text-brand-600 no-underline hover:underline">{{ $nota->status === \App\Enums\StatusNota::Falhou ? 'Reenviar' : 'Corrigir' }} →</a>
+            <a href="{{ $href }}" data-painel class="font-semibold text-brand-600 no-underline hover:underline">{{ $nota->status === \App\Enums\StatusNota::Falhou ? 'Reenviar' : 'Corrigir' }} →</a>
         @endif
     </div>
 </div>
