@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->web(prepend: [\App\Http\Middleware\IdentificarRevenda::class]);
-        $middleware->alias(['conta' => \App\Http\Middleware\DefinirContaAtual::class]);
+        $middleware->alias([
+            'conta'  => \App\Http\Middleware\DefinirContaAtual::class,
+            'master' => \App\Http\Middleware\SomenteMaster::class,
+        ]);
         // A conta ativa precisa existir ANTES de o Laravel carregar {importacao}, {nota}, {pagamento}… da URL:
         // esses modelos são filtrados pela conta, e sem ela a busca não acha nada (404).
         $middleware->prependToPriorityList(

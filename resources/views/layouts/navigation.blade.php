@@ -13,12 +13,19 @@
         ['importacoes.index', 'Importações',  'consultar', 'importacoes.*'],
         ['creditos.index',    'Créditos',     'consultar', 'creditos.*'],
     ], fn ($l) => Gate::allows($l[2])) : [];
+
+    // Área master (administrador da plataforma): menu próprio e atalho de ida e volta
+    $ehMaster = (bool) ($usuario->admin_plataforma ?? false);
+    $noMaster = request()->routeIs('master.*');
+    if ($noMaster) {
+        $links = [['master.visao', 'Visão geral', null, 'master.visao'], ['master.clientes', 'Clientes', null, 'master.cliente*']];
+    }
 @endphp
 <nav x-data="{ open: false }" class="bg-white border-b border-linha" aria-label="Principal">
     <div class="max-w-[1240px] mx-auto px-4 sm:px-8">
         <div class="flex items-center justify-between min-h-16 gap-4">
             <div class="flex items-center gap-2 sm:gap-4">
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3">
+                <a href="{{ route($noMaster ? 'master.visao' : 'dashboard') }}" class="flex items-center gap-3">
                     <span class="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center font-semibold" aria-hidden="true">N</span>
                     <span class="font-semibold hidden sm:inline">{{ config('saas.nome_produto', 'Emissor NFS-e') }}</span>
                 </a>
@@ -31,6 +38,9 @@
             </div>
 
             <div class="hidden md:flex items-center gap-3">
+                @if ($ehMaster)
+                    <a href="{{ route($noMaster ? 'inicio' : 'master.visao') }}" class="pill bg-ink-900 text-white font-semibold no-underline hover:bg-ink-700">{{ $noMaster ? '← Voltar ao app' : 'Master' }}</a>
+                @endif
                 @if ($modoTeste)
                     <span class="pill bg-amber-100 text-amber-900 font-semibold" title="As notas emitidas em modo teste não têm valor fiscal">Modo teste</span>
                 @elseif ($emProducao)
@@ -99,6 +109,7 @@
                 <a href="{{ route('emitentes.index') }}" class="flex items-center min-h-[44px] px-3 rounded-lg text-ink-700">Empresas que emitem</a>
                 @can('gerenciar-usuarios')<a href="{{ route('usuarios.index') }}" class="flex items-center min-h-[44px] px-3 rounded-lg text-ink-700">Usuários da conta</a>@endcan
             @endif
+            @if ($ehMaster)<a href="{{ route($noMaster ? 'inicio' : 'master.visao') }}" class="flex items-center min-h-[44px] px-3 rounded-lg font-semibold text-ink-900">{{ $noMaster ? '← Voltar ao app' : 'Área master' }}</a>@endif
             <a href="{{ route('profile.edit') }}" class="flex items-center min-h-[44px] px-3 rounded-lg text-ink-700">Meu perfil</a>
         </div>
         <div class="px-4 py-3 border-t border-linha flex items-center justify-between gap-3 text-sm">

@@ -19,3 +19,4 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/auth.php';
 require __DIR__.'/saas.php';
+require __DIR__.'/master.php';
