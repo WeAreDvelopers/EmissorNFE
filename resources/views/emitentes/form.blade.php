@@ -191,6 +191,49 @@
             </form>
 
             <aside class="flex-[1_1_280px] min-w-0 space-y-4">
+                @isset($numeracao)
+                    <div class="card p-5 space-y-3">
+                        <h2 class="text-base font-semibold">Numeração da DPS · série {{ $emitente->serie_dps }}</h2>
+                        <p class="text-[13px] text-ink-700 leading-relaxed">Número de controle de cada nota enviada. O app cuida disso sozinho e nunca repete um número. O número que vale para o cliente é o da NFS-e, dado pelo ambiente nacional ao autorizar.</p>
+                        @foreach ($numeracao as $ambiente => $n)
+                            <div class="rounded-lg border border-gray-200 p-3 space-y-2">
+                                <div class="flex justify-between gap-2 text-sm"><b>{{ $n['rotulo'] }}</b><span class="text-ink-600">último usado <b class="font-mono text-ink-900">{{ $n['ultimo'] ?: '—' }}</b> · próximo <b class="font-mono text-ink-900">{{ $n['proximo'] }}</b></span></div>
+                                <form method="POST" action="{{ route('emitentes.numeracao', $emitente) }}" class="flex gap-2 items-end">
+                                    @csrf
+                                    <input type="hidden" name="ambiente" value="{{ $ambiente }}">
+                                    <div class="flex-1">
+                                        <label for="proximo-{{ $ambiente }}" class="campo-rotulo text-xs">Ajustar o próximo número</label>
+                                        <input id="proximo-{{ $ambiente }}" name="proximo" type="number" min="{{ $n['maior_usado'] + 1 }}" value="{{ old('ambiente') == $ambiente ? old('proximo') : $n['proximo'] }}" class="campo-entrada font-mono !mt-0">
+                                    </div>
+                                    <button class="btn btn-sm">Ajustar</button>
+                                </form>
+                                @if (old('ambiente') == $ambiente) @error('proximo')<p class="text-[13px] text-warn-800" role="alert">{{ $message }}</p>@enderror @endif
+                            </div>
+                        @endforeach
+                        <p class="text-[12px] text-ink-600">Só o dono ajusta. Não dá para voltar a um número que já foi usado.</p>
+
+                        @if ($historicoDps->isNotEmpty())
+                            <details>
+                                <summary class="cursor-pointer text-sm font-medium">Números já usados</summary>
+                                <div class="mt-2 text-[13px] divide-y divide-gray-100">
+                                    @foreach ($historicoDps as $h)
+                                        <div class="py-1.5 flex justify-between gap-2"><span class="font-mono">{{ $h->ambiente == 1 ? 'Prod.' : 'Teste' }} · DPS {{ $h->numero_dps }}</span><span class="text-ink-600">{{ $h->numero_nfse ? 'NFS-e nº '.$h->numero_nfse : $h->status->label() }}</span></div>
+                                    @endforeach
+                                </div>
+                            </details>
+                        @endif
+                        @if ($ajustesDps->isNotEmpty())
+                            <details>
+                                <summary class="cursor-pointer text-sm font-medium">Ajustes manuais</summary>
+                                <div class="mt-2 text-[13px] divide-y divide-gray-100">
+                                    @foreach ($ajustesDps as $a)
+                                        <div class="py-1.5">{{ \Illuminate\Support\Carbon::parse($a->created_at)->format('d/m/Y H:i') }} · {{ $a->ambiente == 1 ? 'produção' : 'teste' }}: próximo {{ $a->de }} → {{ $a->para }}</div>
+                                    @endforeach
+                                </div>
+                            </details>
+                        @endif
+                    </div>
+                @endisset
                 <div class="card p-5">
                     <h2 class="text-base font-semibold mb-2">Não tem o certificado?</h2>
                     <p class="text-sm leading-relaxed text-ink-700">É um arquivo .pfx ou .p12 (certificado A1) emitido para o CNPJ da empresa. Seu contador costuma ter.</p>

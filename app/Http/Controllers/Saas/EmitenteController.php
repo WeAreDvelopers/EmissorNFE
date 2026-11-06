@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Saas;
 use App\Http\Controllers\Controller;
 use App\Models\Emitente;
 use App\Services\Nfse\Certificado;
+use App\Services\Nfse\NumeracaoDps;
 use App\Support\Documento;
 use App\Support\ListaServicoNacional;
 use Illuminate\Http\Request;
@@ -62,7 +63,29 @@ class EmitenteController extends Controller
     {
         $this->authorize('gerenciar-emitentes');
 
-        return view('emitentes.form', compact('emitente'));
+        $numeracao = app(NumeracaoDps::class);
+
+        return view('emitentes.form', [
+            'emitente'     => $emitente,
+            'numeracao'    => $numeracao->situacao($emitente),
+            'historicoDps' => $numeracao->historico($emitente),
+            'ajustesDps'   => $numeracao->ajustes($emitente),
+        ]);
+    }
+
+    /** Ajuste manual do próximo número da DPS (somente o dono; não deixa repetir número já usado). */
+    public function ajustarNumeracao(Request $request, Emitente $emitente, NumeracaoDps $numeracao)
+    {
+        $this->authorize('gerenciar-emitentes');
+
+        $dados = $request->validate([
+            'ambiente' => ['required', 'in:1,2'],
+            'proximo'  => ['required', 'integer', 'min:1'],
+        ], ['proximo.required' => 'Informe o próximo número.', 'proximo.integer' => 'O próximo número precisa ser um número inteiro.', 'proximo.min' => 'O próximo número precisa ser 1 ou maior.']);
+
+        $numeracao->ajustar($emitente, (int) $dados['ambiente'], (int) $dados['proximo'], $request->user()?->id);
+
+        return back()->with('ok', 'Numeração ajustada. A próxima DPS será a nº '.number_format((int) $dados['proximo'], 0, ',', '.').'.');
     }
 
     public function store(Request $request)
