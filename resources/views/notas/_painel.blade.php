@@ -7,7 +7,7 @@
 <aside class="card w-full p-5 sm:p-6 space-y-4 border-2 border-brand-600" aria-label="Corrigir nota da linha {{ $nota->linha_planilha }}">
     <div class="flex items-start justify-between gap-3">
         <div>
-            <div class="text-[13px] text-ink-600">Linha {{ $nota->linha_planilha }} · {{ $nota->tomador_nome }}</div>
+            <div class="text-[13px] text-ink-600">Linha {{ $nota->linha_planilha }} · {{ $nota->tomador_rotulo }}</div>
             <h2 class="text-xl font-semibold mt-0.5">{{ $ex['titulo'] }}</h2>
         </div>
         <a href="{{ $fechar }}" data-fechar aria-label="Fechar" class="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 hover:bg-gray-50">
@@ -48,8 +48,8 @@
                 <div class="rounded-lg bg-chao px-3.5 py-3 text-[13px] leading-relaxed text-ink-700">
                     @if ($nota->status === \App\Enums\StatusNota::Invalida && $nota->importacao?->status === 'conferir')
                         Esta nota ainda não gastou crédito.
-                    @elseif ($nota->emitente?->ehHomologacao())
-                        Modo teste: reenviar não gasta crédito.
+                    @elseif ($nota->emitente?->semCobranca())
+                        {{ $nota->emitente->ehHomologacao() ? 'Modo teste: reenviar não gasta crédito.' : 'Esta empresa não paga por nota: reenviar não gasta crédito.' }}
                     @else
                         Esta nota não gastou crédito. Ao reenviar, 1 crédito é reservado de novo e só é cobrado se a prefeitura autorizar.
                     @endif

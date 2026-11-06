@@ -169,7 +169,13 @@
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
- <x-campo nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" maxlength="6" mono ajuda="Usado nas notas da planilha que vierem sem código de serviço. Ex.: 010701 (manutenção de programas de computação)." />
+ <x-campo nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" maxlength="6" mono ajuda="Usado nas linhas da planilha sem código de serviço. Empresas com vários serviços podem trazer o código na planilha. Ex.: 010701 (manutenção de programas de computação)." />
+                        <x-campo nome="codigo_nbs_padrao" rotulo="NBS padrão (opcional)" :valor="$emitente->codigo_nbs_padrao" maxlength="9" mono ajuda="9 dígitos. Usado quando a planilha não traz NBS. Confirme com a contabilidade." />
+                        <div class="sm:col-span-2">
+                            <label for="descricao_servico_padrao" class="campo-rotulo">Descrição padrão do serviço</label>
+                            <textarea id="descricao_servico_padrao" name="descricao_servico_padrao" rows="2" class="campo-entrada" placeholder="Ex.: Manutenção de programas de computação.">{{ old('descricao_servico_padrao', $emitente->descricao_servico_padrao) }}</textarea>
+                            <p class="campo-ajuda">Vai em toda nota cuja linha da planilha não tiver descrição própria (coluna R).</p>
+                        </div>
                         <x-campo nome="serie_dps" rotulo="Série" :valor="$emitente->serie_dps" maxlength="5" mono ajuda="Já vem pronta (00001). Só mude se o seu contador pedir." required />
                         <x-campo nome="ambiente" tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera depois de emitir uma nota em teste.">
                             <option value="2" @selected(old('ambiente', $emitente->ambiente ?? 2) == 2)>Teste (as notas não têm valor fiscal)</option>

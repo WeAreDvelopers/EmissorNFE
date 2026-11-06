@@ -12,7 +12,7 @@ class Emitente extends Model
     use PertenceAConta;
 
     protected $fillable = [
-        'conta_id', 'cnpj', 'razao_social', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao',
+        'conta_id', 'cnpj', 'razao_social', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
         'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples',
         'tributos_aprox', 'serie_dps', 'ambiente', 'certificado_arquivo', 'certificado_senha',
         'certificado_validade', 'logo_arquivo', 'ativo',
@@ -23,6 +23,7 @@ class Emitente extends Model
         'certificado_senha'    => 'encrypted',
         'certificado_validade' => 'datetime',
         'ativo'                => 'boolean',
+        'cobranca_desligada'   => 'boolean',
     ];
 
     protected $hidden = ['certificado_senha', 'certificado_arquivo'];
@@ -57,6 +58,12 @@ class Emitente extends Model
     public function ehHomologacao(): bool
     {
         return (int) $this->ambiente !== 1;
+    }
+
+    /** Notas desta empresa não consomem créditos: ambiente de teste ou cobrança desligada pelo master. */
+    public function semCobranca(): bool
+    {
+        return $this->ehHomologacao() || $this->cobranca_desligada;
     }
 
     public function certificadoVenceEmDias(): ?int

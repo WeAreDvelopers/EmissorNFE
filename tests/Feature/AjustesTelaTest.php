@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\GeraPlanilha;
 use Tests\TestCase;
 
 /** Ajustes pedidos no ajustes.pdf: excluir, planilha fora do padrão, correção rápida (AJAX), logo da empresa. */
@@ -65,15 +66,17 @@ class AjustesTelaTest extends TestCase
     /** Lote com N linhas válidas e M com data de competência no futuro (inválidas). */
     private function lote(int $validas, int $invalidas = 0): Importacao
     {
-        $linhas = [self::CAB];
         $docs = ['52998224725', '11444777000161', '11222333000181', '39053344705'];
+        $linhas = [];
         for ($i = 0; $i < $validas; $i++) {
-            $linhas[] = $docs[$i % 4].";Cliente $i;;010701;;Serviço;100,00;".now()->subDay()->format('d/m/Y');
+            $linhas[] = ['doc' => $docs[$i % 4], 'nome_ref' => "Cliente $i", 'codigo' => '010701', 'descricao' => 'Serviço', 'valor' => 100];
         }
         for ($i = 0; $i < $invalidas; $i++) {
-            $linhas[] = $docs[$i % 4].";Futuro $i;;010701;;Serviço;100,00;".$this->dataFutura();
+            $linhas[] = ['doc' => $docs[$i % 4], 'nome_ref' => "Futuro $i", 'codigo' => '010701', 'descricao' => 'Serviço', 'valor' => 100, 'data' => now()->addDays(10)->toDateString()];
         }
-        $this->enviar('lote.csv', implode("\n", $linhas)."\n")->assertRedirect();
+        $this->actingAs($this->user)->post(route('importacoes.store'), [
+            'emitente_id' => $this->emitente->id, 'planilha' => GeraPlanilha::xlsx($this->emitente->cnpj, $linhas),
+        ])->assertRedirect();
 
         return Importacao::latest('id')->firstOrFail();
     }
@@ -88,28 +91,64 @@ class AjustesTelaTest extends TestCase
         $this->get(route('importacoes.criar'))->assertOk();
     }
 
-    public function test_planilha_sem_as_colunas_do_modelo_e_barrada_e_diz_quais_faltam(): void
+    public function test_planilha_fora_do_modelo_e_barrada(): void
     {
-        $this->enviar('outra.csv', "nome;valor\nJoão;10\n")
-            ->assertSessionHasErrors('planilha');
+        $this->enviar('outra.csv', "nome;valor
+João;10
+")->assertSessionHasErrors('planilha');
 
         $erro = session('errors')->first('planilha');
         $this->assertStringContainsString('fora do padrão', $erro);
-        $this->assertStringContainsString('tomador_documento', $erro);
-        $this->assertStringContainsString('data_competencia', $erro);
+        $this->assertStringContainsString('aba de notas', $erro);
         $this->assertSame(0, Importacao::count());
     }
 
-    public function test_coluna_codigo_servico_pode_faltar_se_a_empresa_tem_codigo_padrao(): void
+    public function test_formato_antigo_com_tomador_documento_nao_vale_mais(): void
     {
-        $linha = '11222333000181;Cliente;;Serviço;100,00;'.now()->subDay()->format('d/m/Y');
-        $cab = 'tomador_documento;tomador_nome;tomador_email;descricao;valor;data_competencia';
+        $this->enviar('antigo.csv', "tomador_documento;tomador_nome;codigo_servico;descricao;valor;data_competencia
+52998224725;Cliente;010701;Serviço;100,00;".now()->subDay()->format('d/m/Y')."
+")
+            ->assertSessionHasErrors('planilha');
+        $this->assertSame(0, Importacao::count());
+    }
 
-        $this->enviar('sem-codigo.csv', "$cab\n$linha\n")->assertSessionHasErrors('planilha');
+    public function test_planilha_de_outra_empresa_e_barrada_pelo_cnpj_de_a1(): void
+    {
+        $this->actingAs($this->user)->post(route('importacoes.store'), [
+            'emitente_id' => $this->emitente->id,
+            'planilha'    => GeraPlanilha::xlsx('11222333000181', [['doc' => '52998224725', 'valor' => 100]]),
+        ])->assertSessionHasErrors('planilha');
 
-        $this->emitente->update(['codigo_servico_padrao' => '010701']);
-        Importacao::query()->delete();
-        $this->enviar('sem-codigo.csv', "$cab\n$linha\n")->assertSessionHasNoErrors();
+        $this->assertStringContainsString('célula A1', session('errors')->first('planilha'));
+        $this->assertSame(0, Importacao::count());
+    }
+
+    public function test_coluna_de_codigo_vazia_usa_o_padrao_da_empresa_e_preenchida_prevalece(): void
+    {
+        $this->emitente->update(['codigo_servico_padrao' => '010302', 'descricao_servico_padrao' => 'Suporte técnico padrão']);
+        $this->actingAs($this->user)->post(route('importacoes.store'), [
+            'emitente_id' => $this->emitente->id,
+            'planilha'    => GeraPlanilha::xlsx($this->emitente->cnpj, [
+                ['doc' => '52998224725', 'nome_ref' => 'A', 'valor' => 100],
+                ['doc' => '11444777000161', 'nome_ref' => 'B', 'valor' => 100, 'codigo' => '170302', 'descricao' => 'Outra coisa'],
+            ]),
+        ])->assertSessionHasNoErrors();
+
+        $notas = NotaFiscal::semIsolamento()->orderBy('linha_planilha')->get();
+        $this->assertSame(['010302', '170302'], $notas->pluck('codigo_servico')->all());
+        $this->assertSame(['Suporte técnico padrão', 'Outra coisa'], $notas->pluck('descricao')->all());
+    }
+
+    public function test_sem_codigo_na_planilha_e_sem_padrao_a_linha_fica_invalida(): void
+    {
+        $this->actingAs($this->user)->post(route('importacoes.store'), [
+            'emitente_id' => $this->emitente->id,
+            'planilha'    => GeraPlanilha::xlsx($this->emitente->cnpj, [['doc' => '52998224725', 'nome_ref' => 'A', 'valor' => 100, 'descricao' => 'x']]),
+        ])->assertSessionHasNoErrors();
+
+        $nota = NotaFiscal::semIsolamento()->firstOrFail();
+        $this->assertSame(StatusNota::Invalida, $nota->status);
+        $this->assertStringContainsString('código de serviço', implode(' ', $nota->erros));
     }
 
     public function test_tela_de_importacao_mostra_o_alerta_forte_com_o_motivo(): void

@@ -36,7 +36,13 @@
                             @elseif ($venc->isPast())<span class="pill bg-warn-100 text-warn-800">certificado vencido em {{ $venc->format('d/m/Y') }}</span>
                             @elseif ($venc->lt(now()->addDays(30)))<span class="pill bg-amber-100 text-amber-900">certificado vence {{ $venc->format('d/m/Y') }}</span>
                             @else<span class="pill bg-gray-100 text-ink-700">certificado até {{ $venc->format('d/m/Y') }}</span>@endif
+                            <span class="pill {{ $e->cobranca_desligada ? 'bg-info-100 text-info-800' : 'bg-gray-100 text-ink-700' }}">{{ $e->cobranca_desligada ? 'sem cobrança' : 'cobrança normal' }}</span>
                         </div>
+                        <form method="POST" action="{{ route('master.empresa.cobranca', $e->id) }}" class="mt-2">
+                            @csrf
+                            <input type="hidden" name="desligar" value="{{ $e->cobranca_desligada ? 0 : 1 }}">
+                            <button class="btn btn-secondary text-xs">{{ $e->cobranca_desligada ? 'Religar cobrança' : 'Desligar cobrança' }}</button>
+                        </form>
                     </div>
                 @empty
                     <p class="text-sm text-ink-600 mt-2">Nenhuma empresa cadastrada.</p>
@@ -70,7 +76,7 @@
                 <h2 class="text-lg font-semibold">Últimos erros</h2>
                 @forelse ($ultimosErros as $n)
                     <div class="tabela-linha py-3 text-sm">
-                        <div class="flex justify-between gap-3"><span class="font-medium truncate">Linha {{ $n->linha_planilha }} · {{ $n->tomador_nome }}</span><span class="text-xs text-ink-600 shrink-0">{{ $n->updated_at->format('d/m H:i') }}</span></div>
+                        <div class="flex justify-between gap-3"><span class="font-medium truncate">Linha {{ $n->linha_planilha }} · {{ $n->tomador_rotulo }}</span><span class="text-xs text-ink-600 shrink-0">{{ $n->updated_at->format('d/m H:i') }}</span></div>
                         <div class="text-[13px] text-warn-800 leading-snug break-words">{{ \Illuminate\Support\Str::limit(implode(' | ', (array) $n->erros), 200) }}</div>
                         <div class="text-xs text-ink-600 font-mono">serviço {{ $n->codigo_servico }} · {{ $n->status->label() }}</div>
                     </div>

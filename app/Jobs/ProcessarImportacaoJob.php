@@ -2,15 +2,14 @@
 
 namespace App\Jobs;
 
-use App\Imports\NotasImport;
 use App\Models\Importacao;
+use App\Services\Nfse\ImportadorPlanilha;
 use App\Support\Tenancy\ContaAtual;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Maatwebsite\Excel\Facades\Excel;
 use Throwable;
 
 /**
@@ -33,7 +32,7 @@ class ProcessarImportacaoJob implements ShouldQueue
         app(ContaAtual::class)->como($this->importacao->conta_id, function () {
             $this->importacao->update(['status' => 'lendo']);
 
-            Excel::import(new NotasImport($this->importacao->load('emitente')), $this->importacao->arquivo_caminho);
+            app(ImportadorPlanilha::class)->importar($this->importacao->load('emitente'));
 
             $this->importacao->update(['status' => 'conferir']);
         });
@@ -49,8 +48,12 @@ class ProcessarImportacaoJob implements ShouldQueue
 
     private function mensagemAmigavel(Throwable $e): string
     {
-        // Cabeçalho errado é o caso mais comum: o usuário precisa saber qual coluna falta
-        return 'Não conseguimos ler a planilha. Confira se a primeira linha tem os nomes das colunas do modelo.'
+        // Erro já escrito para o usuário (aba/cabeçalho fora do modelo, CNPJ de A1 errado)
+        if ($e instanceof \RuntimeException) {
+            return $e->getMessage();
+        }
+
+        return 'Não conseguimos ler a planilha. Confira se ela segue o modelo de notas (cabeçalhos na linha 2 e dados a partir da linha 3).'
             .(config('app.debug') ? ' ('.$e->getMessage().')' : '');
     }
 }

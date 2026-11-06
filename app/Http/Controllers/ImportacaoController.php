@@ -11,6 +11,7 @@ use App\Models\Importacao;
 use App\Models\NotaFiscal;
 use App\Services\Creditos\CarteiraService;
 use App\Services\Nfse\EnvioDeNotas;
+use App\Services\Tomadores\CadastroTomadores;
 use App\Support\ExplicacaoErro;
 use App\Support\Tenancy\ContaAtual;
 use Illuminate\Http\Request;
@@ -116,8 +117,9 @@ class ImportacaoController extends Controller
             'qtdInvalidas' => $resumo['invalida'],
             'saldo'      => $saldo,
             'saldoDepois' => $saldo - $prontas,
-            'semCusto'   => $importacao->emitente->ehHomologacao(),
-            'semSaldo'   => ! $importacao->emitente->ehHomologacao() && $saldo < $prontas,
+            'semCusto'   => $importacao->emitente->semCobranca(),
+            'semSaldo'   => ! $importacao->emitente->semCobranca() && $saldo < $prontas,
+            'cobrancaDesligada' => ! $importacao->emitente->ehHomologacao() && $importacao->emitente->cobranca_desligada,
             'total'      => array_sum($resumo),
             'somaValores' => (float) NotaFiscal::where('importacao_id', $importacao->id)->where('status', StatusNota::Rascunho)->sum('valor'),
         ]);
@@ -134,6 +136,9 @@ class ImportacaoController extends Controller
         }
 
         abort_if($importacao->resumo()['rascunho'] === 0, 422, 'Não há notas prontas para enviar.');
+
+        // Só agora o cadastro de clientes é atualizado (a prévia foi mostrada na conferência) e fica no histórico
+        app(CadastroTomadores::class)->aplicar($importacao, $request->user()?->id);
 
         $importacao->update(['status' => 'enviando']);
         EnviarImportacaoJob::dispatch($importacao);
@@ -262,20 +267,59 @@ class ImportacaoController extends Controller
             : redirect()->route('importacoes.index')->with('ok', $msg);
     }
 
-    /** Planilha modelo (CSV com ; e BOM para abrir certo no Excel brasileiro). */
-    public function modelo()
+    /** Planilha modelo no formato dos ERPs: CNPJ em A1, totais em E1/F1, cabeçalhos na linha 2, notas a partir da linha 3. */
+    public function modelo(Request $request)
     {
         $this->authorize('consultar');
 
-        $linhas = [
-            ['tomador_documento', 'tomador_nome', 'tomador_email', 'codigo_servico', 'codigo_nbs', 'descricao', 'valor', 'data_competencia'],
-            ['12.345.678/0001-95', 'Padaria Bom Grão Ltda', 'financeiro@exemplo.com.br', '010701', '', 'Manutenção do site - outubro', '1500,00', now()->format('d/m/Y')],
-        ];
-        $csv = "\xEF\xBB\xBF".collect($linhas)->map(fn ($l) => implode(';', $l))->implode("\r\n")."\r\n";
+        // O CNPJ da empresa vem preenchido em A1: é com ele que o app confere se a planilha é da empresa certa
+        $empresa = Emitente::where('ativo', true)->find($request->integer('emitente')) ?? Emitente::where('ativo', true)->orderBy('razao_social')->first();
 
-        return response($csv, 200, [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="modelo-notas.csv"',
-        ]);
+        $livro = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $aba = $livro->getActiveSheet()->setTitle('Notas');
+        $cabecalhos = ['Data de Competência', 'Nome Fantasia (ref.)', 'Razão Social/Nome (ref.)', 'CNPJ/CPF', 'Valor (R$)', 'Imposto IBPT', 'Atualizar',
+            'Nome Fantasia (novo)', 'Razão Social/Nome (novo)', 'Logradouro', 'Número', 'Complemento', 'Bairro', 'Município', 'UF', 'CEP', 'E-mail',
+            'Descrição dos Serviços (Opcional)', 'Código de Serviço (Opcional)', 'NBS (Opcional)'];
+
+        $aba->setCellValue('A1', $empresa ? \App\Support\Documento::formatar($empresa->cnpj) : '00.000.000/0000-00');   // CNPJ da empresa que emite
+        $aba->setCellValueExplicit('A1', $empresa ? \App\Support\Documento::formatar($empresa->cnpj) : '00.000.000/0000-00', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        if ($empresa) {
+            $aba->setCellValue('B1', $empresa->razao_social);                // só para quem abre a planilha; o app lê apenas A1, E1 e F1
+        }
+        $aba->getStyle('A1:D1')->getFont()->setBold(true)->setSize(13);
+        $aba->getStyle('A1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('DDEFE3');
+        $aba->setCellValue('E1', '=SUM(E3:E200)')->setCellValue('F1', '=SUM(F3:F200)');
+        foreach ($cabecalhos as $i => $titulo) {
+            $aba->setCellValue([$i + 1, 2], $titulo);
+        }
+        $hoje = \PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel(now());
+        $exemplos = [
+            [$hoje, 'Padaria Bom Grão', 'Padaria Bom Grão Ltda', '12.345.678/0001-95', 1500, '=E3*0.1759', 'x', '', '', 'Rua das Flores', '120', 'Sala 2', 'Centro', 'São Paulo', 'SP', '01001-000', 'financeiro@exemplo.com.br, contato@exemplo.com.br', '', '', ''],
+            [$hoje, '', '', 'sem destinatário informado', 300, '=E4*0.1759', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+        ];
+        foreach ($exemplos as $l => $linha) {
+            foreach ($linha as $c => $valor) {
+                if ($valor !== '') {
+                    $aba->setCellValue([$c + 1, $l + 3], $valor);
+                }
+            }
+        }
+        $aba->getStyle('A3:A200')->getNumberFormat()->setFormatCode('dd/mm/yyyy');
+        $cab = $aba->getStyle('A2:T2');
+        $cab->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $cab->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('1F6F43');
+        $cab->getAlignment()->setWrapText(true)->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+        $aba->getStyle('H2:R2')->getFill()->getStartColor()->setRGB('2F855A');   // colunas que atualizam o cadastro (valem com x em "Atualizar")
+        $aba->freezePane('A3');
+        $aba->getStyle('E1:F200')->getNumberFormat()->setFormatCode('#,##0.00');
+        foreach (range('A', 'T') as $col) {
+            $aba->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        return response()->streamDownload(
+            fn () => (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($livro))->save('php://output'),
+            'modelo-notas-'.($empresa ? $empresa->cnpj : 'erp').'.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        );
     }
 }

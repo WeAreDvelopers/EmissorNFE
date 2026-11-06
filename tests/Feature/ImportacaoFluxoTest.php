@@ -19,6 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\GeraPlanilha;
 use Tests\TestCase;
 
 class ImportacaoFluxoTest extends TestCase
@@ -56,15 +57,15 @@ class ImportacaoFluxoTest extends TestCase
     private function csv(int $validas, bool $comInvalida = true): UploadedFile
     {
         $docs = ['52998224725', '11444777000161', '11222333000181', '39053344705', '11222333000181'];
-        $linhas = ['tomador_documento;tomador_nome;tomador_email;codigo_servico;codigo_nbs;descricao;valor;data_competencia'];
+        $linhas = [];
         for ($i = 0; $i < $validas; $i++) {
-            $linhas[] = $docs[$i % count($docs)].";Cliente $i;;010701;;Serviço $i;1.250,00;".now()->subDay()->format('d/m/Y');
+            $linhas[] = ['doc' => $docs[$i % count($docs)], 'nome_ref' => "Cliente $i", 'codigo' => '010701', 'descricao' => "Serviço $i", 'valor' => 1250];
         }
         if ($comInvalida) {
-            $linhas[] = '12345;Studio Lume;;010701;;Serviço X;700,00;'.now()->subDay()->format('d/m/Y');
+            $linhas[] = ['doc' => '12345', 'nome_ref' => 'Studio Lume', 'codigo' => '010701', 'descricao' => 'Serviço X', 'valor' => 700];
         }
 
-        return UploadedFile::fake()->createWithContent('lote.csv', implode("\n", $linhas)."\n");
+        return GeraPlanilha::xlsx($this->emitente->cnpj, $linhas);
     }
 
     private function importar(int $validas, bool $comInvalida = true): Importacao
@@ -97,9 +98,9 @@ class ImportacaoFluxoTest extends TestCase
             ->assertSee('Todas as linhas da planilha')->assertSee('Cliente 0')->assertSee('Cliente 2')->assertSee('Studio Lume')
             ->assertSee('Serviço 1')->assertSee('1.250,00');
         $this->get(route('importacoes.conferir', [$imp, 'ver' => 'problemas']))->assertOk()
-            ->assertSee('Studio Lume')->assertDontSee('Cliente 0');
+            ->assertSee('Studio Lume')->assertDontSee('Serviço 0');
         $this->get(route('importacoes.conferir', [$imp, 'ver' => 'prontas']))->assertOk()
-            ->assertSee('Cliente 0')->assertDontSee('Studio Lume</td>', false);
+            ->assertSee('Serviço 0')->assertDontSee('Serviço X');
 
         $this->get(route('importacoes.conferir', $imp))->assertOk()
             ->assertSee('Encontramos 3 notas prontas e 1 com problema')
@@ -250,13 +251,14 @@ class ImportacaoFluxoTest extends TestCase
 
         $this->actingAs($this->user);
         $this->get(route('inicio'))->assertOk()->assertSee('1 nota precisa de você')->assertSee('Importar planilha');
-        $this->get(route('importacoes.index'))->assertOk()->assertSee('lote.csv')->assertSee('Aguardando sua conferência');
+        $this->get(route('importacoes.index'))->assertOk()->assertSee('lote.xlsx')->assertSee('Aguardando sua conferência');
         $this->emitente->update(['ambiente' => 2]);   // o aviso de modo teste só aparece em homologação
         $this->get(route('importacoes.criar'))->assertOk()->assertSee('Modo teste');
         $this->get(route('pendencias'))->assertOk()->assertSee('Dado inválido');
         $nota = NotaFiscal::semIsolamento()->where('status', StatusNota::Invalida)->firstOrFail();
         $this->get(route('pendencias', ['nota' => $nota->id]))->assertOk()->assertSee('tamanho errado')->assertSee('Confirmar correção');
-        $this->get(route('importacoes.modelo'))->assertOk()->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $modelo = $this->get(route('importacoes.modelo', ['emitente' => $this->emitente->id]));
+        $modelo->assertOk()->assertDownload('modelo-notas-'.$this->emitente->cnpj.'.xlsx');
     }
 
     /** Importa, confere e envia um lote; devolve o lote original já "enviada". */

@@ -74,7 +74,7 @@ class CarteiraService
     {
         // Homologação (modo teste) é grátis: não mexe na carteira, não gera movimento e nunca fica "aguardando crédito".
         // Como nunca há reserva, consumir() e estornar() também viram no-op para essas notas.
-        if ($this->emHomologacao($nota)) {
+        if ($this->semCobranca($nota)) {
             return true;
         }
 
@@ -117,12 +117,15 @@ class CarteiraService
         });
     }
 
-    /** A nota é de um emitente em ambiente de teste? (sem isolamento: roda também no worker, sem conta ativa) */
-    public function emHomologacao(NotaFiscal $nota): bool
+    /**
+     * A nota é isenta de cobrança? Emitente em ambiente de teste ou com a cobrança desligada pelo master.
+     * (sem isolamento: roda também no worker, sem conta ativa)
+     */
+    public function semCobranca(NotaFiscal $nota): bool
     {
-        $ambiente = Emitente::semIsolamento()->whereKey($nota->emitente_id)->value('ambiente');
+        $e = Emitente::semIsolamento()->whereKey($nota->emitente_id)->first(['ambiente', 'cobranca_desligada']);
 
-        return $ambiente !== null && (int) $ambiente !== 1;
+        return $e !== null && ((int) $e->ambiente !== 1 || $e->cobranca_desligada);
     }
 
     /** NFS-e autorizada: o crédito reservado é consumido. */

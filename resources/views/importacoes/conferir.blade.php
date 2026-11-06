@@ -58,6 +58,37 @@
         <div class="flex flex-wrap gap-6 items-start">
 
             <div class="flex-[999_1_620px] min-w-0 space-y-5">
+                @foreach ($importacao->avisos ?? [] as $aviso)
+                    <div class="rounded-xl bg-amber-50 border border-amber-300 px-4 py-3.5 text-sm text-amber-900 flex gap-3" role="alert">
+                        <svg class="w-5 h-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+                        <span><b>Confira antes de enviar.</b> {{ $aviso }}</span>
+                    </div>
+                @endforeach
+
+                @php $atualizacoes = collect($importacao->atualizacoes ?? []); $rotulosCampos = \App\Models\Tomador::CAMPOS; $fmtCampo = fn ($v) => is_array($v) ? implode(', ', $v) : ($v === null || $v === '' ? '—' : $v); @endphp
+                @if ($atualizacoes->isNotEmpty())
+                    <details class="card p-5 sm:p-6" open>
+                        <summary class="cursor-pointer text-lg font-semibold">Cadastro de clientes: {{ $atualizacoes->where('novo', true)->count() }} {{ $atualizacoes->where('novo', true)->count() === 1 ? 'novo' : 'novos' }} e {{ $atualizacoes->where('novo', false)->count() }} {{ $atualizacoes->where('novo', false)->count() === 1 ? 'atualizado' : 'atualizados' }}</summary>
+                        <p class="text-sm text-ink-700 mt-2">Nada foi gravado ainda. Quando você enviar as notas, o cadastro é atualizado assim e a mudança fica no histórico do cliente.</p>
+                        <div class="mt-3 divide-y divide-gray-200">
+                            @foreach ($atualizacoes as $a)
+                                <div class="py-3 text-sm">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-medium">{{ $a['nome'] ?: 'Sem nome' }}</span>
+                                        <span class="font-mono text-xs text-ink-600">{{ \App\Support\Documento::formatar($a['documento']) }}</span>
+                                        <span class="pill {{ $a['novo'] ? 'bg-info-100 text-info-800' : 'bg-gray-100 text-ink-700' }}">{{ $a['novo'] ? 'cliente novo' : 'atualizar' }}</span>
+                                    </div>
+                                    @foreach ($a['campos'] as $campo => [$de, $para])
+                                        @if (isset($rotulosCampos[$campo]) && ! ($a['novo'] && $campo === 'nome'))
+                                            <div class="text-[13px] leading-snug mt-0.5"><b>{{ $rotulosCampos[$campo] }}:</b> @unless ($a['novo'])<span class="text-ink-600">{{ $fmtCampo($de) }}</span> → @endunless{{ $fmtCampo($para) }}</div>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @endforeach
+                        </div>
+                    </details>
+                @endif
+
                 <div class="card p-5 sm:p-6 space-y-4" data-regiao="resumo" data-versao="{{ $prontas }}-{{ $qtdInvalidas }}-{{ $somaValores }}-{{ $saldo }}">
                     <h2 class="text-xl font-semibold">
                         @if ($prontas && $qtdInvalidas) Encontramos {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota pronta' : 'notas prontas' }} e {{ $fmt($qtdInvalidas) }} com problema
@@ -73,7 +104,11 @@
 
                     @if ($semCusto)
                         <div class="rounded-lg bg-ok-50 border border-brand-200 px-4 py-3.5 text-sm leading-relaxed text-ok-800">
-                            <b>Modo teste: não gasta créditos.</b> As notas enviadas em homologação não consomem o seu saldo e não têm valor fiscal.
+                            @if ($cobrancaDesligada)
+                                <b>Esta empresa não paga por nota.</b> O envio não consome créditos do seu saldo.
+                            @else
+                                <b>Modo teste: não gasta créditos.</b> As notas enviadas em homologação não consomem o seu saldo e não têm valor fiscal.
+                            @endif
                         </div>
                     @else
                     <div class="rounded-lg bg-chao px-4 py-3.5 text-sm leading-relaxed text-ink-900">
@@ -239,8 +274,8 @@
                                     @else<span class="pill bg-ok-100 text-ok-800">Pronta</span>@endif
                                 </td>
                                 <td class="pe-4 py-3.5">
-                                    <div class="font-medium truncate" title="{{ $l->tomador_nome }}">{{ $l->tomador_nome }}</div>
-                                    <div class="text-xs text-ink-600 mt-0.5 truncate"><span class="font-mono">{{ \App\Support\Documento::formatar($l->tomador_documento) }}</span>@if ($l->tomador_email) · {{ $l->tomador_email }}@endif</div>
+                                    <div class="font-medium truncate" title="{{ $l->tomador_rotulo }}">{{ $l->tomador_rotulo }}</div>
+                                    @unless ($l->sem_tomador)<div class="text-xs text-ink-600 mt-0.5 truncate"><span class="font-mono">{{ \App\Support\Documento::formatar($l->tomador_documento) }}</span>@if ($l->tomador_email) · {{ $l->tomador_email }}@endif</div>@endunless
                                 </td>
                                 <td class="pe-3 py-3.5 whitespace-nowrap">
                                     <div class="font-mono text-[13px]">{{ $l->codigo_servico }}</div>

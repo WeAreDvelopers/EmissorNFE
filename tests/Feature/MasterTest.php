@@ -163,13 +163,63 @@ class MasterTest extends TestCase
         $registro->delete();
     }
 
-    public function test_nao_existe_rota_de_escrita_na_area_master(): void
+    public function test_unica_escrita_da_area_master_e_a_cobranca_da_empresa(): void
     {
-        $metodos = collect(app('router')->getRoutes()->getRoutes())
+        $escritas = collect(app('router')->getRoutes()->getRoutes())
             ->filter(fn ($r) => str_starts_with($r->getName() ?? '', 'master.'))
-            ->flatMap(fn ($r) => $r->methods())->unique()->values()->sort()->all();
+            ->filter(fn ($r) => array_diff($r->methods(), ['GET', 'HEAD']))
+            ->map(fn ($r) => $r->getName())->values()->all();
 
-        $this->assertSame(['GET', 'HEAD'], array_values($metodos));
+        $this->assertSame(['master.empresa.cobranca'], $escritas);
+    }
+
+    // ---------- cobrança por empresa ----------
+
+    private function empresaAlfa(): Emitente
+    {
+        return Emitente::semIsolamento()->where('conta_id', $this->contaA->id)->first();
+    }
+
+    public function test_master_desliga_e_religa_a_cobranca_de_uma_empresa_com_auditoria(): void
+    {
+        $empresa = $this->empresaAlfa();
+        $this->actingAs($this->master);
+
+        $this->post(route('master.empresa.cobranca', $empresa->id), ['desligar' => 1])->assertRedirect();
+        $this->assertTrue($empresa->fresh()->cobranca_desligada);
+        $this->assertDatabaseHas('auditoria_master', ['acao' => 'cobranca_desligada', 'conta_id' => $this->contaA->id, 'user_id' => $this->master->id]);
+
+        $this->post(route('master.empresa.cobranca', $empresa->id), ['desligar' => 0])->assertRedirect();
+        $this->assertFalse($empresa->fresh()->cobranca_desligada);
+        $this->assertDatabaseHas('auditoria_master', ['acao' => 'cobranca_ligada']);
+    }
+
+    public function test_cliente_comum_nao_consegue_desligar_a_cobranca(): void
+    {
+        $this->actingAs($this->cliente)->post(route('master.empresa.cobranca', $this->empresaAlfa()->id), ['desligar' => 1])->assertNotFound();
+        $this->assertFalse($this->empresaAlfa()->cobranca_desligada);
+    }
+
+    public function test_cobranca_desligada_vale_so_para_a_empresa_escolhida(): void
+    {
+        $this->actingAs($this->master)->post(route('master.empresa.cobranca', $this->empresaAlfa()->id), ['desligar' => 1]);
+
+        $this->assertTrue($this->empresaAlfa()->cobranca_desligada);
+        $this->assertFalse(Emitente::semIsolamento()->where('conta_id', $this->contaB->id)->first()->cobranca_desligada);
+    }
+
+    public function test_empresa_sem_cobranca_nao_reserva_nem_consome_credito_em_producao(): void
+    {
+        $empresa = $this->empresaAlfa();                       // produção (ambiente 1), conta Alfa sem saldo
+        $nota = NotaFiscal::semIsolamento()->where('emitente_id', $empresa->id)->first();
+        $carteira = app(\App\Services\Creditos\CarteiraService::class);
+
+        $this->assertFalse($carteira->reservar($nota), 'com cobrança e sem saldo, não reserva');
+
+        $empresa->forceFill(['cobranca_desligada' => true])->save();
+
+        $this->assertTrue($carteira->reservar($nota), 'sem cobrança, segue sem precisar de saldo');
+        $this->assertDatabaseMissing('movimentos_credito', ['nota_fiscal_id' => $nota->id]);
     }
 
     // ---------- comando ----------

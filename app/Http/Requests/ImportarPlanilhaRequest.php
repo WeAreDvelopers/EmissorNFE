@@ -22,7 +22,7 @@ class ImportarPlanilhaRequest extends FormRequest
         ];
     }
 
-    /** Arquivo fora do padrão: extensão errada ou sem as colunas do modelo. */
+    /** Arquivo fora do padrão: extensão errada, sem a aba de notas do modelo ou de outra empresa. */
     public function after(): array
     {
         return [function (\Illuminate\Validation\Validator $v) {
@@ -38,17 +38,24 @@ class ImportarPlanilhaRequest extends FormRequest
                 return;
             }
 
-            $cabecalho = \App\Support\CabecalhoPlanilha::ler($arquivo);
-            if ($cabecalho === null) {
-                $v->errors()->add('planilha', 'Não conseguimos abrir este arquivo. Confira se é uma planilha válida e baixe o modelo para usar como base.');
+            // Formato único: planilha do modelo "Notas ERP" (aba de notas, CNPJ em A1, cabeçalhos na linha 2)
+            try {
+                $planilha = \App\Support\PlanilhaModelo::ler($arquivo->getRealPath());
+            } catch (\RuntimeException $e) {
+                $v->errors()->add('planilha', $e->getMessage());
 
                 return;
             }
 
             $emitente = \App\Models\Emitente::find($this->input('emitente_id'));
-            $faltam = \App\Support\CabecalhoPlanilha::faltando($cabecalho, ! $emitente?->codigo_servico_padrao);
-            if ($faltam) {
-                $v->errors()->add('planilha', 'Arquivo fora do padrão. Faltam as colunas: '.implode(', ', $faltam).'. A primeira linha precisa ter os nomes do modelo; baixe o modelo ao lado e copie seus dados para ele.');
+            if ($emitente && $planilha['cnpj'] !== $emitente->cnpj) {
+                $v->errors()->add('planilha', 'O CNPJ da célula A1 da planilha ('.\App\Support\Documento::formatar($planilha['cnpj']).') não é o da empresa escolhida ('.\App\Support\Documento::formatar($emitente->cnpj).'). Escolha a empresa certa ou use a planilha dela.');
+
+                return;
+            }
+
+            if ($planilha['linhas'] === []) {
+                $v->errors()->add('planilha', 'A planilha não tem nenhuma nota: os dados começam na linha 3.');
             }
         }];
     }

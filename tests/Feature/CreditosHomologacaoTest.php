@@ -19,6 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\GeraPlanilha;
 use Tests\TestCase;
 
 /** Modo teste (homologação) não consome crédito; produção continua reservando e cobrando. */
@@ -55,13 +56,12 @@ class CreditosHomologacaoTest extends TestCase
     /** Importa 2 linhas válidas e envia, SEM nenhum crédito na carteira. */
     private function enviarSemSaldo(): Importacao
     {
-        $linhas = ['tomador_documento;tomador_nome;tomador_email;codigo_servico;codigo_nbs;descricao;valor;data_competencia'];
-        foreach (['52998224725', '11444777000161'] as $i => $doc) {
-            $linhas[] = "$doc;Cliente $i;;010302;;Serviço $i;100,00;".now()->subDay()->format('d/m/Y');
-        }
         $this->actingAs($this->user)->post(route('importacoes.store'), [
             'emitente_id' => $this->emitente->id,
-            'planilha'    => UploadedFile::fake()->createWithContent('lote.csv', implode("\n", $linhas)."\n"),
+            'planilha'    => GeraPlanilha::xlsx($this->emitente->cnpj, [
+                ['doc' => '52998224725', 'nome_ref' => 'Cliente 0', 'codigo' => '010302', 'descricao' => 'Serviço 0', 'valor' => 100],
+                ['doc' => '11444777000161', 'nome_ref' => 'Cliente 1', 'codigo' => '010302', 'descricao' => 'Serviço 1', 'valor' => 100],
+            ]),
         ])->assertRedirect();
 
         $imp = Importacao::firstOrFail();
@@ -118,9 +118,9 @@ class CreditosHomologacaoTest extends TestCase
     public function test_tela_de_conferencia_avisa_que_modo_teste_nao_gasta_creditos(): void
     {
         $this->emitente(2);
-        $linhas = "tomador_documento;tomador_nome;tomador_email;codigo_servico;codigo_nbs;descricao;valor;data_competencia\n52998224725;Cliente;;010302;;Serviço;100,00;".now()->subDay()->format('d/m/Y')."\n";
         $this->actingAs($this->user)->post(route('importacoes.store'), [
-            'emitente_id' => $this->emitente->id, 'planilha' => UploadedFile::fake()->createWithContent('lote.csv', $linhas),
+            'emitente_id' => $this->emitente->id,
+            'planilha'    => GeraPlanilha::xlsx($this->emitente->cnpj, [['doc' => '52998224725', 'nome_ref' => 'Cliente', 'codigo' => '010302', 'descricao' => 'Serviço', 'valor' => 100]]),
         ]);
         $imp = Importacao::firstOrFail();
 
@@ -131,9 +131,9 @@ class CreditosHomologacaoTest extends TestCase
     public function test_tela_de_conferencia_em_producao_mostra_o_custo(): void
     {
         $this->emitente(1);
-        $linhas = "tomador_documento;tomador_nome;tomador_email;codigo_servico;codigo_nbs;descricao;valor;data_competencia\n52998224725;Cliente;;010302;;Serviço;100,00;".now()->subDay()->format('d/m/Y')."\n";
         $this->actingAs($this->user)->post(route('importacoes.store'), [
-            'emitente_id' => $this->emitente->id, 'planilha' => UploadedFile::fake()->createWithContent('lote.csv', $linhas),
+            'emitente_id' => $this->emitente->id,
+            'planilha'    => GeraPlanilha::xlsx($this->emitente->cnpj, [['doc' => '52998224725', 'nome_ref' => 'Cliente', 'codigo' => '010302', 'descricao' => 'Serviço', 'valor' => 100]]),
         ]);
         $imp = Importacao::firstOrFail();
 

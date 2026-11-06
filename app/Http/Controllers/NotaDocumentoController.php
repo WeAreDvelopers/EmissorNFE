@@ -44,7 +44,12 @@ class NotaDocumentoController extends Controller
     /** Endereços válidos do cliente (a planilha pode trazer vários, separados por vírgula ou ponto e vírgula). */
     public static function destinatarios(NotaFiscal $nota): array
     {
-        return collect(preg_split('/[;,\s]+/', (string) $nota->tomador_email, -1, PREG_SPLIT_NO_EMPTY))
+        // Cliente cadastrado com vários e-mails: a nota leva o principal, mas o aviso vai para todos
+        // (a menos que o e-mail da nota tenha sido corrigido à mão, aí vale o da nota).
+        $cadastro = $nota->tomador?->emails ?? [];
+        $lista = $cadastro && ($cadastro[0] ?? null) === $nota->tomador_email ? $cadastro : preg_split('/[;,\s]+/', (string) $nota->tomador_email, -1, PREG_SPLIT_NO_EMPTY);
+
+        return collect($lista)
             ->filter(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
             ->unique(fn ($e) => strtolower($e))->take(5)->values()->all();
     }

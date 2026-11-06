@@ -11,4 +11,6 @@ Route::middleware(['auth', 'master'])->prefix('master')->name('master.')->group(
     Route::get('/', [MasterController::class, 'visao'])->name('visao');
     Route::get('/clientes', [MasterController::class, 'clientes'])->name('clientes');
     Route::get('/clientes/{conta}', [MasterController::class, 'cliente'])->name('cliente');
+    // Única escrita da área master: ligar/desligar a cobrança de uma empresa (sempre auditada)
+    Route::post('/empresas/{emitente}/cobranca', [MasterController::class, 'cobranca'])->name('empresa.cobranca');
 });

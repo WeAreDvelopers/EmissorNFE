@@ -75,13 +75,16 @@ class DpsBuilder
         }
         $this->el($doc, $reg, 'regEspTrib', (string) $p['regime_especial']);
 
-        // Tomador
-        $toma = $this->el($doc, $inf, 'toma');
-        $tag = strlen($nota->tomador_documento) === 11 ? 'CPF' : 'CNPJ';
-        $this->el($doc, $toma, $tag, $nota->tomador_documento);
-        $this->el($doc, $toma, 'xNome', $nota->tomador_nome);
-        if ($nota->tomador_email) {
-            $this->el($doc, $toma, 'email', $nota->tomador_email);
+        // Tomador: "sem destinatário informado" segue sem o grupo toma (opcional no leiaute)
+        if (! $nota->sem_tomador) {
+            $toma = $this->el($doc, $inf, 'toma');
+            $tag = strlen($nota->tomador_documento) === 11 ? 'CPF' : 'CNPJ';
+            $this->el($doc, $toma, $tag, $nota->tomador_documento);
+            $this->el($doc, $toma, 'xNome', $nota->tomador_nome);
+            $this->enderecoTomador($doc, $toma, $nota);
+            if ($nota->tomador_email) {
+                $this->el($doc, $toma, 'email', $nota->tomador_email);   // o leiaute aceita um e-mail só: o principal
+            }
         }
 
         // Serviço
@@ -143,6 +146,26 @@ class DpsBuilder
                 $this->el($doc, $pct, 'pTotTribMun', $fmt($p['tributos_aprox']['municipal']));
             })(),
         };
+    }
+
+    /** Endereço do cadastro do cliente, só quando está completo (município IBGE, CEP, logradouro, número e bairro). */
+    private function enderecoTomador(DOMDocument $doc, DOMElement $toma, NotaFiscal $nota): void
+    {
+        $t = $nota->tomador;
+        if (! $t || ! $t->enderecoCompleto()) {
+            return;
+        }
+
+        $end = $this->el($doc, $toma, 'end');
+        $nac = $this->el($doc, $end, 'endNac');
+        $this->el($doc, $nac, 'cMun', $t->codigo_municipio);
+        $this->el($doc, $nac, 'CEP', $t->cep);
+        $this->el($doc, $end, 'xLgr', $t->logradouro);
+        $this->el($doc, $end, 'nro', $t->numero);
+        if (filled($t->complemento)) {
+            $this->el($doc, $end, 'xCpl', $t->complemento);
+        }
+        $this->el($doc, $end, 'xBairro', $t->bairro);
     }
 
     private function el(DOMDocument $doc, DOMElement $pai, string $nome, ?string $valor = null): DOMElement

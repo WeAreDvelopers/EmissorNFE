@@ -16,6 +16,7 @@ use App\Http\Controllers\Saas\ContaController;
 use App\Http\Controllers\Saas\CreditoController;
 use App\Http\Controllers\Saas\EmitenteController;
 use App\Http\Controllers\Saas\UsuarioController;
+use App\Http\Controllers\TomadorController;
 use App\Http\Controllers\Webhooks\PagamentoWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -69,6 +70,11 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::post('/importacoes/{importacao}/reprocessar', [ReprocessoController::class, 'reprocessar'])->name('importacoes.reprocessar');
     Route::get('/importacoes/{importacao}/editar', [ReprocessoController::class, 'editar'])->name('importacoes.editar');
     Route::put('/importacoes/{importacao}/linhas', [ReprocessoController::class, 'salvar'])->name('importacoes.linhas.salvar');
+
+    // Clientes (tomadores): cadastro por conta, com histórico de alterações
+    Route::get('/clientes', [TomadorController::class, 'index'])->name('tomadores.index');
+    Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');
+    Route::put('/clientes/{tomador}', [TomadorController::class, 'update'])->name('tomadores.update');
 
     // Notas que precisam de ação, correção e reenvio
     Route::get('/pendencias', [NotaController::class, 'pendencias'])->name('pendencias');

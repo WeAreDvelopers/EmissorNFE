@@ -16,7 +16,7 @@ class ValidadorLinha
 {
     public const CAMPOS = [
         'tomador_documento', 'tomador_nome', 'tomador_email', 'codigo_servico',
-        'codigo_nbs', 'descricao', 'valor', 'data_competencia',
+        'codigo_nbs', 'descricao', 'valor', 'data_competencia', 'sem_tomador',
     ];
 
     /** Limpa formatação comum de planilha (pontos, traços, R$, vírgula decimal, data do Excel). */
@@ -24,13 +24,21 @@ class ValidadorLinha
     {
         $soDigitos = fn ($v) => preg_replace('/\D/', '', (string) $v);
 
-        // Planilha sem código de serviço: usa o padrão da empresa (só em linha que tem outros dados)
+        // Dados fiscais que a planilha não repete: vêm do cadastro da empresa (só em linha que tem outros dados)
+        $semTomador = (bool) ($l['sem_tomador'] ?? false);
+        $temDados = collect($l)->except(['codigo_servico', 'codigo_nbs', 'descricao', 'sem_tomador'])->filter(fn ($v) => trim((string) $v) !== '')->isNotEmpty();
+
         $codigo = $soDigitos($l['codigo_servico'] ?? '');
-        if (trim($codigo, '0') === '' && $emitente?->codigo_servico_padrao) {
-            $outros = collect($l)->except(['codigo_servico', 'codigo_nbs'])->filter(fn ($v) => trim((string) $v) !== '');
-            if ($outros->isNotEmpty()) {
-                $codigo = $emitente->codigo_servico_padrao;
-            }
+        if (trim($codigo, '0') === '' && $temDados && $emitente?->codigo_servico_padrao) {
+            $codigo = $emitente->codigo_servico_padrao;
+        }
+        $descricao = trim((string) ($l['descricao'] ?? ''));
+        if ($descricao === '' && $temDados && $emitente?->descricao_servico_padrao) {
+            $descricao = trim($emitente->descricao_servico_padrao);
+        }
+        $nbs = $soDigitos($l['codigo_nbs'] ?? '');
+        if ($nbs === '' && $temDados && $emitente?->codigo_nbs_padrao) {
+            $nbs = $soDigitos($emitente->codigo_nbs_padrao);
         }
 
         $valor = trim((string) ($l['valor'] ?? ''));
@@ -47,12 +55,13 @@ class ValidadorLinha
         }
 
         return [
-            'tomador_documento' => $soDigitos($l['tomador_documento'] ?? ''),
-            'tomador_nome'      => trim((string) ($l['tomador_nome'] ?? '')),
-            'tomador_email'     => trim((string) ($l['tomador_email'] ?? '')) ?: null,
+            'tomador_documento' => $semTomador ? '' : $soDigitos($l['tomador_documento'] ?? ''),
+            'tomador_nome'      => $semTomador ? '' : trim((string) ($l['tomador_nome'] ?? '')),
+            'tomador_email'     => $semTomador ? null : (trim((string) ($l['tomador_email'] ?? '')) ?: null),
+            'sem_tomador'       => $semTomador,
             'codigo_servico'    => str_pad($codigo, 6, '0', STR_PAD_LEFT),
-            'codigo_nbs'        => $soDigitos($l['codigo_nbs'] ?? '') ?: null,
-            'descricao'         => trim((string) ($l['descricao'] ?? '')),
+            'codigo_nbs'        => $nbs ?: null,
+            'descricao'         => $descricao,
             'valor'             => $valor,
             'data_competencia'  => $data,
         ];
@@ -60,7 +69,7 @@ class ValidadorLinha
 
     public static function validar(array $dados, Emitente $emitente): ValidatorContract
     {
-        return Validator::make($dados, [
+        $regrasTomador = [
             'tomador_documento' => [
                 'bail', 'required', 'regex:/^(\d{11}|\d{14})$/',   // bail: uma mensagem só por campo, a mais útil
                 fn ($a, $v, $falha) => Documento::valido((string) $v) ?: $falha('O CPF/CNPJ do cliente não é válido (dígito verificador não confere).'),
@@ -68,6 +77,11 @@ class ValidadorLinha
             ],
             'tomador_nome'      => ['required', 'string', 'max:300'],
             'tomador_email'     => ['nullable', 'email', 'max:80'],
+        ];
+
+        // "sem destinatário informado": não há cliente para validar
+        return Validator::make($dados, [
+            ...(($dados['sem_tomador'] ?? false) ? [] : $regrasTomador),
             'codigo_servico'    => [
                 'bail', 'required', 'digits:6',
                 fn ($a, $v, $falha) => ListaServicoNacional::existe((string) $v) ?: $falha(
@@ -88,7 +102,7 @@ class ValidadorLinha
             'codigo_servico.required'     => 'Falta o código de serviço (ou defina um código padrão nos dados da empresa).',
             'codigo_servico.digits'       => 'O código de serviço precisa ter 6 dígitos.',
             'codigo_nbs.digits'           => 'O código NBS precisa ter 9 dígitos (ou ficar vazio).',
-            'descricao.required'          => 'Falta a descrição do serviço.',
+            'descricao.required'          => 'Falta a descrição do serviço (ou defina uma descrição padrão nos dados da empresa).',
             'descricao.max'               => 'A descrição passou de 2000 caracteres.',
             'valor.required'              => 'Falta o valor do serviço.',
             'valor.numeric'               => 'O valor do serviço não é um número válido.',

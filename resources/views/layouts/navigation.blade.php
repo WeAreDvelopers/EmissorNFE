@@ -11,6 +11,7 @@
     $links = $contaAtiva ? array_filter([
         ['inicio',            'Início',       'consultar', 'inicio'],
         ['importacoes.index', 'Importações',  'consultar', 'importacoes.*'],
+        ['tomadores.index',   'Clientes',     'consultar', 'tomadores.*'],
         ['creditos.index',    'Créditos',     'consultar', 'creditos.*'],
     ], fn ($l) => Gate::allows($l[2])) : [];
 

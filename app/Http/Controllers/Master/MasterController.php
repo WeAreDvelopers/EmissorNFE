@@ -199,6 +199,24 @@ class MasterController extends Controller
 
     // ------------------------------------------------------------------ um cliente
 
+    /** Liga/desliga a cobrança de créditos de UMA empresa. Registra quem fez, quando e de qual valor para qual. */
+    public function cobranca(Request $request, int $emitente)
+    {
+        $empresa = Emitente::semIsolamento()->findOrFail($emitente);
+        $desligar = $request->boolean('desligar');
+
+        if ($empresa->cobranca_desligada !== $desligar) {
+            $empresa->forceFill(['cobranca_desligada' => $desligar])->save();
+            AuditoriaMaster::registrar($desligar ? 'cobranca_desligada' : 'cobranca_ligada', $empresa->conta_id, [
+                'emitente_id' => $empresa->id, 'cnpj' => $empresa->cnpj, 'razao_social' => $empresa->razao_social,
+            ]);
+        }
+
+        return back()->with('ok', $desligar
+            ? "Cobrança desligada para {$empresa->razao_social}: as notas dela não consomem créditos."
+            : "Cobrança religada para {$empresa->razao_social}: as notas voltam a consumir créditos.");
+    }
+
     public function cliente(Conta $conta)
     {
         AuditoriaMaster::registrar('ver_conta', $conta->id);

@@ -17,7 +17,10 @@ class Importacao extends Model
     protected $fillable = [
         'conta_id', 'emitente_id', 'user_id', 'arquivo_nome', 'arquivo_caminho', 'arquivo_hash',
         'status', 'total_linhas', 'linhas_invalidas', 'erro', 'reprocessada_de_id',
+        'avisos', 'atualizacoes', 'cadastro_aplicado_em',
     ];
+
+    protected $casts = ['avisos' => 'array', 'atualizacoes' => 'array', 'cadastro_aplicado_em' => 'datetime'];
 
     /** Lote de onde este foi reprocessado (null se veio de uma planilha). */
     public function reprocessadaDe(): BelongsTo

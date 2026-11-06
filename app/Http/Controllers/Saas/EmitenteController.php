@@ -89,6 +89,8 @@ class EmitenteController extends Controller
             'inscricao_municipal' => ['nullable', 'string', 'max:15'],
             'codigo_municipio'    => ['required', 'digits:7'],
             'codigo_servico_padrao' => ['nullable', 'digits:6', fn ($a, $v, $f) => ListaServicoNacional::existe((string) $v) ?: $f('Esse código não existe na lista nacional de serviços.')],
+            'descricao_servico_padrao' => ['nullable', 'string', 'max:2000'],
+            'codigo_nbs_padrao'   => ['nullable', 'digits:9'],
             'op_simples_nacional' => ['required', 'in:1,2,3'],
             'regime_apuracao_sn'  => ['nullable', 'required_if:op_simples_nacional,3', 'in:1,2,3'],
             'regime_especial'     => ['required', 'in:0,1,2,3,4,5,6,9'],

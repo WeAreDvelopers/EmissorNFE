@@ -17,7 +17,7 @@ class NotaFiscal extends Model
     protected $fillable = [
         'conta_id', 'emitente_id', 'importacao_id', 'origem', 'linha_planilha', 'status',
         'ciclo_credito', 'serie_dps', 'numero_dps',
-        'tomador_documento', 'tomador_nome', 'tomador_email',
+        'tomador_id', 'tomador_documento', 'tomador_nome', 'tomador_email', 'sem_tomador',
         'codigo_servico', 'codigo_nbs', 'descricao', 'valor', 'data_competencia',
         'chave_acesso', 'numero_nfse', 'xml_dps', 'xml_nfse', 'erros',
         'tentativas', 'emitida_em',
@@ -30,11 +30,23 @@ class NotaFiscal extends Model
         'erros'            => 'array',
         'emitida_em'       => 'datetime',
         'email_enviado_em' => 'datetime',
+        'sem_tomador'      => 'boolean',
     ];
 
     public function importacao(): BelongsTo
     {
         return $this->belongsTo(Importacao::class);
+    }
+
+    public function tomador(): BelongsTo
+    {
+        return $this->belongsTo(Tomador::class);
+    }
+
+    /** Nome para exibir: nota sem tomador identificado não tem nome de cliente. */
+    public function getTomadorRotuloAttribute(): string
+    {
+        return $this->sem_tomador ? 'Sem destinatário informado' : (string) $this->tomador_nome;
     }
 
     public function emitente(): BelongsTo
