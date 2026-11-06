@@ -67,7 +67,7 @@ class ExplicacaoErro
         $texto = implode(' | ', $tecnico);
 
         $mapa = [
-            '/E0312/'                        => [['codigo_servico'], 'A prefeitura da empresa não administra o código de serviço %codigo% na data de competência desta nota. Esse código existe na lista nacional, mas cada prefeitura escolhe quais ela aceita.', 'Peça ao seu contador (ou à prefeitura) o código de serviço nacional aceito para esta atividade e corrija aqui. Para testar, tente outro código da mesma família da lista nacional, como 010101, 010401 ou 010601.'],
+            '/E0312/'                        => [['codigo_servico'], 'A prefeitura da empresa não administra o código de serviço %codigo% na data de competência desta nota. Esse código existe na lista nacional, mas cada prefeitura escolhe quais ela aceita.', 'Peça ao seu contador (ou à prefeitura) o código de serviço nacional aceito para esta atividade e corrija aqui. Para descobrir qual ela aceita, veja a lista de serviços no emissor público nacional da sua prefeitura.'],
             '/E0310/'                        => [['codigo_servico'], 'O código de serviço %codigo% não existe na lista nacional de serviços.', 'Use um código de 6 dígitos da lista nacional (ex.: 010701 para manutenção de programas de computação) ou o que seu contador indicou.'],
             '/E0316/'                        => [['codigo_nbs'], 'O código NBS informado não existe ou não combina com o serviço.', 'Corrija o código NBS ou deixe o campo vazio.'],
             '/E0015/'                        => [['data_competencia'], 'A data de competência não é aceita.', 'Informe uma data de competência que não esteja no futuro.'],
