@@ -64,7 +64,8 @@
             <summary class="cursor-pointer text-sm text-ink-700 min-h-8">Detalhes técnicos</summary>
             <div class="font-mono text-xs leading-relaxed text-ink-700 pt-2 break-words space-y-1">
                 @foreach ($ex['tecnico'] as $linha)<div>{{ $linha }}</div>@endforeach
-                @if ($nota->numero_dps)<div>DPS série {{ $nota->serie_dps }} · nº {{ $nota->numero_dps }}</div>@endif
+                @if ($nota->numero_nfse)<div>NFS-e nº {{ $nota->numero_nfse }}@if ($nota->chave_acesso) · chave {{ $nota->chave_acesso }}@endif</div>@endif
+                @if ($nota->numero_dps)<div>DPS (controle interno) série {{ $nota->serie_dps }} · nº {{ $nota->numero_dps }}</div>@endif
                 <div>Tentativas: {{ $nota->tentativas }}</div>
             </div>
         </details>

@@ -9,7 +9,7 @@
     <span class="font-mono sm:text-right col-start-2 sm:col-start-auto">R$ {{ number_format($nota->valor, 2, ',', '.') }}</span>
     <div class="col-start-2 sm:col-start-auto">
         <span class="pill {{ $nota->status->selo() }}">{{ $nota->status->label() }}</span>
-        @if ($nota->status === \App\Enums\StatusNota::Emitida && $nota->numero_nfse)<div class="text-xs text-ink-600 mt-1">NFS-e nº {{ $nota->numero_nfse }}</div>@endif
+        @if ($nota->status === \App\Enums\StatusNota::Emitida && $nota->numero_nfse)<div class="text-[13px] text-ink-900 mt-1" @if ($nota->chave_acesso) title="Chave de acesso: {{ $nota->chave_acesso }}" @endif>NFS-e nº <b class="font-mono">{{ $nota->numero_nfse }}</b></div>@endif
         @if ($nota->status === \App\Enums\StatusNota::Enviando)<div class="text-xs text-ink-600 mt-1">Tentativa {{ max($nota->tentativas, 1) }}</div>@endif
     </div>
     <div class="col-start-2 sm:col-start-auto sm:text-right">
