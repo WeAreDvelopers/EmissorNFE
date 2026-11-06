@@ -12,6 +12,7 @@ enum StatusNota: string
     case Emitida    = 'emitida';     // NFS-e autorizada
     case Rejeitada  = 'rejeitada';   // SEFIN recusou (erro de negócio — corrigir dados)
     case Falhou     = 'falhou';      // erro técnico após todas as tentativas
+    case Cancelada  = 'cancelada';   // NFS-e emitida e depois cancelada (evento 101101); não conta como emitida
 
     /** Texto para o usuário (sem jargão). */
     public function label(): string
@@ -25,6 +26,7 @@ enum StatusNota: string
             self::Emitida   => 'Emitida',
             self::Rejeitada => 'Recusada pela prefeitura',
             self::Falhou    => 'Não saiu: instabilidade',
+            self::Cancelada => 'Cancelada',
         };
     }
 
@@ -32,7 +34,7 @@ enum StatusNota: string
     public function grupo(): string
     {
         return match ($this) {
-            self::Emitida => 'emitida',
+            self::Emitida, self::Cancelada => 'emitida',   // ciclo concluído (a cancelada só muda o selo)
             self::Invalida, self::Rejeitada, self::Falhou => 'atencao',
             default => 'andamento',
         };
@@ -53,6 +55,10 @@ enum StatusNota: string
     /** Classes do selo (cores com contraste AA). */
     public function selo(): string
     {
+        if ($this === self::Cancelada) {
+            return 'bg-gray-200 text-ink-700';
+        }
+
         return match ($this->grupo()) {
             'emitida' => 'bg-ok-100 text-ok-800',
             'atencao' => 'bg-warn-100 text-warn-800',

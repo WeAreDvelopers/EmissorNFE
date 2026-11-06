@@ -79,6 +79,10 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');
     Route::put('/clientes/{tomador}', [TomadorController::class, 'update'])->name('tomadores.update');
 
+    // Cancelamento de NFS-e emitida (somente o dono)
+    Route::get('/notas/{nota}/cancelar', [\App\Http\Controllers\NotaCancelamentoController::class, 'form'])->name('notas.cancelar.form');
+    Route::post('/notas/{nota}/cancelar', [\App\Http\Controllers\NotaCancelamentoController::class, 'store'])->name('notas.cancelar');
+
     // Auditoria da conta (somente o dono)
     Route::get('/auditoria', [\App\Http\Controllers\AuditoriaController::class, 'index'])->name('auditoria.index');
 

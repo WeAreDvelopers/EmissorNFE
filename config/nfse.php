@@ -18,6 +18,9 @@ return [
     // XSD oficial v1.01 (com ajuste local do pattern da série — ver resources/xsd/LEIA-ME.md)
     'xsd_dps' => resource_path('xsd/DPS_v1.01.xsd'),
 
+    // XSD do pedido de registro de evento (cancelamento)
+    'xsd_evento' => resource_path('xsd/pedRegEvento_v1.01.xsd'),
+
     // Fila dedicada para chamadas à SEFIN (controle de vazão separado)
     'fila_emissao' => env('NFSE_FILA', 'nfse'),
 

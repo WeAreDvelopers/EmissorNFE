@@ -258,7 +258,7 @@ class ImportacaoController extends Controller
         abort_if($importacao->status === 'lendo', 422, 'Estamos lendo esta planilha agora. Tente excluir em alguns segundos.');
 
         $bloqueadas = $importacao->notas()
-            ->whereIn('status', [StatusNota::Emitida, StatusNota::Pendente, StatusNota::Enviando, StatusNota::AguardandoCredito])
+            ->whereIn('status', [StatusNota::Emitida, StatusNota::Cancelada, StatusNota::Pendente, StatusNota::Enviando, StatusNota::AguardandoCredito])
             ->count();
         abort_if($bloqueadas > 0, 422, "Este lote tem {$bloqueadas} ".($bloqueadas === 1 ? 'nota emitida ou na fila' : 'notas emitidas ou na fila').' e não pode ser excluído.');
 

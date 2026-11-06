@@ -40,8 +40,36 @@ class SefinNacionalClient
             return $this->extrairNfse($resposta->json());
         }
 
+        $this->falhar($resposta, 'SEFIN rejeitou a DPS');
+    }
+
+    /**
+     * Registra o evento de cancelamento (pedRegEvento assinado) da NFS-e.
+     *
+     * @return array{xml_evento:?string}
+     * @throws RejeicaoSefinException  a SEFIN recusou o cancelamento (regra de negócio)
+     * @throws RuntimeException        erro técnico: o resultado é incerto, confira antes de tentar de novo
+     */
+    public function cancelar(string $chaveAcesso, string $xmlPedidoAssinado): array
+    {
+        $resposta = $this->http()->post("/nfse/{$chaveAcesso}/eventos", [
+            'pedidoRegistroEventoXmlGZipB64' => base64_encode(gzencode($xmlPedidoAssinado)),
+        ]);
+
+        if ($resposta->successful()) {
+            $xml = $resposta->json('eventoXmlGZipB64') ? gzdecode(base64_decode($resposta->json('eventoXmlGZipB64'))) : null;
+
+            return ['xml_evento' => $xml ?: null];
+        }
+
+        $this->falhar($resposta, 'SEFIN recusou o cancelamento');
+    }
+
+    /** Resposta que não é sucesso: 4xx vira rejeição de negócio com a mensagem real; o resto é erro técnico. */
+    private function falhar(\Illuminate\Http\Client\Response $resposta, string $logMensagem): never
+    {
         if ($resposta->clientError()) {
-            Log::warning('SEFIN rejeitou a DPS', [
+            Log::warning($logMensagem, [
                 'status' => $resposta->status(),
                 'corpo'  => $resposta->body(),
             ]);

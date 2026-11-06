@@ -16,14 +16,14 @@ use RobRichards\XMLSecLibs\XMLSecurityKey;
 class AssinadorXml
 {
     /** O certificado vem do emitente da nota (cada CNPJ tem o seu). */
-    public function assinar(string $xml, Certificado $certificado): string
+    public function assinar(string $xml, Certificado $certificado, string $elementoAssinado = 'infDPS'): string
     {
         $doc = new DOMDocument('1.0', 'UTF-8');
         $doc->preserveWhiteSpace = false;
         $doc->loadXML($xml);
         $doc->encoding = 'UTF-8'; // loadXML de uma string sem declaração zera o encoding
 
-        $inf = $doc->getElementsByTagName('infDPS')->item(0);
+        $inf = $doc->getElementsByTagName($elementoAssinado)->item(0);   // infDPS (DPS) ou infPedReg (pedido de evento)
 
         $dsig = new XMLSecurityDSig('');
         $dsig->setCanonicalMethod(XMLSecurityDSig::C14N);

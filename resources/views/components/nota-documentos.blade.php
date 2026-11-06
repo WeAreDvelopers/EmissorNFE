@@ -8,6 +8,9 @@
     <a href="{{ route('notas.danfse', $nota) }}" target="_blank" rel="noopener" class="btn-acao" title="Abrir o DANFSe (PDF) em outra aba">PDF</a>
     <a href="{{ route('notas.xml', $nota) }}" class="btn-acao" title="Baixar o XML da NFS-e">XML</a>
     <button type="button" class="btn-acao" data-copiar="{{ $nota->chave_acesso }}" data-aviso="Chave de acesso copiada" title="Copiar a chave de acesso">Chave</button>
+    @can('cancelar-nota')
+        <a href="{{ route('notas.cancelar.form', $nota) }}" class="btn-acao !text-perigo-700" title="Cancelar esta NFS-e (ato fiscal, sem volta)">Cancelar</a>
+    @endcan
     @can('emitir')
         <button type="button" class="btn-acao"
                 @if ($emails)

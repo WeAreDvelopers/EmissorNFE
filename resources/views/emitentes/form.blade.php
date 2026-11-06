@@ -176,6 +176,13 @@
                             <textarea id="descricao_servico_padrao" name="descricao_servico_padrao" rows="2" class="campo-entrada" placeholder="Ex.: Manutenção de programas de computação.">{{ old('descricao_servico_padrao', $emitente->descricao_servico_padrao) }}</textarea>
                             <p class="campo-ajuda">Vai em toda nota cuja linha da planilha não tiver descrição própria (coluna R).</p>
                         </div>
+                        <div class="sm:col-span-2">
+                            <input type="hidden" name="enviar_email_automatico" value="0">
+                            <label class="flex items-start gap-2.5 text-sm cursor-pointer">
+                                <input type="checkbox" name="enviar_email_automatico" value="1" class="mt-0.5 rounded text-brand-600 focus:ring-brand-600" @checked(old('enviar_email_automatico', $emitente->enviar_email_automatico))>
+                                <span><b>Enviar a NFS-e ao cliente por e-mail assim que for emitida</b><span class="block text-[13px] text-ink-600">PDF e XML vão para os e-mails do cadastro do cliente. Só funciona em produção: em modo teste o envio é sempre manual.</span></span>
+                            </label>
+                        </div>
                         <x-campo nome="serie_dps" rotulo="Série" :valor="$emitente->serie_dps" maxlength="5" mono ajuda="Já vem pronta (00001). Só mude se o seu contador pedir." required />
                         <x-campo nome="ambiente" tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera depois de emitir uma nota em teste.">
                             <option value="2" @selected(old('ambiente', $emitente->ambiente ?? 2) == 2)>Teste (as notas não têm valor fiscal)</option>

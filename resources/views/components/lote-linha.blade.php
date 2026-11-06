@@ -1,13 +1,13 @@
 @props(['importacao', 'resumo', 'situacao', 'selo'])
 @php
     $total = max(array_sum($resumo) - $resumo['rascunho'], 1);
-    $emitidas = $resumo['emitida'];
+    $emitidas = $resumo['emitida'] + $resumo['cancelada'];   // cancelada = ciclo concluído
     $atencao = $resumo['invalida'] + $resumo['rejeitada'] + $resumo['falhou'];
     $andamento = $resumo['pendente'] + $resumo['enviando'] + $resumo['aguardando_credito'];
     $pct = fn ($n) => round($n / $total * 100, 1);
     $aguardandoConferencia = in_array($importacao->status, ['pendente', 'lendo', 'conferir'], true);
     // Só dá para excluir o que não emitiu nada e não está na fila (créditos já devolvidos)
-    $podeExcluir = $importacao->status !== 'lendo' && ($resumo['emitida'] + $resumo['pendente'] + $resumo['enviando'] + $resumo['aguardando_credito']) === 0;
+    $podeExcluir = $importacao->status !== 'lendo' && ($resumo['emitida'] + $resumo['cancelada'] + $resumo['pendente'] + $resumo['enviando'] + $resumo['aguardando_credito']) === 0;
 @endphp
 <div class="flex items-center tabela-linha hover:bg-gray-50" data-item="lote-{{ $importacao->id }}">
 <a href="{{ $aguardandoConferencia ? route('importacoes.conferir', $importacao) : route('importacoes.show', $importacao) }}"

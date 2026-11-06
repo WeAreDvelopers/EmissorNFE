@@ -15,7 +15,7 @@ class Emitente extends Model
         'conta_id', 'cnpj', 'razao_social', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
         'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples',
         'tributos_aprox', 'serie_dps', 'ambiente', 'certificado_arquivo', 'certificado_senha',
-        'certificado_validade', 'logo_arquivo', 'ativo',
+        'certificado_validade', 'logo_arquivo', 'ativo', 'enviar_email_automatico',
     ];
 
     protected $casts = [
@@ -23,6 +23,7 @@ class Emitente extends Model
         'certificado_senha'    => 'encrypted',
         'certificado_validade' => 'datetime',
         'ativo'                => 'boolean',
+        'enviar_email_automatico' => 'boolean',
         'cobranca_desligada'   => 'boolean',
     ];
 

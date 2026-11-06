@@ -112,6 +112,7 @@ class EmitenteController extends Controller
             'razao_social'        => ['required', 'string', 'max:255'],
             'inscricao_municipal' => ['nullable', 'string', 'max:15'],
             'codigo_municipio'    => ['required', 'digits:7'],
+            'enviar_email_automatico' => ['nullable', 'boolean'],
             'codigo_servico_padrao' => ['nullable', 'digits:6', fn ($a, $v, $f) => ListaServicoNacional::existe((string) $v) ?: $f('Esse código não existe na lista nacional de serviços.')],
             'descricao_servico_padrao' => ['nullable', 'string', 'max:2000'],
             'codigo_nbs_padrao'   => ['nullable', 'digits:9'],
@@ -176,7 +177,7 @@ class EmitenteController extends Controller
 
         // Campos fiscais que entram na trilha de auditoria (nunca a senha nem o arquivo do certificado)
         $campos = ['razao_social', 'cnpj', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
-            'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente'];
+            'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente', 'enviar_email_automatico'];
         $antes = $novo ? [] : $emitente->only($campos);
 
         DB::transaction(function () use ($emitente, $dados, $pfx, $cert) {

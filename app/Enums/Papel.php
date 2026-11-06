@@ -18,6 +18,7 @@ enum Papel: string
         'comprar-creditos'    => [self::Dono, self::Financeiro],
         'ver-financeiro'      => [self::Dono, self::Financeiro],
         'emitir'              => [self::Dono, self::Operador],
+        'cancelar-nota'       => [self::Dono],   // cancelar NFS-e é um ato fiscal sem volta: só o dono
         'consultar'           => [self::Dono, self::Financeiro, self::Operador, self::Leitura],
     ];
 

@@ -28,6 +28,7 @@ class NotaFiscal extends Model
         'data_competencia' => 'date',
         'erros'            => 'array',
         'emitida_em'       => 'datetime',
+        'cancelada_em'     => 'datetime',
         'conciliada_em'    => 'datetime',
         'email_enviado_em' => 'datetime',
         'sem_tomador'      => 'boolean',

@@ -2,7 +2,7 @@
     @php
         $emAndamento = $importacao->status === 'enviando' || $andamento > 0;
         [$sit, $selo] = $importacao->situacao($resumo);
-        $concluidas = $resumo['emitida'] + $atencao;
+        $concluidas = $resumo['emitida'] + $resumo['cancelada'] + $atencao;
         $pct = fn ($n) => $total ? round($n / $total * 100, 1) : 0;
         $f = fn ($n) => number_format($n, 0, ',', '.');
         $filtros = ['todas' => ['Todas', $total], 'emitidas' => ['Emitidas', $resumo['emitida']], 'andamento' => ['Em andamento', $andamento], 'atencao' => ['Precisa de você', $atencao]];
