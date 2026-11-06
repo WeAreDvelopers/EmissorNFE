@@ -79,6 +79,9 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');
     Route::put('/clientes/{tomador}', [TomadorController::class, 'update'])->name('tomadores.update');
 
+    // Auditoria da conta (somente o dono)
+    Route::get('/auditoria', [\App\Http\Controllers\AuditoriaController::class, 'index'])->name('auditoria.index');
+
     // Consulta de notas (todos os lotes), conferência na SEFIN e relatório mensal
     Route::get('/notas', [NotaConsultaController::class, 'index'])->name('notas.index');
     Route::post('/notas/{nota}/conciliar', [NotaConsultaController::class, 'conciliar'])->name('notas.conciliar');

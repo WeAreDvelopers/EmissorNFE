@@ -153,6 +153,10 @@ class ImportacaoController extends Controller
         app(CadastroTomadores::class)->aplicar($importacao, $request->user()?->id);
 
         $importacao->update(['status' => 'enviando']);
+        \App\Models\Auditoria::registrar('importacao_enviada', "Lote {$importacao->arquivo_nome} enviado para emissão.", [
+            'lote' => $importacao->id, 'notas_prontas' => $importacao->resumo()['rascunho'], 'empresa' => $importacao->emitente?->razao_social,
+            'ambiente' => $importacao->emitente?->ehHomologacao() ? 'teste' : 'produção',
+        ]);
         EnviarImportacaoJob::dispatch($importacao);
 
         return redirect()->route('importacoes.show', $importacao)
@@ -260,6 +264,7 @@ class ImportacaoController extends Controller
 
         $nome = $importacao->arquivo_nome;
         $caminho = $importacao->arquivo_caminho;
+        \App\Models\Auditoria::registrar('importacao_excluida', "Lote {$nome} excluído.", ['lote' => $importacao->id, 'linhas' => $importacao->total_linhas]);
 
         DB::transaction(function () use ($importacao) {
             DB::table('movimentos_credito')->whereIn('nota_fiscal_id', $importacao->notas()->select('id'))->update(['nota_fiscal_id' => null]);

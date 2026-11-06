@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\StatusNota;
+use App\Models\Auditoria;
 use App\Models\Importacao;
 use App\Models\NotaFiscal;
 use App\Services\Nfse\EnvioDeNotas;
@@ -64,7 +65,11 @@ class NotaController extends Controller
         $valorAntigo = $nota->getRawOriginal($campoAplicar);
         $statusInicial = $nota->status;
 
+        $antes = $nota->only(ValidadorLinha::CAMPOS);
         $nota->update(ValidadorLinha::paraGravar($dados));
+        $mudancas = collect($nota->only(ValidadorLinha::CAMPOS))->map(fn ($novo, $campo) => ['de' => $antes[$campo] ?? null, 'para' => $novo])
+            ->filter(fn ($m) => (string) $m['de'] !== (string) $m['para'])->all();
+        Auditoria::registrar('nota_corrigida', "Linha {$nota->linha_planilha} (nota #{$nota->id}) corrigida.", $mudancas + ['aplicado_em_outras' => $request->boolean('aplicar_em_todas')]);
 
         $afetadas = collect([$nota]);
         $importacao = $nota->importacao;
@@ -123,6 +128,7 @@ class NotaController extends Controller
         abort_unless($nota->importacao?->status === 'conferir' && $nota->status === StatusNota::Rascunho && $nota->duplicidade_de_id, 422, 'Esta linha não está aguardando decisão.');
 
         $nota->forceFill(['duplicidade_aprovada' => true])->save();
+        Auditoria::registrar('duplicidade_aprovada', "Linha {$nota->linha_planilha} mantida como outra cobrança (parecida com a nota #{$nota->duplicidade_de_id}).", ['nota' => $nota->id, 'parecida_com' => $nota->duplicidade_de_id]);
         $msg = "Linha {$nota->linha_planilha} mantida: será emitida como outra cobrança.";
 
         return $request->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
@@ -138,6 +144,7 @@ class NotaController extends Controller
             && in_array($nota->status, [StatusNota::Invalida, StatusNota::Rascunho], true), 422, 'Só dá para excluir linhas de um lote que ainda não foi enviado.');
 
         $linha = $nota->linha_planilha;
+        Auditoria::registrar('nota_excluida', "Linha {$linha} excluída do lote {$importacao->arquivo_nome}.", ['cliente' => $nota->tomador_rotulo, 'valor' => (string) $nota->valor, 'lote' => $importacao->id]);
         DB::table('movimentos_credito')->where('nota_fiscal_id', $nota->id)->update(['nota_fiscal_id' => null]);
         $nota->delete();
         $importacao->update(['total_linhas' => $importacao->notas()->count()]);

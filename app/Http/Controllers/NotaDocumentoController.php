@@ -64,6 +64,7 @@ class NotaDocumentoController extends Controller
 
         Mail::to($destinos)->queue(new NfseEmitidaMail($nota));
         $nota->forceFill(['email_enviado_em' => now()])->save();
+        \App\Models\Auditoria::registrar('email_enviado', "NFS-e nº {$nota->numero_nfse} enviada por e-mail.", ['nota' => $nota->id, 'destinatarios' => $destinos]);
 
         $msg = 'E-mail com o PDF e o XML enviado para '.implode(', ', $destinos).'.';
 

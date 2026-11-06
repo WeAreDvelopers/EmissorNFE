@@ -78,6 +78,8 @@ class NotaConsultaController extends Controller
             return $request->expectsJson() ? response()->json(['message' => $msg], 502) : back()->withErrors(['conciliacao' => $msg]);
         }
 
+        \App\Models\Auditoria::registrar('nota_conciliada', "Nota #{$nota->id} conferida na SEFIN: {$resultado}.", ['nota' => $nota->id, 'resultado' => $resultado]);
+
         $msg = match ($resultado) {
             ConciliacaoNfse::AUTORIZADA => 'A SEFIN já tinha autorizado esta nota. Ela foi marcada como emitida.',
             ConciliacaoNfse::NAO_ENCONTRADA => 'A SEFIN não tem esta nota. Ela não foi emitida e pode ser reenviada com segurança.',

@@ -84,6 +84,7 @@ class EmitenteController extends Controller
         ], ['proximo.required' => 'Informe o próximo número.', 'proximo.integer' => 'O próximo número precisa ser um número inteiro.', 'proximo.min' => 'O próximo número precisa ser 1 ou maior.']);
 
         $numeracao->ajustar($emitente, (int) $dados['ambiente'], (int) $dados['proximo'], $request->user()?->id);
+        \App\Models\Auditoria::registrar('numeracao_ajustada', "Próximo número da DPS de {$emitente->razao_social} ajustado para {$dados['proximo']} (".($dados['ambiente'] == 1 ? 'produção' : 'teste').').', ['emitente' => $emitente->id, 'serie' => $emitente->serie_dps, 'proximo' => (int) $dados['proximo']]);
 
         return back()->with('ok', 'Numeração ajustada. A próxima DPS será a nº '.number_format((int) $dados['proximo'], 0, ',', '.').'.');
     }
@@ -173,6 +174,11 @@ class EmitenteController extends Controller
             $dados['logo_arquivo'] = null;
         }
 
+        // Campos fiscais que entram na trilha de auditoria (nunca a senha nem o arquivo do certificado)
+        $campos = ['razao_social', 'cnpj', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
+            'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente'];
+        $antes = $novo ? [] : $emitente->only($campos);
+
         DB::transaction(function () use ($emitente, $dados, $pfx, $cert) {
             $emitente->fill(collect($dados)->except(['certificado', 'certificado_senha', 'logo', 'remover_logo'])->all());
             $emitente->save();
@@ -185,6 +191,21 @@ class EmitenteController extends Controller
                 ]);
             }
         });
+
+        $mudancas = [];
+        foreach ($campos as $campo) {
+            $de = $antes[$campo] ?? null;
+            $para = $emitente->{$campo};
+            if (json_encode($de) !== json_encode($para) && ! (blank($de) && blank($para))) {
+                $mudancas[$campo] = ['de' => $de, 'para' => $para];
+            }
+        }
+        if ($pfx) {
+            $mudancas['certificado'] = ['de' => $novo ? null : 'anterior', 'para' => 'novo (válido até '.$cert->validoAte()?->format('d/m/Y').')'];
+        }
+        if ($novo || $mudancas) {
+            \App\Models\Auditoria::registrar($novo ? 'empresa_criada' : 'empresa_alterada', ($novo ? 'Empresa cadastrada: ' : 'Empresa alterada: ').$emitente->razao_social.'.', $novo ? ['cnpj' => $emitente->cnpj, 'ambiente' => (int) $emitente->ambiente] : $mudancas);
+        }
 
         if ($logoAntiga && ($novaLogo || $request->boolean('remover_logo'))) {
             Storage::disk('public')->delete($logoAntiga);

@@ -44,6 +44,7 @@ class UsuarioController extends Controller
         ]);
 
         Mail::to($convite->email)->queue(new ConviteConta($convite));
+        \App\Models\Auditoria::registrar('usuario_convidado', "Convite enviado para {$convite->email} como {$convite->papel->value}.", ['email' => $convite->email, 'papel' => $convite->papel->value]);
 
         return back()->with('ok', "Convite enviado para {$convite->email}.");
     }
@@ -73,7 +74,9 @@ class UsuarioController extends Controller
 
         $conta = $this->contaAtual->conta();
         $this->garantirOutroDono($conta, $user, $papel);
+        $antes = $conta->usuarios()->whereKey($user)->first()?->pivot?->papel;
         $conta->usuarios()->updateExistingPivot($user, ['papel' => $papel->value]);
+        \App\Models\Auditoria::registrar('papel_alterado', "Papel do usuário #{$user} alterado para {$papel->value}.", ['usuario' => $user, 'papel' => ['de' => $antes, 'para' => $papel->value]]);
 
         return back()->with('ok', 'Papel atualizado.');
     }
@@ -85,6 +88,7 @@ class UsuarioController extends Controller
         $conta = $this->contaAtual->conta();
         $this->garantirOutroDono($conta, $user, null);
         $conta->usuarios()->detach($user);
+        \App\Models\Auditoria::registrar('usuario_removido', "Usuário #{$user} removido da conta.", ['usuario' => $user]);
 
         return back()->with('ok', 'Usuário removido da conta.');
     }

@@ -42,6 +42,7 @@
                 ['creditos.index', 'Créditos', 'consultar', 'creditos.*', 'creditos'],
                 ['emitentes.index', 'Empresas que emitem', 'consultar', 'emitentes.*', 'empresas'],
                 ['usuarios.index', 'Usuários', 'gerenciar-usuarios', 'usuarios.*', 'usuarios'],
+                ['auditoria.index', 'Auditoria', 'gerenciar-conta', 'auditoria.*', 'notas'],
             ],
         ];
     } else {
