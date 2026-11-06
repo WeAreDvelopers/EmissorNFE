@@ -151,6 +151,14 @@ João;10
         $this->assertStringContainsString('código de serviço', implode(' ', $nota->erros));
     }
 
+    public function test_tela_de_importacao_traz_o_tutorial_em_video(): void
+    {
+        $this->assertFileExists(public_path('videos/tutorial-planilha-importacao.mp4'));
+
+        $this->actingAs($this->user)->get(route('importacoes.criar'))->assertOk()
+            ->assertSee('Ver como importar')->assertSee('videos/tutorial-planilha-importacao.mp4', false);
+    }
+
     public function test_tela_de_importacao_mostra_o_alerta_forte_com_o_motivo(): void
     {
         $this->enviar('premissas.txt', 'x')->assertSessionHasErrors('planilha');
