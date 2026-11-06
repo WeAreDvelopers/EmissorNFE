@@ -10,29 +10,36 @@
             <a href="{{ route('relatorios.index') }}" class="btn">Relatório do mês</a>
         </div>
 
-        <form method="GET" class="card p-4 grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
-            <div class="sm:col-span-2">
-                <label for="q" class="campo-rotulo">Buscar</label>
-                <input id="q" name="q" value="{{ $filtros['q'] ?? '' }}" placeholder="Cliente, CNPJ/CPF, nº da NFS-e ou chave" class="campo-entrada" autocomplete="off">
+        @php $temFiltro = collect($filtros)->filter(fn ($v) => filled($v) && $v !== 'todas')->isNotEmpty(); @endphp
+        <form method="GET" class="card p-4 sm:p-5 space-y-4">
+            {{-- Linha 1: o que procurar. Linha 2: onde e quando. Os botões ficam sempre dentro do cartão. --}}
+            <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_200px] gap-4">
+                <div>
+                    <label for="q" class="campo-rotulo">Buscar</label>
+                    <input id="q" name="q" value="{{ $filtros['q'] ?? '' }}" placeholder="Cliente, CNPJ/CPF, nº da NFS-e ou chave" class="campo-entrada" autocomplete="off">
+                </div>
+                <div>
+                    <label for="grupo" class="campo-rotulo">Situação</label>
+                    <select id="grupo" name="grupo" class="campo-entrada">@foreach ($grupos as $v => $r)<option value="{{ $v }}" @selected(($filtros['grupo'] ?? 'todas') === $v)>{{ $r }}</option>@endforeach</select>
+                </div>
             </div>
-            <div>
-                <label for="grupo" class="campo-rotulo">Situação</label>
-                <select id="grupo" name="grupo" class="campo-entrada">@foreach ($grupos as $v => $r)<option value="{{ $v }}" @selected(($filtros['grupo'] ?? 'todas') === $v)>{{ $r }}</option>@endforeach</select>
-            </div>
-            <div>
-                <label for="emitente" class="campo-rotulo">Empresa</label>
-                <select id="emitente" name="emitente" class="campo-entrada"><option value="">Todas</option>@foreach ($emitentes as $e)<option value="{{ $e->id }}" @selected(($filtros['emitente'] ?? '') == $e->id)>{{ \Illuminate\Support\Str::limit($e->razao_social, 28) }}</option>@endforeach</select>
-            </div>
-            <div>
-                <label for="de" class="campo-rotulo">Competência de</label>
-                <input id="de" name="de" type="date" value="{{ $filtros['de'] ?? '' }}" class="campo-entrada">
-            </div>
-            <div class="flex gap-2">
-                <div class="flex-1">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="w-full sm:w-[260px]">
+                    <label for="emitente" class="campo-rotulo">Empresa</label>
+                    <select id="emitente" name="emitente" class="campo-entrada"><option value="">Todas</option>@foreach ($emitentes as $e)<option value="{{ $e->id }}" @selected(($filtros['emitente'] ?? '') == $e->id)>{{ \Illuminate\Support\Str::limit($e->razao_social, 32) }}</option>@endforeach</select>
+                </div>
+                <div class="w-[calc(50%-8px)] sm:w-[178px]">
+                    <label for="de" class="campo-rotulo">Competência de</label>
+                    <input id="de" name="de" type="date" value="{{ $filtros['de'] ?? '' }}" class="campo-entrada">
+                </div>
+                <div class="w-[calc(50%-8px)] sm:w-[178px]">
                     <label for="ate" class="campo-rotulo">até</label>
                     <input id="ate" name="ate" type="date" value="{{ $filtros['ate'] ?? '' }}" class="campo-entrada">
                 </div>
-                <button class="btn btn-primary mt-[26px]">Filtrar</button>
+                <div class="flex items-center gap-3 sm:ms-auto">
+                    @if ($temFiltro)<a href="{{ route('notas.index') }}" class="text-sm text-ink-700 hover:underline">Limpar filtros</a>@endif
+                    <button class="btn btn-primary">Filtrar</button>
+                </div>
             </div>
         </form>
 
@@ -42,7 +49,7 @@
                 <span>Emitidas neste filtro: <b class="font-mono text-ink-900">R$ {{ number_format($totalEmitidas, 2, ',', '.') }}</b></span>
             </div>
             @forelse ($notas as $n)
-                <div class="tabela-linha px-5 sm:px-6 py-3.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_110px_170px_auto] gap-x-4 gap-y-1.5 items-center text-sm">
+                <div class="tabela-linha px-5 sm:px-6 py-3.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_104px_150px_112px] gap-x-4 gap-y-1.5 items-center text-sm">
                     <div class="min-w-0">
                         <div class="font-medium truncate">{{ $n->tomador_rotulo }}</div>
                         <div class="text-xs text-ink-600 truncate">@unless ($n->sem_tomador)<span class="font-mono">{{ \App\Support\Documento::formatar($n->tomador_documento) }}</span> · @endunless{{ $n->emitente?->razao_social }}</div>
@@ -62,7 +69,7 @@
                             <x-nota-documentos :nota="$n" />
                         @elseif (in_array($n->status, [\App\Enums\StatusNota::Falhou, \App\Enums\StatusNota::Enviando, \App\Enums\StatusNota::Pendente], true) && $n->numero_dps)
                             @can('emitir')
-                                <form method="POST" action="{{ route('notas.conciliar', $n) }}">@csrf<button class="btn-acao" title="Pergunta à SEFIN se esta nota já foi autorizada">Conferir na SEFIN</button></form>
+                                <form method="POST" action="{{ route('notas.conciliar', $n) }}">@csrf<button class="btn-acao" title="Pergunta à SEFIN se esta nota já foi autorizada">Conferir</button></form>
                             @endcan
                         @elseif ($n->status->grupo() === 'atencao' && $n->importacao)
                             <a href="{{ route('importacoes.show', [$n->importacao, 'filtro' => 'atencao', 'nota' => $n->id]) }}" class="font-semibold text-brand-600 no-underline hover:underline">Corrigir →</a>
