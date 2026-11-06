@@ -118,7 +118,7 @@ class TomadoresImportacaoTest extends TestCase
         $this->assertSame('Rua Velha', $this->cliente(self::CEMAR)->logradouro);
 
         // com x: muda só o que veio preenchido (e-mails e razão social), o resto fica
-        $comX = $this->importar([['doc' => self::CEMAR, 'atualizar' => true, 'nome' => 'Cemar Multimarcas Eireli', 'emails' => 'a@x.com , b@x.com, A@x.com', 'valor' => 100]]);
+        $comX = $this->importar([['doc' => self::CEMAR, 'atualizar' => true, 'nome' => 'Cemar Multimarcas Eireli', 'emails' => 'a@x.com , b@x.com, A@x.com', 'valor' => 120]]);
         $this->get(route('importacoes.conferir', $comX))->assertOk()->assertSee('Cemar Antiga')->assertSee('Cemar Multimarcas Eireli')->assertSee('a@x.com, b@x.com');
         $this->assertSame('Cemar Antiga', $this->cliente(self::CEMAR)->nome, 'ainda não confirmou');
 

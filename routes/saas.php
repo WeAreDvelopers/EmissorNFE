@@ -81,6 +81,7 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/pendencias', [NotaController::class, 'pendencias'])->name('pendencias');
     Route::patch('/notas/{nota}', [NotaController::class, 'corrigir'])->name('notas.corrigir');
     Route::delete('/notas/{nota}', [NotaController::class, 'excluir'])->name('notas.excluir');
+    Route::post('/notas/{nota}/duplicidade/aprovar', [NotaController::class, 'aprovarDuplicidade'])->name('notas.duplicidade.aprovar');
 
     // NFS-e emitida: baixar o XML, ver/baixar o DANFSE (PDF) e enviar por e-mail ao cliente
     Route::get('/notas/{nota}/xml', [NotaDocumentoController::class, 'xml'])->name('notas.xml');

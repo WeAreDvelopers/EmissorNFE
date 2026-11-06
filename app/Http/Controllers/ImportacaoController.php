@@ -57,12 +57,15 @@ class ImportacaoController extends Controller
         $arquivo = $request->file('planilha');
         $hash = hash_file('sha256', $arquivo->getRealPath());
 
-        // Mesma planilha já enviada para este emitente? Bloqueia, a não ser que o usuário confirme.
-        $repetida = Importacao::where('emitente_id', $request->emitente_id)->where('arquivo_hash', $hash)->first();
-        if ($repetida && ! $request->boolean('confirmar_repetida')) {
+        // Arquivo idêntico já importado para esta empresa: não existe "enviar mesmo assim". As notas dele continuam lá
+        // (corrigir, reenviar, consultar); só uma leitura que falhou pode ser refeita com o mesmo arquivo.
+        $repetida = Importacao::where('emitente_id', $request->emitente_id)->where('arquivo_hash', $hash)->where('status', '!=', 'falhou')->latest('id')->first();
+        if ($repetida) {
+            $situacao = $repetida->foiEnviada() ? 'e as notas dela já foram enviadas' : 'e ainda aguarda a sua conferência';
+
             return back()->withInput()->withErrors([
-                'planilha' => "Esta planilha já foi enviada em {$repetida->created_at->format('d/m/Y H:i')}. Enviar de novo gera notas em dobro.",
-            ])->with('pedir_confirmacao_repetida', true);
+                'planilha' => "Este arquivo já foi importado em {$repetida->created_at->format('d/m/Y H:i')} {$situacao}. Importar de novo geraria notas em dobro, então não é permitido. Abra a importação para ver, corrigir ou reenviar o que precisar.",
+            ])->with('importacao_repetida', $repetida->id);
         }
 
         $importacao = Importacao::create([
@@ -120,6 +123,7 @@ class ImportacaoController extends Controller
             'semCusto'   => $importacao->emitente->semCobranca(),
             'semSaldo'   => ! $importacao->emitente->semCobranca() && $saldo < $prontas,
             'cobrancaDesligada' => ! $importacao->emitente->ehHomologacao() && $importacao->emitente->cobranca_desligada,
+            'duplicidades' => NotaFiscal::with('duplicadaDe.importacao')->where('importacao_id', $importacao->id)->comDuplicidadePendente()->orderBy('linha_planilha')->get(),
             'total'      => array_sum($resumo),
             'somaValores' => (float) NotaFiscal::where('importacao_id', $importacao->id)->where('status', StatusNota::Rascunho)->sum('valor'),
         ]);
@@ -136,6 +140,14 @@ class ImportacaoController extends Controller
         }
 
         abort_if($importacao->resumo()['rascunho'] === 0, 422, 'Não há notas prontas para enviar.');
+
+        // Cobrança que parece repetida precisa de uma decisão sua (manter ou excluir) antes de qualquer envio
+        $pendentes = $importacao->notas()->comDuplicidadePendente()->count();
+        if ($pendentes > 0) {
+            $msg = "Resolva as {$pendentes} possíveis duplicidades antes de enviar: aprove a linha se for outra cobrança, ou exclua.";
+
+            return $request->expectsJson() ? response()->json(['message' => $msg], 422) : back()->withErrors(['duplicidade' => $msg]);
+        }
 
         // Só agora o cadastro de clientes é atualizado (a prévia foi mostrada na conferência) e fica no histórico
         app(CadastroTomadores::class)->aplicar($importacao, $request->user()?->id);

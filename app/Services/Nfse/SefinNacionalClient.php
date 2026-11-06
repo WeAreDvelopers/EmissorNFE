@@ -84,8 +84,17 @@ class SefinNacionalClient
 
         $resposta->throw();
         $chave = $resposta->json('chaveAcesso');
+        if (! $chave) {
+            return null;
+        }
 
-        return $chave ? ['chave_acesso' => $chave] : null;
+        // Autorizada e a resposta se perdeu: busca a NFS-e pela chave para guardar número e XML (e poder gerar o DANFSE)
+        $nfse = $this->http()->get("/nfse/{$chave}");
+        if ($nfse->successful() && $nfse->json('nfseXmlGZipB64')) {
+            return $this->extrairNfse($nfse->json() + ['chaveAcesso' => $chave]);
+        }
+
+        return ['chave_acesso' => $chave];
     }
 
     private function extrairNfse(array $json): array

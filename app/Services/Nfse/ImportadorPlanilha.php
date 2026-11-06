@@ -31,6 +31,7 @@ class ImportadorPlanilha
 
         DB::transaction(function () use ($importacao, $emitente, $planilha) {
             $cadastro = new CadastroTomadores();
+            $detector = new DetectorDuplicidade();
             $somaValor = 0.0;
             $somaIbpt = 0.0;
 
@@ -54,7 +55,7 @@ class ImportadorPlanilha
                 $validador = ValidadorLinha::validar($dados, $emitente);
                 $invalida = $validador->fails();
 
-                NotaFiscal::create([
+                $nota = NotaFiscal::create([
                     ...ValidadorLinha::paraGravar($dados),
                     'conta_id'       => $importacao->conta_id,
                     'emitente_id'    => $importacao->emitente_id,
@@ -65,6 +66,10 @@ class ImportadorPlanilha
                     'status'         => $invalida ? StatusNota::Invalida : StatusNota::Rascunho,
                     'erros'          => $invalida ? $validador->errors()->all() : null,
                 ]);
+
+                if (! $invalida) {
+                    $detector->marcar($nota);
+                }
 
                 $importacao->increment('total_linhas');
                 if ($invalida) {

@@ -115,6 +115,19 @@ class NotaController extends Controller
         return redirect()->to(strtok($destino, '#').($antesDoEnvio ? "#linha-{$nota->id}" : ''))->with('ok', $msg);
     }
 
+    /** "É outra cobrança": o usuário confirma que a linha parecida com uma nota existente deve ser emitida. */
+    public function aprovarDuplicidade(Request $request, NotaFiscal $nota)
+    {
+        $this->authorize('emitir');
+
+        abort_unless($nota->importacao?->status === 'conferir' && $nota->status === StatusNota::Rascunho && $nota->duplicidade_de_id, 422, 'Esta linha não está aguardando decisão.');
+
+        $nota->forceFill(['duplicidade_aprovada' => true])->save();
+        $msg = "Linha {$nota->linha_planilha} mantida: será emitida como outra cobrança.";
+
+        return $request->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
+    }
+
     /** Tira uma linha do lote antes do envio (nunca gastou crédito). */
     public function excluir(Request $request, NotaFiscal $nota)
     {

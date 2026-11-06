@@ -16,7 +16,7 @@ class NotaFiscal extends Model
     protected $fillable = [
         'conta_id', 'emitente_id', 'importacao_id', 'origem', 'linha_planilha', 'status',
         'ciclo_credito', 'serie_dps', 'numero_dps',
-        'tomador_id', 'tomador_documento', 'tomador_nome', 'tomador_email', 'sem_tomador',
+        'tomador_id', 'duplicidade_de_id', 'duplicidade_aprovada', 'tomador_documento', 'tomador_nome', 'tomador_email', 'sem_tomador',
         'codigo_servico', 'codigo_nbs', 'descricao', 'valor', 'data_competencia',
         'chave_acesso', 'numero_nfse', 'xml_dps', 'xml_nfse', 'erros',
         'tentativas', 'emitida_em',
@@ -30,11 +30,24 @@ class NotaFiscal extends Model
         'emitida_em'       => 'datetime',
         'email_enviado_em' => 'datetime',
         'sem_tomador'      => 'boolean',
+        'duplicidade_aprovada' => 'boolean',
     ];
 
     public function importacao(): BelongsTo
     {
         return $this->belongsTo(Importacao::class);
+    }
+
+    /** Nota que esta linha parece repetir (só um alerta; ver DetectorDuplicidade). */
+    public function duplicadaDe(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'duplicidade_de_id');
+    }
+
+    /** Linhas que parecem repetidas e o usuário ainda não decidiu. */
+    public function scopeComDuplicidadePendente($q)
+    {
+        return $q->whereNotNull('duplicidade_de_id')->where('duplicidade_aprovada', false)->where('status', StatusNota::Rascunho);
     }
 
     public function tomador(): BelongsTo

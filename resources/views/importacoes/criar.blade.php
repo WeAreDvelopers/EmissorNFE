@@ -39,12 +39,10 @@
                             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
                         </span>
                         <div class="space-y-2.5 min-w-0">
-                            <div class="text-lg font-semibold leading-snug">{{ session('pedir_confirmacao_repetida') ? 'Atenção: esta planilha já foi enviada' : 'Não foi possível usar este arquivo' }}</div>
+                            <div class="text-lg font-semibold leading-snug">{{ session('importacao_repetida') ? 'Este arquivo já foi importado' : 'Não foi possível usar este arquivo' }}</div>
                             <p class="text-[15px] leading-relaxed">{{ $message }}</p>
-                            @if (session('pedir_confirmacao_repetida'))
-                                <label class="flex items-center gap-2.5 text-[15px] font-medium bg-white/15 rounded-lg px-3.5 py-3 cursor-pointer">
-                                    <input type="checkbox" name="confirmar_repetida" value="1" class="rounded w-5 h-5 text-perigo-700 focus:ring-white"> Enviar mesmo assim (as notas serão geradas em dobro)
-                                </label>
+                            @if (session('importacao_repetida'))
+                                <a href="{{ route('importacoes.show', session('importacao_repetida')) }}" class="inline-flex items-center min-h-[44px] px-4 rounded-lg bg-white text-perigo-700 font-semibold no-underline hover:bg-gray-100">Abrir a importação existente →</a>
                             @endif
                         </div>
                     </div>

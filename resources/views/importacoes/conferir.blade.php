@@ -65,6 +65,34 @@
                     </div>
                 @endforeach
 
+                @if ($duplicidades->isNotEmpty())
+                    <section class="card p-5 sm:p-6 border-2 border-amber-400" id="duplicidades" aria-labelledby="titulo-dup">
+                        <h2 id="titulo-dup" class="text-lg font-semibold">{{ $duplicidades->count() }} {{ $duplicidades->count() === 1 ? 'linha parece' : 'linhas parecem' }} repetir uma nota que já existe</h2>
+                        <p class="text-sm text-ink-700 mt-1">Mesma empresa, mesmo cliente, mesmo valor e mesma data. A planilha não traz um número único da cobrança, então <b>você decide</b>: se for outra cobrança, mantenha; se for repetida, exclua. Só dá para enviar depois de decidir todas.</p>
+                        <div class="mt-3 divide-y divide-gray-200">
+                            @foreach ($duplicidades as $d)
+                                @php $o = $d->duplicadaDe; @endphp
+                                <div class="py-3 text-sm flex flex-wrap items-center justify-between gap-3" id="dup-{{ $d->id }}">
+                                    <div class="min-w-0">
+                                        <div class="font-medium">Linha {{ $d->linha_planilha }} · {{ $d->tomador_rotulo }} · R$ {{ number_format($d->valor, 2, ',', '.') }} · {{ $d->data_competencia?->format('d/m/Y') }}</div>
+                                        <div class="text-[13px] text-ink-600">
+                                            @if ($o && $o->importacao_id === $importacao->id) Igual à linha {{ $o->linha_planilha }} deste mesmo arquivo.
+                                            @elseif ($o) Já existe: {{ $o->status->label() }}@if ($o->numero_nfse) (NFS-e nº {{ $o->numero_nfse }})@endif @if ($o->importacao) no arquivo “{{ $o->importacao->arquivo_nome }}”@endif.
+                                            @endif
+                                        </div>
+                                    </div>
+                                    @can('emitir')
+                                        <div class="flex gap-2 shrink-0">
+                                            <form method="POST" action="{{ route('notas.duplicidade.aprovar', $d) }}">@csrf<button class="btn btn-sm">É outra cobrança, manter</button></form>
+                                            <form method="POST" action="{{ route('notas.excluir', $d) }}">@csrf @method('DELETE')<button class="btn-excluir">Excluir linha</button></form>
+                                        </div>
+                                    @endcan
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
+                @endif
+
                 @php $atualizacoes = collect($importacao->atualizacoes ?? []); $rotulosCampos = \App\Models\Tomador::CAMPOS; $fmtCampo = fn ($v) => is_array($v) ? implode(', ', $v) : ($v === null || $v === '' ? '—' : $v); @endphp
                 @if ($atualizacoes->isNotEmpty())
                     <details class="card p-5 sm:p-6" open>
@@ -220,7 +248,9 @@
                     @endif
 
                     @can('emitir')
-                        <button class="btn btn-primary btn-lg w-full" @disabled(! $prontas)>Enviar {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota' : 'notas' }} →</button>
+                        @if ($duplicidades->isNotEmpty())<p class="text-[13px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5" role="alert">Decida as {{ $duplicidades->count() }} possíveis duplicidades antes de enviar.</p>@endif
+                        @error('duplicidade')<p class="text-[13px] text-warn-800" role="alert">{{ $message }}</p>@enderror
+                        <button class="btn btn-primary btn-lg w-full" @disabled(! $prontas || $duplicidades->isNotEmpty())>Enviar {{ $fmt($prontas) }} {{ $prontas === 1 ? 'nota' : 'notas' }} →</button>
                     @endcan
                     <a href="{{ route('importacoes.index') }}" class="block text-center text-sm text-ink-700">Cancelar</a>
                 </form>
