@@ -230,6 +230,20 @@ class AjustesTelaTest extends TestCase
             ->assertSee('data-regiao="envio"', false)->assertSee('data-ajax', false)->assertSee('Excluir');
     }
 
+    public function test_erro_e0312_explica_que_a_prefeitura_nao_administra_o_codigo(): void
+    {
+        $imp = $this->lote(1);
+        $nota = $imp->notas()->firstOrFail();
+        $nota->update(['status' => StatusNota::Rejeitada, 'codigo_servico' => '010701',
+            'erros' => ['E0312 O código de tributação nacional informado não está administrado pelo município de incidência do ISSQN na data de competência informada na DPS.']]);
+
+        $ex = \App\Support\ExplicacaoErro::para($nota->fresh());
+
+        $this->assertSame(['codigo_servico'], $ex['campos']);
+        $this->assertStringContainsString('não administra o código de serviço 010701', $ex['o_que_aconteceu']);
+        $this->assertStringContainsString('contador', $ex['como_resolver']);
+    }
+
     // ---------- logo da empresa ----------
 
     private function dadosEmpresa(array $extra = []): array
