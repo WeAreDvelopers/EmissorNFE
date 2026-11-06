@@ -10,6 +10,7 @@
 
 use App\Http\Controllers\ImportacaoController;
 use App\Http\Controllers\NotaController;
+use App\Http\Controllers\NotaDocumentoController;
 use App\Http\Controllers\ReprocessoController;
 use App\Http\Controllers\Saas\ContaController;
 use App\Http\Controllers\Saas\CreditoController;
@@ -73,6 +74,11 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/pendencias', [NotaController::class, 'pendencias'])->name('pendencias');
     Route::patch('/notas/{nota}', [NotaController::class, 'corrigir'])->name('notas.corrigir');
     Route::delete('/notas/{nota}', [NotaController::class, 'excluir'])->name('notas.excluir');
+
+    // NFS-e emitida: baixar o XML, ver/baixar o DANFSE (PDF) e enviar por e-mail ao cliente
+    Route::get('/notas/{nota}/xml', [NotaDocumentoController::class, 'xml'])->name('notas.xml');
+    Route::get('/notas/{nota}/danfse', [NotaDocumentoController::class, 'danfse'])->name('notas.danfse');
+    Route::post('/notas/{nota}/email', [NotaDocumentoController::class, 'email'])->name('notas.email');
     Route::post('/notas/{nota}/reenviar', [ImportacaoController::class, 'reenviar'])->name('notas.reenviar');
 });
 

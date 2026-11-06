@@ -13,6 +13,9 @@
         @if ($nota->status === \App\Enums\StatusNota::Enviando)<div class="text-xs text-ink-600 mt-1">Tentativa {{ max($nota->tentativas, 1) }}</div>@endif
     </div>
     <div class="col-start-2 sm:col-start-auto sm:text-right">
+        @if ($nota->status === \App\Enums\StatusNota::Emitida && $nota->xml_nfse)
+            <x-nota-documentos :nota="$nota" />
+        @endif
         @if ($precisa)
             <a href="{{ $href }}" data-painel class="font-semibold text-brand-600 no-underline hover:underline">{{ $nota->status === \App\Enums\StatusNota::Falhou ? 'Reenviar' : 'Corrigir' }} →</a>
         @endif

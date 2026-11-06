@@ -279,6 +279,24 @@ document.addEventListener('click', async (e) => {
     else aviso(json?.message || 'Não foi possível concluir agora. Tente de novo.', 'erro');
 });
 
+/* ---------- copiar texto (ex.: chave de acesso) ---------- */
+document.addEventListener('click', async (e) => {
+    const botao = e.target.closest('[data-copiar]');
+    if (!botao) return;
+    e.preventDefault();
+    const texto = botao.dataset.copiar;
+    try {
+        await navigator.clipboard.writeText(texto);
+    } catch {
+        const t = document.createElement('textarea');
+        t.value = texto; t.style.position = 'fixed'; t.style.opacity = '0';
+        document.body.appendChild(t); t.select();
+        try { document.execCommand('copy'); } catch { /* sem permissão */ }
+        t.remove();
+    }
+    aviso(botao.dataset.aviso || 'Copiado', 'ok');
+});
+
 /* ---------- painel lateral (abrir/fechar sem recarregar) ---------- */
 function fecharPainel(historico = true, url) {
     const vaga = document.getElementById('painel-vaga');

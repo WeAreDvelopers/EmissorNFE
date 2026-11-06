@@ -29,6 +29,7 @@ class NotaFiscal extends Model
         'data_competencia' => 'date',
         'erros'            => 'array',
         'emitida_em'       => 'datetime',
+        'email_enviado_em' => 'datetime',
     ];
 
     public function importacao(): BelongsTo

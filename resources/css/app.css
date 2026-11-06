@@ -59,6 +59,13 @@
 .btn-excluir.confirmando { background: #C62828; color: #fff; border-color: #C62828; animation: tremer .35s ease; }
 .btn-excluir[aria-busy='true'] { opacity: .8; cursor: progress; }
 
+/* ações pequenas na linha da nota emitida (PDF, XML, chave, e-mail) */
+.btn-acao { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid #cbd2cc; background: #fff; color: #16201B; font-size: 13px; font-weight: 500; line-height: 1; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.btn-acao:hover { background: #F4F6F3; }
+.btn-acao:disabled { opacity: .5; cursor: not-allowed; }
+.btn-acao.confirmando { background: #0B6B4D; border-color: #0B6B4D; color: #fff; animation: tremer .35s ease; }
+.btn-acao[aria-busy='true'] { opacity: .8; cursor: progress; }
+
 /* alerta forte (o que não pode passar batido) */
 .alerta-forte { animation: tremer .5s ease, pulso-alerta 1.6s ease 2; }
 @keyframes pulso-alerta { 0%, 100% { box-shadow: 0 0 0 0 rgba(198, 40, 40, .0); } 50% { box-shadow: 0 0 0 8px rgba(198, 40, 40, .18); } }
