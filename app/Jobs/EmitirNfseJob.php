@@ -8,6 +8,7 @@ use App\Services\Creditos\CarteiraService;
 use App\Services\Nfse\AssinadorXml;
 use App\Services\Nfse\Certificado;
 use App\Services\Nfse\DpsBuilder;
+use App\Services\Nfse\FinalizadorNota;
 use App\Services\Nfse\RejeicaoSefinException;
 use App\Services\Nfse\SefinNacionalClient;
 use App\Services\Nfse\ValidadorXsd;
@@ -124,17 +125,6 @@ class EmitirNfseJob implements ShouldQueue
 
     private function marcarEmitida(NotaFiscal $nota, array $retorno, CarteiraService $creditos): void
     {
-        $nota->update([
-            'status'       => StatusNota::Emitida,
-            'chave_acesso' => $retorno['chave_acesso'],
-            'numero_nfse'  => $retorno['numero_nfse'] ?? null,
-            'xml_nfse'     => $retorno['xml_nfse'] ?? null,
-            'erros'        => null,
-            'emitida_em'   => now(),
-        ]);
-
-        $creditos->consumir($nota);
-
-        // Próximos passos: gerar DANFSE (NT 008/2026) e enviar ao tomador por e-mail/WhatsApp
+        app(FinalizadorNota::class)->emitida($nota, $retorno);
     }
 }

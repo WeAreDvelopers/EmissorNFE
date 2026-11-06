@@ -46,6 +46,7 @@ class SaasServiceProvider extends ServiceProvider
         $this->callAfterResolving(Schedule::class, function (Schedule $s) {
             $s->job(new ConciliarPagamentosJob)->hourly();
             $s->job(new ExpirarCreditosJob)->dailyAt('03:10');
+            $s->command('nfse:conciliar')->everyFifteenMinutes()->withoutOverlapping();
         });
     }
 }

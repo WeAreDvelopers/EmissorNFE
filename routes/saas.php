@@ -9,7 +9,9 @@
  */
 
 use App\Http\Controllers\ImportacaoController;
+use App\Http\Controllers\NotaConsultaController;
 use App\Http\Controllers\NotaController;
+use App\Http\Controllers\RelatorioController;
 use App\Http\Controllers\NotaDocumentoController;
 use App\Http\Controllers\ReprocessoController;
 use App\Http\Controllers\Saas\ContaController;
@@ -76,6 +78,12 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/clientes', [TomadorController::class, 'index'])->name('tomadores.index');
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');
     Route::put('/clientes/{tomador}', [TomadorController::class, 'update'])->name('tomadores.update');
+
+    // Consulta de notas (todos os lotes), conferência na SEFIN e relatório mensal
+    Route::get('/notas', [NotaConsultaController::class, 'index'])->name('notas.index');
+    Route::post('/notas/{nota}/conciliar', [NotaConsultaController::class, 'conciliar'])->name('notas.conciliar');
+    Route::get('/relatorios', [RelatorioController::class, 'index'])->name('relatorios.index');
+    Route::get('/relatorios/csv', [RelatorioController::class, 'csv'])->name('relatorios.csv');
 
     // Notas que precisam de ação, correção e reenvio
     Route::get('/pendencias', [NotaController::class, 'pendencias'])->name('pendencias');

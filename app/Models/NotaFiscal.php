@@ -19,7 +19,7 @@ class NotaFiscal extends Model
         'tomador_id', 'duplicidade_de_id', 'duplicidade_aprovada', 'tomador_documento', 'tomador_nome', 'tomador_email', 'sem_tomador',
         'codigo_servico', 'codigo_nbs', 'descricao', 'valor', 'data_competencia',
         'chave_acesso', 'numero_nfse', 'xml_dps', 'xml_nfse', 'erros',
-        'tentativas', 'emitida_em',
+        'tentativas', 'emitida_em', 'conciliada_em',
     ];
 
     protected $casts = [
@@ -28,6 +28,7 @@ class NotaFiscal extends Model
         'data_competencia' => 'date',
         'erros'            => 'array',
         'emitida_em'       => 'datetime',
+        'conciliada_em'    => 'datetime',
         'email_enviado_em' => 'datetime',
         'sem_tomador'      => 'boolean',
         'duplicidade_aprovada' => 'boolean',

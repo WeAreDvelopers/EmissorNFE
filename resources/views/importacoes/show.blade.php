@@ -59,6 +59,27 @@
             @endif
         </div>
 
+        @if ($importacao->total_planilha !== null)
+            @php
+                $emitidoValor = (float) $importacao->notas()->where('status', \App\Enums\StatusNota::Emitida)->sum('valor');
+                $pendenteValor = (float) $importacao->notas()->whereNotIn('status', [\App\Enums\StatusNota::Emitida, \App\Enums\StatusNota::Rascunho])->sum('valor');
+                $diferenca = round((float) $importacao->total_planilha - $emitidoValor - $pendenteValor, 2);
+                $brl = fn ($v) => 'R$ '.number_format($v, 2, ',', '.');
+            @endphp
+            <div class="card p-5 sm:px-6" data-regiao="conciliacao" data-versao="{{ md5(json_encode($resumo)) }}">
+                <h2 class="text-base font-semibold">Conferência com a planilha</h2>
+                <div class="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div><div class="text-ink-600">Total da planilha</div><div class="font-mono text-lg">{{ $brl($importacao->total_planilha) }}</div></div>
+                    <div><div class="text-ink-600">Emitido</div><div class="font-mono text-lg text-ok-800">{{ $brl($emitidoValor) }}</div></div>
+                    <div><div class="text-ink-600">Ainda não emitido</div><div class="font-mono text-lg {{ $pendenteValor > 0 ? 'text-warn-800' : '' }}">{{ $brl($pendenteValor) }}</div></div>
+                    <div><div class="text-ink-600">Diferença</div><div class="font-mono text-lg {{ abs($diferenca) > 0.009 ? 'text-warn-800' : 'text-ok-800' }}">{{ abs($diferenca) > 0.009 ? $brl($diferenca) : 'Fechou' }}</div></div>
+                </div>
+                @if (abs($diferenca) > 0.009)
+                    <p class="mt-2 text-[13px] text-ink-700">A diferença é valor de linhas que saíram do lote (excluídas) ou que não batem com o total declarado na célula E1.</p>
+                @endif
+            </div>
+        @endif
+
         <div data-regiao="atencao" data-versao="{{ md5(json_encode($resumo)) }}">
         @if ($atencao)
             <section class="space-y-3">

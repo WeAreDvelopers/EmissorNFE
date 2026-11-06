@@ -82,6 +82,7 @@ class ImportadorPlanilha
 
             $importacao->update([
                 'atualizacoes' => $cadastro->previa(),
+                'total_planilha' => $planilha['total_valor'] ?? round($somaValor, 2),
                 'avisos'       => $this->avisos($planilha, $somaValor, $somaIbpt),
             ]);
         });
