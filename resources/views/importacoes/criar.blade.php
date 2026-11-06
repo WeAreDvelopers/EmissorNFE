@@ -84,9 +84,16 @@
                     <h2 class="text-base font-semibold">Modelo da planilha</h2>
                     <a href="{{ route('importacoes.modelo') }}" class="link text-sm whitespace-nowrap">Baixar</a>
                 </div>
-                <button type="button" @click="$dispatch('abrir-video')" class="mt-3 w-full flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 px-3.5 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
-                    <span class="w-10 h-10 shrink-0 rounded-full bg-brand-600 text-white flex items-center justify-center" aria-hidden="true"><svg class="w-4 h-4 ms-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
-                    <span class="leading-tight"><b class="block text-sm text-ink-900">Ver como importar</b><span class="text-[13px] text-ink-700">Vídeo de 1 min 27 s</span></span>
+                <button type="button" @click="$dispatch('abrir-video')" class="group mt-3 block w-full text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2" aria-label="Assistir ao tutorial de importação, 1 minuto e 27 segundos">
+                    <span class="relative block aspect-video overflow-hidden rounded-xl border border-linha bg-chao shadow-[0_6px_18px_rgba(14,42,32,.22)] transition-shadow group-hover:shadow-[0_10px_28px_rgba(14,42,32,.32)]">
+                        <img src="{{ asset('videos/tutorial-planilha-importacao.jpg') }}" alt="" width="800" height="450" loading="lazy" class="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]">
+                        <span class="absolute inset-0 bg-casca/25 group-hover:bg-casca/35 transition-colors" aria-hidden="true"></span>
+                        <span class="absolute inset-0 flex items-center justify-center" aria-hidden="true">
+                            <span class="w-14 h-14 rounded-full bg-white/95 text-brand-600 shadow-lg flex items-center justify-center transition-transform group-hover:scale-110"><svg class="w-6 h-6 ms-1" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+                        </span>
+                        <span class="absolute right-2 bottom-2 rounded-md bg-casca/85 px-1.5 py-0.5 text-xs font-medium text-white font-mono">1:27</span>
+                    </span>
+                    <span class="mt-2 block text-sm font-medium text-ink-900">Ver como importar</span>
                 </button>
                 <dl class="mt-3 text-[13px] leading-snug divide-y divide-gray-200">
                     @foreach ([
@@ -109,7 +116,7 @@
     {{-- Player do tutorial: só carrega o vídeo quando o usuário abre --}}
     <div x-data="{ aberto: false }" @abrir-video.window="aberto = true" @keydown.escape.window="aberto = false" x-show="aberto" x-cloak x-transition.opacity.duration.150ms
          class="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-8 bg-black/70" role="dialog" aria-modal="true" aria-label="Tutorial de importação" @click.self="aberto = false">
-        <div class="w-full max-w-[960px] rounded-xl bg-white overflow-hidden shadow-2xl">
+        <div class="w-full max-w-[960px] rounded-xl bg-white overflow-hidden shadow-[0_28px_90px_rgba(0,0,0,.6),0_6px_20px_rgba(0,0,0,.35)] ring-1 ring-white/15">
             <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-linha">
                 <h2 class="text-base font-semibold">Como importar a planilha</h2>
                 <button type="button" @click="aberto = false" class="w-10 h-10 -me-1.5 inline-flex items-center justify-center rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" aria-label="Fechar vídeo">
@@ -117,7 +124,7 @@
                 </button>
             </div>
             <template x-if="aberto">
-                <video class="block w-full aspect-video bg-black" controls autoplay playsinline preload="metadata">
+                <video class="block w-full aspect-video bg-black" controls autoplay playsinline preload="metadata" poster="{{ asset('videos/tutorial-planilha-importacao.jpg') }}">
                     <source src="{{ asset('videos/tutorial-planilha-importacao.mp4') }}" type="video/mp4">
                     Seu navegador não toca este vídeo. <a href="{{ asset('videos/tutorial-planilha-importacao.mp4') }}">Baixe o vídeo</a>.
                 </video>
