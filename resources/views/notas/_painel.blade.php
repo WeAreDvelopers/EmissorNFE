@@ -48,6 +48,8 @@
                 <div class="rounded-lg bg-chao px-3.5 py-3 text-[13px] leading-relaxed text-ink-700">
                     @if ($nota->status === \App\Enums\StatusNota::Invalida && $nota->importacao?->status === 'conferir')
                         Esta nota ainda não gastou crédito.
+                    @elseif ($nota->emitente?->ehHomologacao())
+                        Modo teste: reenviar não gasta crédito.
                     @else
                         Esta nota não gastou crédito. Ao reenviar, 1 crédito é reservado de novo e só é cobrado se a prefeitura autorizar.
                     @endif

@@ -116,7 +116,8 @@ class ImportacaoController extends Controller
             'qtdInvalidas' => $resumo['invalida'],
             'saldo'      => $saldo,
             'saldoDepois' => $saldo - $prontas,
-            'semSaldo'   => $saldo < $prontas,
+            'semCusto'   => $importacao->emitente->ehHomologacao(),
+            'semSaldo'   => ! $importacao->emitente->ehHomologacao() && $saldo < $prontas,
             'total'      => array_sum($resumo),
             'somaValores' => (float) NotaFiscal::where('importacao_id', $importacao->id)->where('status', StatusNota::Rascunho)->sum('valor'),
         ]);

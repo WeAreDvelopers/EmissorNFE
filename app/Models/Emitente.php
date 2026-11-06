@@ -53,6 +53,12 @@ class Emitente extends Model
         return $this->logo_arquivo ? asset('storage/'.$this->logo_arquivo) : null;
     }
 
+    /** Ambiente de teste (homologação): não gasta crédito e a nota não tem valor fiscal. */
+    public function ehHomologacao(): bool
+    {
+        return (int) $this->ambiente !== 1;
+    }
+
     public function certificadoVenceEmDias(): ?int
     {
         return $this->certificado_validade ? (int) now()->diffInDays($this->certificado_validade, false) : null;

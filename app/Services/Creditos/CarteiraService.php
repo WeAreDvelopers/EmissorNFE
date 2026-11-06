@@ -4,6 +4,7 @@ namespace App\Services\Creditos;
 
 use App\Enums\TipoMovimento;
 use App\Models\Carteira;
+use App\Models\Emitente;
 use App\Models\LoteCredito;
 use App\Models\MovimentoCredito;
 use App\Models\NotaFiscal;
@@ -71,6 +72,12 @@ class CarteiraService
      */
     public function reservar(NotaFiscal $nota): bool
     {
+        // Homologação (modo teste) é grátis: não mexe na carteira, não gera movimento e nunca fica "aguardando crédito".
+        // Como nunca há reserva, consumir() e estornar() também viram no-op para essas notas.
+        if ($this->emHomologacao($nota)) {
+            return true;
+        }
+
         return DB::transaction(function () use ($nota) {
             $carteira = $this->travar($nota->conta_id);
             $nota = NotaFiscal::semIsolamento()->lockForUpdate()->findOrFail($nota->id);
@@ -108,6 +115,14 @@ class CarteiraService
 
             return true;
         });
+    }
+
+    /** A nota é de um emitente em ambiente de teste? (sem isolamento: roda também no worker, sem conta ativa) */
+    public function emHomologacao(NotaFiscal $nota): bool
+    {
+        $ambiente = Emitente::semIsolamento()->whereKey($nota->emitente_id)->value('ambiente');
+
+        return $ambiente !== null && (int) $ambiente !== 1;
     }
 
     /** NFS-e autorizada: o crédito reservado é consumido. */

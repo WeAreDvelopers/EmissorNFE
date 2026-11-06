@@ -71,11 +71,17 @@
                         <div class="rounded-xl bg-chao border border-linha p-4"><div class="font-mono text-2xl font-semibold leading-9">R$ {{ number_format($somaValores, 2, ',', '.') }}</div><div class="text-sm font-medium text-ink-700">soma das notas prontas</div></div>
                     </div>
 
+                    @if ($semCusto)
+                        <div class="rounded-lg bg-ok-50 border border-brand-200 px-4 py-3.5 text-sm leading-relaxed text-ok-800">
+                            <b>Modo teste: não gasta créditos.</b> As notas enviadas em homologação não consomem o seu saldo e não têm valor fiscal.
+                        </div>
+                    @else
                     <div class="rounded-lg bg-chao px-4 py-3.5 text-sm leading-relaxed text-ink-900">
                         <b>Custo:</b> {{ $fmt($prontas) }} {{ $prontas === 1 ? 'crédito será reservado' : 'créditos serão reservados' }}.
                         Você tem <b class="font-mono">{{ $fmt($saldo) }}</b>@unless ($semSaldo) e fica com <b class="font-mono">{{ $fmt($saldoDepois) }}</b>@endunless.
                         Nota recusada ou que falhar devolve o crédito.
                     </div>
+                    @endif
                     @if ($semSaldo && $prontas)
                         <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3.5 text-sm text-amber-900">
                             <b>Saldo insuficiente para tudo.</b> Se você enviar agora, as primeiras {{ $fmt(max($saldo, 0)) }} saem e as outras {{ $fmt($prontas - max($saldo, 0)) }} ficam <b>aguardando crédito</b>, voltando sozinhas depois da recarga.

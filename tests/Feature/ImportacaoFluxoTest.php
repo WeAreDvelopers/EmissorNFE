@@ -43,7 +43,7 @@ class ImportacaoFluxoTest extends TestCase
         app(ContaAtual::class)->como($this->conta->id, function () {
             $this->emitente = Emitente::create([
                 'cnpj' => '00000000000191', 'razao_social' => 'Padaria Teste', 'codigo_municipio' => '3549904',
-                'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => 6, 'serie_dps' => '00001', 'ambiente' => 2,
+                'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => 6, 'serie_dps' => '00001', 'ambiente' => 1,
             ]);
         });
     }
@@ -251,6 +251,7 @@ class ImportacaoFluxoTest extends TestCase
         $this->actingAs($this->user);
         $this->get(route('inicio'))->assertOk()->assertSee('1 nota precisa de você')->assertSee('Importar planilha');
         $this->get(route('importacoes.index'))->assertOk()->assertSee('lote.csv')->assertSee('Aguardando sua conferência');
+        $this->emitente->update(['ambiente' => 2]);   // o aviso de modo teste só aparece em homologação
         $this->get(route('importacoes.criar'))->assertOk()->assertSee('Modo teste');
         $this->get(route('pendencias'))->assertOk()->assertSee('Dado inválido');
         $nota = NotaFiscal::semIsolamento()->where('status', StatusNota::Invalida)->firstOrFail();
