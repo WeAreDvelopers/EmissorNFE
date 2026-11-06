@@ -8,117 +8,148 @@
     $modoTeste  = $ambientes->isNotEmpty() && $ambientes->contains(2);
     $emProducao = $ambientes->isNotEmpty() && ! $modoTeste;
 
-    $links = $contaAtiva ? array_filter([
-        ['inicio',            'Início',       'consultar', 'inicio'],
-        ['importacoes.index', 'Importações',  'consultar', 'importacoes.*'],
-        ['tomadores.index',   'Clientes',     'consultar', 'tomadores.*'],
-        ['creditos.index',    'Créditos',     'consultar', 'creditos.*'],
-    ], fn ($l) => Gate::allows($l[2])) : [];
-
     // Área master (administrador da plataforma): menu próprio e atalho de ida e volta
     $ehMaster = (bool) ($usuario->admin_plataforma ?? false);
     $noMaster = request()->routeIs('master.*');
+
+    // [rota, rótulo, permissão, padrão de rota ativa, ícone]
+    $icones = [
+        'inicio'   => 'M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10',
+        'lotes'    => 'M12 16V4M7 9l5-5 5 5M5 20h14',
+        'clientes' => 'M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21a8 8 0 0116 0',
+        'creditos' => 'M3 7h18v12H3zM3 7l3-3h12l3 3M16 13h2',
+        'empresas' => 'M4 21V5l8-2v18M12 9h8v12M7 9h2M7 13h2M7 17h2M15 13h2M15 17h2',
+        'usuarios' => 'M17 20v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M10 11a4 4 0 100-8 4 4 0 000 8zM21 20v-1a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
+        'visao'    => 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+    ];
+
     if ($noMaster) {
-        $links = [['master.visao', 'Visão geral', null, 'master.visao'], ['master.clientes', 'Clientes', null, 'master.cliente*']];
+        $grupos = ['Plataforma' => [
+            ['master.visao', 'Visão geral', null, 'master.visao', 'visao'],
+            ['master.clientes', 'Clientes', null, 'master.cliente*', 'clientes'],
+        ]];
+    } elseif ($contaAtiva) {
+        $grupos = [
+            'Notas' => [
+                ['inicio', 'Início', 'consultar', 'inicio', 'inicio'],
+                ['importacoes.index', 'Importações', 'consultar', 'importacoes.*', 'lotes'],
+                ['tomadores.index', 'Clientes', 'consultar', 'tomadores.*', 'clientes'],
+            ],
+            'Conta' => [
+                ['creditos.index', 'Créditos', 'consultar', 'creditos.*', 'creditos'],
+                ['emitentes.index', 'Empresas que emitem', 'consultar', 'emitentes.*', 'empresas'],
+                ['usuarios.index', 'Usuários', 'gerenciar-usuarios', 'usuarios.*', 'usuarios'],
+            ],
+        ];
+    } else {
+        $grupos = [];
     }
 @endphp
-<nav x-data="{ open: false }" class="bg-white border-b border-linha" aria-label="Principal">
-    <div class="max-w-[1240px] mx-auto px-4 sm:px-8">
-        <div class="flex items-center justify-between min-h-16 gap-4">
-            <div class="flex items-center gap-2 sm:gap-4">
-                <a href="{{ route($noMaster ? 'master.visao' : 'dashboard') }}" class="flex items-center gap-3">
-                    <span class="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center font-semibold" aria-hidden="true">N</span>
-                    <span class="font-semibold hidden sm:inline">{{ config('saas.nome_produto', 'Emissor NFS-e') }}</span>
-                </a>
 
-                <div class="hidden md:flex gap-1 ms-4">
-                    @foreach ($links as [$rota, $rotulo, , $ativo])
-                        <a href="{{ route($rota) }}" @class(['inline-flex items-center min-h-[44px] px-3.5 rounded-lg text-[15px] font-medium', 'bg-gray-100 text-ink-900' => request()->routeIs($ativo), 'text-ink-700 hover:bg-gray-50' => ! request()->routeIs($ativo)]) @if(request()->routeIs($ativo)) aria-current="page" @endif>{{ $rotulo }}</a>
-                    @endforeach
-                </div>
-            </div>
+{{-- Barra fina só no celular/tablet: abre o menu --}}
+<div class="lg:hidden sticky top-0 z-40 h-14 px-4 flex items-center justify-between bg-casca text-white">
+    <button type="button" @click="menu = true" class="w-11 h-11 -ms-2 inline-flex items-center justify-center rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Abrir menu" :aria-expanded="menu">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <a href="{{ route($noMaster ? 'master.visao' : 'dashboard') }}" class="font-semibold text-white no-underline">{{ config('saas.nome_produto', 'Emissor NFS-e') }}</a>
+    @if ($contaAtiva && ! $noMaster)
+        <a href="{{ route('creditos.index') }}" class="text-sm text-white no-underline rounded-lg bg-white/10 px-3 py-1.5"><b class="font-mono">{{ number_format($saldo ?? 0, 0, ',', '.') }}</b> créd.</a>
+    @else
+        <span class="w-11"></span>
+    @endif
+</div>
 
-            <div class="hidden md:flex items-center gap-3">
-                @if ($ehMaster)
-                    <a href="{{ route($noMaster ? 'inicio' : 'master.visao') }}" class="pill bg-ink-900 text-white font-semibold no-underline hover:bg-ink-700">{{ $noMaster ? '← Voltar ao app' : 'Master' }}</a>
-                @endif
-                @if ($modoTeste)
-                    <span class="pill bg-amber-100 text-amber-900 font-semibold" title="As notas emitidas em modo teste não têm valor fiscal">Modo teste</span>
-                @elseif ($emProducao)
-                    <span class="pill bg-ok-100 text-ok-800 font-semibold">Produção</span>
-                @endif
+<div x-show="menu" x-cloak @click="menu = false" class="lg:hidden fixed inset-0 z-40 bg-black/50" aria-hidden="true"></div>
 
-                @if ($contaAtiva)
-                    <a href="{{ route('creditos.index') }}" class="inline-flex items-center gap-2 min-h-[44px] px-3.5 border border-gray-300 rounded-lg text-sm text-ink-900 hover:bg-gray-50" title="Créditos disponíveis">
-                        <b class="font-mono {{ ($saldo ?? 0) <= 0 ? 'text-warn-800' : '' }}">{{ number_format($saldo ?? 0, 0, ',', '.') }}</b> créditos
-                        <span class="text-brand-600 font-semibold">+ Recarregar</span>
-                    </a>
-                @endif
+<aside id="menu-lateral" aria-label="Principal"
+       class="fixed inset-y-0 left-0 z-50 w-[272px] -translate-x-full transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:w-[256px] bg-casca text-casca-texto flex flex-col"
+       :class="menu ? '!translate-x-0' : ''" @keydown.escape.window="menu = false">
 
-                <x-dropdown align="right" width="64">
-                    <x-slot name="trigger">
-                        <button class="inline-flex items-center gap-2 min-h-[44px] px-2 text-sm text-ink-700 rounded-lg hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
-                            <span class="text-left leading-tight">
-                                <span class="block font-medium text-ink-900">{{ $contaAtiva?->nome ?? $usuario->name }}</span>
-                                <span class="block text-xs text-ink-600">{{ $usuario->name }}</span>
-                            </span>
-                            <svg class="h-4 w-4 fill-current" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                        </button>
-                    </x-slot>
+    <div class="h-16 px-5 flex items-center justify-between shrink-0">
+        <a href="{{ route($noMaster ? 'master.visao' : 'dashboard') }}" class="flex items-center gap-3 no-underline text-white">
+            <span class="w-9 h-9 rounded-lg bg-brand-500 text-white flex items-center justify-center font-semibold" aria-hidden="true">N</span>
+            <span class="font-semibold leading-tight">{{ config('saas.nome_produto', 'Emissor NFS-e') }}</span>
+        </a>
+        <button type="button" @click="menu = false" class="lg:hidden w-10 h-10 -me-2 inline-flex items-center justify-center rounded-lg hover:bg-white/10" aria-label="Fechar menu">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+    </div>
 
-                    <x-slot name="content">
-                        @if ($contaAtiva)
-                            <x-dropdown-link :href="route('emitentes.index')">Empresas que emitem</x-dropdown-link>
-                            @can('gerenciar-usuarios')<x-dropdown-link :href="route('usuarios.index')">Usuários da conta</x-dropdown-link>@endcan
-                            <div class="border-t border-gray-100 my-1"></div>
-                        @endif
-                        @foreach ($usuario->contas as $c)
-                            @if (! $contaAtiva || $c->id !== $contaAtiva->id)
-                                <form method="POST" action="{{ route('contas.trocar', $c->id) }}">
-                                    @csrf
-                                    <x-dropdown-link href="#" onclick="event.preventDefault(); this.closest('form').submit();">Trocar para {{ $c->nome }}</x-dropdown-link>
-                                </form>
-                            @endif
+    @if ($noMaster)
+        <div class="mx-4 mb-2 rounded-lg bg-white/10 px-3 py-2 text-[13px] text-white">Área master · somente leitura</div>
+    @elseif ($modoTeste)
+        <div class="mx-4 mb-2 rounded-lg bg-amber-300/95 px-3 py-2 text-[13px] leading-snug text-amber-950" title="As notas emitidas em modo teste não têm valor fiscal"><b>Modo teste</b><br>notas sem valor fiscal</div>
+    @elseif ($emProducao)
+        <div class="mx-4 mb-2 rounded-lg bg-brand-500/25 px-3 py-2 text-[13px] text-white"><b>Produção</b> · notas com valor fiscal</div>
+    @endif
+
+    <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-5">
+        @foreach ($grupos as $titulo => $links)
+            @php $links = array_filter($links, fn ($l) => $l[2] === null || Gate::allows($l[2])); @endphp
+            @if ($links)
+                <div>
+                    <div class="px-3 pb-1.5 text-[13px] text-casca-texto/70">{{ $titulo }}</div>
+                    <ul class="space-y-0.5">
+                        @foreach ($links as [$rota, $rotulo, , $ativo, $icone])
+                            @php $on = request()->routeIs($ativo); @endphp
+                            <li>
+                                <a href="{{ route($rota) }}" @if ($on) aria-current="page" @endif
+                                   @class(['flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-[15px] font-medium no-underline transition-colors', 'bg-casca-600 text-white shadow-[inset_3px_0_0_#5FD1A0]' => $on, 'text-casca-texto hover:bg-white/10 hover:text-white' => ! $on])>
+                                    <svg class="w-5 h-5 shrink-0 {{ $on ? 'text-[#5FD1A0]' : 'opacity-80' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ $icones[$icone] }}"/></svg>
+                                    {{ $rotulo }}
+                                </a>
+                            </li>
                         @endforeach
-                        <x-dropdown-link :href="route('contas.criar')">Criar outra conta</x-dropdown-link>
-                        <x-dropdown-link :href="route('profile.edit')">Meu perfil</x-dropdown-link>
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <x-dropdown-link :href="route('logout')" onclick="event.preventDefault(); this.closest('form').submit();">Sair</x-dropdown-link>
-                        </form>
-                    </x-slot>
-                </x-dropdown>
-            </div>
-
-            <div class="flex items-center md:hidden">
-                <button @click="open = ! open" class="inline-flex items-center justify-center w-11 h-11 rounded-lg text-ink-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" aria-label="Abrir menu" :aria-expanded="open">
-                    <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                        <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        <path :class="{'hidden': ! open, 'inline-flex': open }" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden md:hidden border-t border-linha">
-        <div class="px-4 py-3 space-y-1">
-            @foreach ($links as [$rota, $rotulo, , $ativo])
-                <a href="{{ route($rota) }}" @class(['flex items-center min-h-[44px] px-3 rounded-lg font-medium', 'bg-gray-100' => request()->routeIs($ativo)])>{{ $rotulo }}</a>
-            @endforeach
-            @if ($contaAtiva)
-                <a href="{{ route('emitentes.index') }}" class="flex items-center min-h-[44px] px-3 rounded-lg text-ink-700">Empresas que emitem</a>
-                @can('gerenciar-usuarios')<a href="{{ route('usuarios.index') }}" class="flex items-center min-h-[44px] px-3 rounded-lg text-ink-700">Usuários da conta</a>@endcan
+                    </ul>
+                </div>
             @endif
-            @if ($ehMaster)<a href="{{ route($noMaster ? 'inicio' : 'master.visao') }}" class="flex items-center min-h-[44px] px-3 rounded-lg font-semibold text-ink-900">{{ $noMaster ? '← Voltar ao app' : 'Área master' }}</a>@endif
-            <a href="{{ route('profile.edit') }}" class="flex items-center min-h-[44px] px-3 rounded-lg text-ink-700">Meu perfil</a>
-        </div>
-        <div class="px-4 py-3 border-t border-linha flex items-center justify-between gap-3 text-sm">
+        @endforeach
+
+        @if ($ehMaster)
             <div>
-                <div class="font-medium">{{ $contaAtiva?->nome ?? $usuario->name }}</div>
-                @if ($contaAtiva)<div class="text-ink-600"><b class="font-mono">{{ number_format($saldo ?? 0, 0, ',', '.') }}</b> créditos @if ($modoTeste)· modo teste @endif</div>@endif
+                <div class="px-3 pb-1.5 text-[13px] text-casca-texto/70">Administração</div>
+                <a href="{{ route($noMaster ? 'inicio' : 'master.visao') }}" class="flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-[15px] font-medium no-underline text-casca-texto hover:bg-white/10 hover:text-white">
+                    <svg class="w-5 h-5 shrink-0 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ $noMaster ? 'M15 18l-6-6 6-6' : $icones['visao'] }}"/></svg>
+                    {{ $noMaster ? 'Voltar ao app' : 'Área master' }}
+                </a>
             </div>
-            <form method="POST" action="{{ route('logout') }}">@csrf<button class="btn btn-sm">Sair</button></form>
+        @endif
+    </nav>
+
+    <div class="shrink-0 p-3 space-y-3 border-t border-white/10">
+        @if ($contaAtiva && ! $noMaster)
+            <a href="{{ route('creditos.index') }}" class="flex items-center justify-between gap-3 rounded-xl bg-white/[.07] hover:bg-white/10 px-3.5 py-3 no-underline text-white" title="Créditos disponíveis">
+                <span>
+                    <span class="block text-[13px] text-casca-texto/80">Créditos</span>
+                    <b class="font-mono text-2xl leading-none {{ ($saldo ?? 0) <= 0 ? 'text-amber-300' : '' }}">{{ number_format($saldo ?? 0, 0, ',', '.') }}</b>
+                </span>
+                <span class="text-sm font-semibold text-[#5FD1A0]">Recarregar</span>
+            </a>
+        @endif
+
+        <div class="relative" x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape="aberto = false">
+            <button type="button" @click="aberto = ! aberto" :aria-expanded="aberto" class="w-full flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <span class="w-9 h-9 shrink-0 rounded-full bg-casca-600 text-white flex items-center justify-center text-sm font-semibold" aria-hidden="true">{{ \Illuminate\Support\Str::of($usuario->name)->substr(0, 1)->upper() }}</span>
+                <span class="min-w-0 flex-1 leading-tight">
+                    <span class="block text-sm font-medium text-white truncate">{{ $contaAtiva?->nome ?? $usuario->name }}</span>
+                    <span class="block text-xs text-casca-texto/75 truncate">{{ $usuario->name }}</span>
+                </span>
+                <svg class="w-4 h-4 shrink-0 opacity-70" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M14.7 12.7a1 1 0 01-1.4 0L10 9.4l-3.3 3.3a1 1 0 01-1.4-1.4l4-4a1 1 0 011.4 0l4 4a1 1 0 010 1.4z" clip-rule="evenodd"/></svg>
+            </button>
+            <div x-show="aberto" x-cloak x-transition.opacity.duration.120ms class="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-white text-ink-900 shadow-xl border border-linha py-1.5 z-10">
+                @foreach ($usuario->contas as $c)
+                    @if (! $contaAtiva || $c->id !== $contaAtiva->id)
+                        <form method="POST" action="{{ route('contas.trocar', $c->id) }}">@csrf
+                            <button class="w-full text-left px-4 min-h-[40px] text-sm hover:bg-gray-50">Trocar para {{ $c->nome }}</button>
+                        </form>
+                    @endif
+                @endforeach
+                <a href="{{ route('contas.criar') }}" class="flex items-center px-4 min-h-[40px] text-sm no-underline text-ink-900 hover:bg-gray-50">Criar outra conta</a>
+                <a href="{{ route('profile.edit') }}" class="flex items-center px-4 min-h-[40px] text-sm no-underline text-ink-900 hover:bg-gray-50">Meu perfil</a>
+                <form method="POST" action="{{ route('logout') }}" class="border-t border-gray-100 mt-1 pt-1">@csrf
+                    <button class="w-full text-left px-4 min-h-[40px] text-sm hover:bg-gray-50">Sair</button>
+                </form>
+            </div>
         </div>
     </div>
-</nav>
+</aside>

@@ -22,10 +22,17 @@
     .campo-ajuda { @apply mt-1 text-[13px] text-ink-600; }
 
     .link { @apply text-brand-600 font-medium hover:underline; }
+
+    /* Campo de arquivo: botão "Escolher arquivo" no estilo do app (antes vinha o botão cinza do navegador) */
+    input[type='file'].campo-entrada { @apply py-1.5 text-sm text-ink-700 cursor-pointer; }
+    input[type='file'].campo-entrada::file-selector-button { @apply me-3 min-h-[34px] px-3.5 rounded-md border-0 bg-brand-50 text-brand-700 text-sm font-medium cursor-pointer hover:bg-brand-100; }
     .tabela-linha { @apply border-t border-gray-200; }
 }
 
 [x-cloak] { display: none !important; }
+
+/* Mesma largura de conteúdo em todas as telas (cada página trazia a sua: 1120, 1160, 1240) */
+.conteudo > [class*='max-w-[1'] { max-width: 1184px; }
 
 /* ---------- retorno visual das ações (AJAX) ---------- */
 .barra-ajax { position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 60; pointer-events: none; opacity: 0; transition: opacity .2s; background: linear-gradient(90deg, transparent, #1B8A66, #0B6B4D, transparent); background-size: 40% 100%; background-repeat: no-repeat; }

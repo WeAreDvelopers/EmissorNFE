@@ -26,6 +26,8 @@ export default {
                 info:  { 100: '#E4EBFB', 500: '#7C9BE0', 800: '#1D3F9E' },
                 ink:   { 900: '#16201B', 700: '#3E4A43', 600: '#4D5A52' },
                 perigo: { 50: '#FDECEC', 200: '#F5B5B5', 600: '#C62828', 700: '#A61E1E', 800: '#8E1B1B' },
+                // Menu lateral: verde-musgo escuro (o único elemento "ousado" do layout)
+                casca: { DEFAULT: '#0E2A20', 600: '#1D4A38', texto: '#C8DBD0' },
                 chao:  '#F4F6F3',
                 linha: '#D9DFD9',
             },

@@ -79,26 +79,24 @@
                 </div>
             </form>
 
-            <aside class="card flex-[1_1_320px] min-w-0 p-5 sm:p-6">
-                <div class="flex items-center justify-between gap-2">
-                    <h2 class="text-base font-semibold">Como a planilha funciona</h2>
-                    <a href="{{ route('importacoes.modelo') }}" class="link text-sm">Baixar modelo</a>
+            <aside class="card flex-[1_1_300px] min-w-0 p-5 lg:sticky lg:top-6">
+                <div class="flex items-baseline justify-between gap-3">
+                    <h2 class="text-base font-semibold">Modelo da planilha</h2>
+                    <a href="{{ route('importacoes.modelo') }}" class="link text-sm whitespace-nowrap">Baixar</a>
                 </div>
-                <p class="text-[13px] text-ink-700 mt-2">É o modelo de notas dos ERPs. O app procura a aba certa sozinho (o nome muda a cada mês).</p>
-                <dl class="mt-3 text-sm divide-y divide-gray-200">
+                <dl class="mt-3 text-[13px] leading-snug divide-y divide-gray-200">
                     @foreach ([
-                        ['A1', 'CNPJ da empresa que emite · tem que bater com a empresa escolhida'],
-                        ['E1 e F1', 'totais de conferência · avisamos se não baterem com as linhas'],
-                        ['Linha 2', 'cabeçalhos · as notas começam na linha 3'],
-                        ['CNPJ/CPF', 'do cliente, ou “sem destinatário informado”'],
-                        ['Atualizar', 'com x, as colunas de dados novos (fantasia, razão social, endereço, e-mail) atualizam o cadastro do cliente; campo vazio mantém o que já existe'],
-                        ['Descrição', 'opcional · vazia usa a descrição padrão da empresa'],
-                        ['Código de Serviço e NBS', 'opcionais, para empresas com vários serviços · vazios usam o padrão da empresa'],
+                        ['A1', 'CNPJ da empresa que emite. Precisa bater com a empresa escolhida.'],
+                        ['E1 e F1', 'Totais de conferência. Avisamos se não baterem com as linhas.'],
+                        ['Linha 2', 'Cabeçalhos. As notas começam na linha 3.'],
+                        ['CNPJ/CPF', 'Do cliente, ou “sem destinatário informado”.'],
+                        ['Atualizar', 'Com x, as colunas de dados novos atualizam o cadastro do cliente. Campo vazio mantém o que já existe.'],
+                        ['Descrição, código e NBS', 'Opcionais. Vazios usam o padrão da empresa.'],
                     ] as [$col, $info])
-                        <div class="py-2"><dt class="font-medium text-[13px]">{{ $col }}</dt><dd class="text-ink-600 text-[13px]">{{ $info }}</dd></div>
+                        <div class="py-2 grid grid-cols-[84px_1fr] gap-x-3"><dt class="font-medium text-ink-900">{{ $col }}</dt><dd class="text-ink-700">{{ $info }}</dd></div>
                     @endforeach
                 </dl>
-                <p class="text-[13px] text-ink-700 mt-3">Linhas com erro não travam o lote: você corrige na tela de conferência e o resto segue. O cadastro de clientes só muda quando você confirmar o envio.</p>
+                <p class="text-[13px] text-ink-600 mt-3 leading-snug">Linhas com erro não travam o lote. O cadastro de clientes só muda quando você confirma o envio.</p>
             </aside>
         </div>
         @endif

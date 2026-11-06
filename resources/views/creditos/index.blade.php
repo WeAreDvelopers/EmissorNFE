@@ -53,18 +53,23 @@
             @endif
         </section>
 
+        @php $temDescricao = $extrato->contains(fn ($m) => filled($m->descricao)); @endphp
         <section class="card pt-5 pb-1.5 overflow-x-auto">
             <h2 class="text-lg font-semibold px-5 sm:px-6 pb-3">Extrato</h2>
-            <table class="min-w-full text-sm">
-                <thead class="text-left text-xs uppercase tracking-wide text-ink-600"><tr><th class="px-5 sm:px-6 py-2 font-medium">Data</th><th class="py-2 font-medium">Movimento</th><th class="py-2 font-medium text-right">Qtd.</th><th class="py-2 font-medium text-right">Saldo</th><th class="px-5 sm:px-6 py-2 font-medium">Descrição</th></tr></thead>
+            <table class="w-full text-sm">
+                <thead class="text-left text-[13px] text-ink-600 border-t border-linha bg-chao/60"><tr>
+                    <th class="px-5 sm:px-6 py-2.5 font-medium w-[150px]">Data</th><th class="py-2.5 font-medium">Movimento</th>
+                    <th class="py-2.5 font-medium text-right w-[90px]">Qtd.</th><th class="py-2.5 font-medium text-right w-[90px] {{ $temDescricao ? '' : 'pe-5 sm:pe-6' }}">Saldo</th>
+                    @if ($temDescricao)<th class="ps-6 pe-5 sm:pe-6 py-2.5 font-medium">Descrição</th>@endif
+                </tr></thead>
                 <tbody>
                 @forelse ($extrato as $m)
                     <tr class="tabela-linha">
-                        <td class="px-5 sm:px-6 py-3 whitespace-nowrap font-mono text-[13px]">{{ $m->created_at->format('d/m H:i') }}</td>
-                        <td class="py-3">{{ ucfirst($m->tipo->value) }}</td>
-                        <td class="py-3 text-right font-mono {{ $m->quantidade < 0 ? 'text-warn-800' : 'text-ok-800' }}">{{ $m->quantidade > 0 ? '+' : '' }}{{ $m->quantidade }}</td>
-                        <td class="py-3 text-right font-mono">{{ $m->disponivel_apos }}</td>
-                        <td class="px-5 sm:px-6 py-3 text-ink-600">{{ $m->descricao }}</td>
+                        <td class="px-5 sm:px-6 py-2.5 whitespace-nowrap font-mono text-[13px] text-ink-700">{{ $m->created_at->format('d/m H:i') }}</td>
+                        <td class="py-2.5">{{ ucfirst($m->tipo->value) }}</td>
+                        <td class="py-2.5 text-right font-mono {{ $m->quantidade < 0 ? 'text-warn-800' : 'text-ok-800' }}">{{ $m->quantidade > 0 ? '+' : '' }}{{ $m->quantidade }}</td>
+                        <td class="py-2.5 text-right font-mono {{ $temDescricao ? '' : 'pe-5 sm:pe-6' }}">{{ $m->disponivel_apos }}</td>
+                        @if ($temDescricao)<td class="ps-6 pe-5 sm:pe-6 py-2.5 text-ink-600">{{ $m->descricao }}</td>@endif
                     </tr>
                 @empty
                     <tr class="tabela-linha"><td colspan="5" class="px-6 py-8 text-center text-ink-700">Sem movimentos ainda.</td></tr>

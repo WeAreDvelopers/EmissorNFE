@@ -110,11 +110,7 @@
                 <div class="px-5 sm:px-6 py-3.5 tabela-linha">{{ $notas->links() }}</div>
             </section>
 
-            <div id="painel-vaga" class="flex-[1_1_380px] min-w-0 max-w-[460px] empty:hidden">
-                @if ($selecionada && $selecionada->status->grupo() === 'atencao')
-                    @include('notas._painel', ['nota' => $selecionada, 'fechar' => route('importacoes.show', [$importacao, 'filtro' => $filtro])])
-                @endif
-            </div>
+            <div id="painel-vaga" class="flex-[1_1_380px] min-w-0 max-w-[460px] empty:hidden">@if ($selecionada && $selecionada->status->grupo() === 'atencao')@include('notas._painel', ['nota' => $selecionada, 'fechar' => route('importacoes.show', [$importacao, 'filtro' => $filtro])])@endif</div>
         </div>
     </div>
 </x-app-layout>

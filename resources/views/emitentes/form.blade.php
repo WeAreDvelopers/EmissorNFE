@@ -197,7 +197,7 @@
                         <p class="text-[13px] text-ink-700 leading-relaxed">Número de controle de cada nota enviada. O app cuida disso sozinho e nunca repete um número. O número que vale para o cliente é o da NFS-e, dado pelo ambiente nacional ao autorizar.</p>
                         @foreach ($numeracao as $ambiente => $n)
                             <div class="rounded-lg border border-gray-200 p-3 space-y-2">
-                                <div class="flex justify-between gap-2 text-sm"><b>{{ $n['rotulo'] }}</b><span class="text-ink-600">último usado <b class="font-mono text-ink-900">{{ $n['ultimo'] ?: '—' }}</b> · próximo <b class="font-mono text-ink-900">{{ $n['proximo'] }}</b></span></div>
+                                <div class="text-sm"><b>{{ $n['rotulo'] }}</b><div class="text-ink-600 mt-0.5">último usado <b class="font-mono text-ink-900">{{ $n['ultimo'] ?: '—' }}</b>, próximo <b class="font-mono text-ink-900">{{ $n['proximo'] }}</b></div></div>
                                 <form method="POST" action="{{ route('emitentes.numeracao', $emitente) }}" class="flex gap-2 items-end">
                                     @csrf
                                     <input type="hidden" name="ambiente" value="{{ $ambiente }}">

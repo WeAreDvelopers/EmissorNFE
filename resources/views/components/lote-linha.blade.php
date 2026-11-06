@@ -11,7 +11,7 @@
 @endphp
 <div class="flex items-center tabela-linha hover:bg-gray-50" data-item="lote-{{ $importacao->id }}">
 <a href="{{ $aguardandoConferencia ? route('importacoes.conferir', $importacao) : route('importacoes.show', $importacao) }}"
-   class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_auto] gap-2 sm:gap-4 items-center ps-5 sm:ps-6 pe-3 py-4 text-inherit no-underline">
+   class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_172px] gap-2 sm:gap-4 items-center ps-5 sm:ps-6 pe-3 py-4 text-inherit no-underline">
     <div>
         <div class="font-medium text-[15px]">{{ $importacao->arquivo_nome }}</div>
         <div class="text-[13px] text-ink-600">{{ $importacao->created_at->isToday() ? 'hoje, '.$importacao->created_at->format('H:i') : $importacao->created_at->format('d/m, H:i') }}@if ($importacao->total_linhas) · {{ $importacao->total_linhas }} notas @endif</div>
@@ -37,7 +37,7 @@
     <span class="pill {{ $selo }} justify-self-start sm:justify-self-end">{{ $situacao }}</span>
 </a>
 @can('emitir')
-    <div class="shrink-0 pe-3 sm:pe-4 w-[132px] flex justify-end">
+    <div class="shrink-0 pe-3 sm:pe-4 w-[112px] flex justify-end">
         @if ($podeExcluir)
             <button type="button" class="btn-excluir" data-acao-url="{{ route('importacoes.excluir', $importacao) }}" data-confirmar="Excluir mesmo?" data-saindo="self" aria-label="Excluir a importação {{ $importacao->arquivo_nome }}" title="Excluir esta importação">
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>Excluir
