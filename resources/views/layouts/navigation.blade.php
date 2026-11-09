@@ -21,6 +21,7 @@
         'empresas' => 'M4 21V5l8-2v18M12 9h8v12M7 9h2M7 13h2M7 17h2M15 13h2M15 17h2',
         'usuarios' => 'M17 20v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M10 11a4 4 0 100-8 4 4 0 000 8zM21 20v-1a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
         'visao'    => 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+        'nova'     => 'M12 5v14M5 12h14',
         'notas'    => 'M7 3h8l4 4v14H7zM15 3v4h4M10 12h6M10 16h6',
     ];
 
@@ -33,6 +34,7 @@
         $grupos = [
             'Notas' => [
                 ['inicio', 'Início', 'consultar', 'inicio', 'inicio'],
+                ['notas.manual', 'Emitir nota', 'emitir', 'notas.manual*', 'nova'],
                 ['importacoes.index', 'Importações', 'consultar', 'importacoes.*', 'lotes'],
                 ['notas.index', 'Notas', 'consultar', 'notas.index', 'notas'],
                 ['tomadores.index', 'Clientes', 'consultar', 'tomadores.*', 'clientes'],

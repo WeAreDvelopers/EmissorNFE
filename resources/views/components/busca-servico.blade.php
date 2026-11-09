@@ -1,8 +1,8 @@
-@props(['nome', 'rotulo' => 'Código de serviço (6 dígitos)', 'valor' => null, 'ajuda' => null, 'id' => null])
+@props(['nome', 'rotulo' => 'Código de serviço (6 dígitos)', 'valor' => null, 'ajuda' => null, 'id' => null, 'somenteLeitura' => 'false'])
 @php $id = $id ?: $nome; @endphp
-<div x-data="buscaServico(@js((string) $valor), @js(route('servicos.buscar')))" @click.outside="aberto = false" class="relative">
+<div x-data="buscaServico(@js((string) $valor), @js(route('servicos.buscar')))" @click.outside="aberto = false" @definir-servico.window="texto = $event.detail; buscar(true)" class="relative">
     @if ($rotulo)<label for="{{ $id }}" class="campo-rotulo">{{ $rotulo }}</label>@endif
-    <input id="{{ $id }}" name="{{ $nome }}" x-model="texto" @input.debounce.250ms="buscar()" @focus="buscar()"
+    <input id="{{ $id }}" name="{{ $nome }}" x-model="texto" @input.debounce.250ms="!$el.readOnly && buscar()" @focus="!$el.readOnly && buscar()" :readonly="{{ $somenteLeitura }}" :class="{ 'bg-gray-100 text-ink-700': {{ $somenteLeitura }} }"
            @keydown.escape="aberto = false" @keydown.enter="if (aberto && itens.length) { $event.preventDefault(); escolher(itens[0]); }"
            autocomplete="off" placeholder="Digite o código ou o nome da atividade" class="campo-entrada font-mono" role="combobox" aria-expanded="false" :aria-expanded="aberto">
     <p class="campo-ajuda" x-show="descricao" x-text="descricao" x-cloak></p>

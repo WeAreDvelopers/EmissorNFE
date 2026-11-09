@@ -225,8 +225,8 @@ class ImportacaoController extends Controller
         $envio->enviarNota($nota);
 
         $msg = $nota->fresh()->status === StatusNota::AguardandoCredito
-            ? "Linha {$nota->linha_planilha} vai para a fila assim que houver crédito."
-            : "Linha {$nota->linha_planilha} reenviada.";
+            ? "{$nota->origem_rotulo} vai para a fila assim que houver crédito."
+            : "{$nota->origem_rotulo} reenviada.";
 
         return request()->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
     }

@@ -4,10 +4,10 @@
         ? \App\Models\NotaFiscal::where('importacao_id', $nota->importacao_id)->where('status', \App\Enums\StatusNota::Rejeitada)->where('codigo_servico', $nota->codigo_servico)->whereKeyNot($nota->id)->count()
         : 0;
 @endphp
-<aside class="card w-full p-5 sm:p-6 space-y-4 border-2 border-brand-600" aria-label="Corrigir nota da linha {{ $nota->linha_planilha }}">
+<aside class="card w-full p-5 sm:p-6 space-y-4 border-2 border-brand-600" aria-label="Corrigir {{ $nota->origem_rotulo }}">
     <div class="flex items-start justify-between gap-3">
         <div>
-            <div class="text-[13px] text-ink-600">Linha {{ $nota->linha_planilha }} · {{ $nota->tomador_rotulo }}</div>
+            <div class="text-[13px] text-ink-600">{{ $nota->origem_rotulo }} · {{ $nota->tomador_rotulo }}</div>
             <h2 class="text-xl font-semibold mt-0.5">{{ $ex['titulo'] }}</h2>
         </div>
         <a href="{{ $fechar }}" data-fechar aria-label="Fechar" class="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 hover:bg-gray-50">

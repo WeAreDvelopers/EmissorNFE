@@ -79,6 +79,13 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/importacoes/{importacao}/editar', [ReprocessoController::class, 'editar'])->name('importacoes.editar');
     Route::put('/importacoes/{importacao}/linhas', [ReprocessoController::class, 'salvar'])->name('importacoes.linhas.salvar');
 
+    // Emissão manual de uma nota (padrões da empresa já preenchidos) e busca de clientes para ela
+    Route::get('/notas/nova', [\App\Http\Controllers\NotaManualController::class, 'criar'])->name('notas.manual');
+    Route::post('/notas/manual/conferir', [\App\Http\Controllers\NotaManualController::class, 'conferir'])->name('notas.manual.conferir');
+    Route::post('/notas/manual/voltar', [\App\Http\Controllers\NotaManualController::class, 'voltar'])->name('notas.manual.voltar');
+    Route::post('/notas/manual', [\App\Http\Controllers\NotaManualController::class, 'store'])->name('notas.manual.store');
+    Route::get('/clientes/buscar', [\App\Http\Controllers\NotaManualController::class, 'clientes'])->middleware('throttle:120,1')->name('tomadores.buscar');
+
     // Clientes (tomadores): cadastro por conta, com histórico de alterações
     Route::get('/clientes', [TomadorController::class, 'index'])->name('tomadores.index');
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');

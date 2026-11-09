@@ -69,7 +69,7 @@ class NotaController extends Controller
         $nota->update(ValidadorLinha::paraGravar($dados));
         $mudancas = collect($nota->only(ValidadorLinha::CAMPOS))->map(fn ($novo, $campo) => ['de' => $antes[$campo] ?? null, 'para' => $novo])
             ->filter(fn ($m) => (string) $m['de'] !== (string) $m['para'])->all();
-        Auditoria::registrar('nota_corrigida', "Linha {$nota->linha_planilha} (nota #{$nota->id}) corrigida.", $mudancas + ['aplicado_em_outras' => $request->boolean('aplicar_em_todas')]);
+        Auditoria::registrar('nota_corrigida', "{$nota->origem_rotulo} (nota #{$nota->id}) corrigida.", $mudancas + ['aplicado_em_outras' => $request->boolean('aplicar_em_todas')]);
 
         $afetadas = collect([$nota]);
         $importacao = $nota->importacao;
@@ -107,8 +107,8 @@ class NotaController extends Controller
         $importacao?->recontarInvalidas();
 
         $msg = $antesDoEnvio
-            ? ($afetadas->count() > 1 ? "{$afetadas->count()} linhas corrigidas." : "Linha {$nota->linha_planilha} corrigida.")
-            : ($afetadas->count() > 1 ? "{$afetadas->count()} notas corrigidas e reenviadas." : "Linha {$nota->linha_planilha} corrigida e reenviada.");
+            ? ($afetadas->count() > 1 ? "{$afetadas->count()} linhas corrigidas." : "{$nota->origem_rotulo} corrigida.")
+            : ($afetadas->count() > 1 ? "{$afetadas->count()} notas corrigidas e reenviadas." : "{$nota->origem_rotulo} corrigida e reenviada.");
 
         if ($request->expectsJson()) {
             return response()->json(['ok' => true, 'mensagem' => $msg, 'notas' => $afetadas->pluck('id')->all()]);

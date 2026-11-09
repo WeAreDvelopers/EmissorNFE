@@ -63,6 +63,12 @@ class NotaFiscal extends Model
         return $this->sem_tomador ? 'Sem destinatário informado' : (string) $this->tomador_nome;
     }
 
+    /** "Linha 12" para nota de planilha; "Nota manual" para a digitada na tela. */
+    public function getOrigemRotuloAttribute(): string
+    {
+        return $this->linha_planilha ? "Linha {$this->linha_planilha}" : "Nota manual #{$this->id}";
+    }
+
     public function emitente(): BelongsTo
     {
         return $this->belongsTo(Emitente::class);
