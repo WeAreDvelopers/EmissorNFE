@@ -169,7 +169,7 @@
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
- <x-campo nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" maxlength="6" mono ajuda="Usado nas linhas da planilha sem código de serviço. Empresas com vários serviços podem trazer o código na planilha. Ex.: 010701 (manutenção de programas de computação)." />
+ <x-busca-servico nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
                         <x-campo nome="codigo_nbs_padrao" rotulo="NBS padrão (opcional)" :valor="$emitente->codigo_nbs_padrao" maxlength="9" mono ajuda="9 dígitos. Usado quando a planilha não traz NBS. Confirme com a contabilidade." />
                         <div class="sm:col-span-2">
                             <label for="descricao_servico_padrao" class="campo-rotulo">Descrição padrão do serviço</label>

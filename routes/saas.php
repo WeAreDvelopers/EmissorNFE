@@ -51,6 +51,11 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::put('/emitentes/{emitente}', [EmitenteController::class, 'update'])->name('emitentes.update');
     Route::post('/emitentes/{emitente}/numeracao', [EmitenteController::class, 'ajustarNumeracao'])->name('emitentes.numeracao');
 
+    // Busca na lista nacional de serviços (autocomplete do campo "código de serviço")
+    Route::get('/servicos/buscar', fn (\Illuminate\Http\Request $r) => response()->json(
+        \App\Support\ListaServicoNacional::buscar((string) $r->query('q', ''))
+    ))->middleware('throttle:120,1')->name('servicos.buscar');
+
     // Créditos e Pix
     Route::get('/creditos', [CreditoController::class, 'index'])->name('creditos.index');
     Route::post('/creditos/pacotes/{pacote}/comprar', [CreditoController::class, 'comprar'])->name('creditos.comprar');

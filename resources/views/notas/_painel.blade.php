@@ -33,8 +33,10 @@
                         default => $nota->{$campo},
                     }; @endphp
                     <div>
-                        <label for="f-{{ $campo }}" class="campo-rotulo">{{ \App\Support\ExplicacaoErro::ROTULOS[$campo] }}</label>
-                        @if ($campo === 'descricao')
+                        @if ($campo !== 'codigo_servico')<label for="f-{{ $campo }}" class="campo-rotulo">{{ \App\Support\ExplicacaoErro::ROTULOS[$campo] }}</label>@endif
+                        @if ($campo === 'codigo_servico')
+                            <x-busca-servico :nome="$campo" id="f-{{ $campo }}" :valor="old($campo, $valorAtual)" :rotulo="null" />
+                        @elseif ($campo === 'descricao')
                             <textarea id="f-{{ $campo }}" name="{{ $campo }}" rows="3" class="campo-entrada">{{ old($campo, $valorAtual) }}</textarea>
                         @else
                             <input id="f-{{ $campo }}" name="{{ $campo }}" value="{{ old($campo, $valorAtual) }}" class="campo-entrada font-mono">
