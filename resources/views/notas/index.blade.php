@@ -46,7 +46,16 @@
         <div class="card pt-1 overflow-hidden">
             <div class="px-5 sm:px-6 py-3 text-sm text-ink-700 flex flex-wrap justify-between gap-2">
                 <span>{{ $f($notas->total()) }} {{ $notas->total() === 1 ? 'nota' : 'notas' }}</span>
-                <span>Emitidas neste filtro: <b class="font-mono text-ink-900">R$ {{ number_format($totalEmitidas, 2, ',', '.') }}</b></span>
+                {{-- Pendentes = na fila, aguardando crédito ou com erro (ainda não emitidas) --}}
+                <span title="Pendentes: notas na fila, aguardando crédito ou com erro">Notas nesse filtro: Emitidas <b class="font-mono text-ink-900">R$ {{ number_format($totalEmitidas, 2, ',', '.') }}</b> | Pendentes <b class="font-mono text-ink-900">R$ {{ number_format($totalPendentes, 2, ',', '.') }}</b></span>
+            </div>
+            {{-- Cabeçalho com ordenação: clique para ordenar, clique de novo para inverter --}}
+            <div class="hidden sm:grid px-5 sm:px-6 py-2 grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_104px_150px_112px] gap-x-4 text-xs uppercase tracking-wide border-y border-linha bg-chao/60">
+                <x-ordenavel col="cliente" :ordem="$ordem" :dir="$dir">Cliente</x-ordenavel>
+                <x-ordenavel col="competencia" :ordem="$ordem" :dir="$dir">Competência</x-ordenavel>
+                <x-ordenavel col="valor" :ordem="$ordem" :dir="$dir" class="justify-self-end">Valor</x-ordenavel>
+                <x-ordenavel col="situacao" :ordem="$ordem" :dir="$dir">Situação</x-ordenavel>
+                <x-ordenavel col="nfse" :ordem="$ordem" :dir="$dir" class="justify-self-end">NFS-e nº</x-ordenavel>
             </div>
             @forelse ($notas as $n)
                 <div class="tabela-linha px-5 sm:px-6 py-3.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_104px_150px_112px] gap-x-4 gap-y-1.5 items-center text-sm">
@@ -60,7 +69,8 @@
                     </div>
                     <div class="font-mono sm:text-right">R$ {{ number_format($n->valor, 2, ',', '.') }}</div>
                     <div>
-                        <span class="pill {{ $n->status->selo() }}">{{ $n->status->label() }}</span>
+                        @php $dica = $n->status->grupo() === 'atencao' ? \App\Support\ExplicacaoErro::para($n) : null; @endphp
+                        <span class="pill {{ $n->status->selo() }}" @if ($dica) title="{{ $dica['titulo'] }}: {{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 220) }}" @endif>{{ $n->status->label() }}</span>
                         @if (in_array($n->status, [\App\Enums\StatusNota::Emitida, \App\Enums\StatusNota::Cancelada], true) && $n->numero_nfse)<div class="text-[13px] mt-1">NFS-e nº <b class="font-mono">{{ $n->numero_nfse }}</b></div>@endif
                         @if ($n->status === \App\Enums\StatusNota::Cancelada)<div class="text-xs text-ink-600 mt-0.5">Cancelada em {{ $n->cancelada_em?->timezone('America/Sao_Paulo')->format('d/m/Y') }}</div>@endif
                     </div>
@@ -72,7 +82,7 @@
                                 <form method="POST" action="{{ route('notas.conciliar', $n) }}">@csrf<button class="btn-acao" title="Pergunta à SEFIN se esta nota já foi autorizada">Conferir</button></form>
                             @endcan
                         @elseif ($n->status->grupo() === 'atencao' && $n->importacao)
-                            <a href="{{ route('importacoes.show', [$n->importacao, 'filtro' => 'atencao', 'nota' => $n->id]) }}" class="font-semibold text-brand-600 no-underline hover:underline">Corrigir →</a>
+                            <a href="{{ route('importacoes.show', [$n->importacao, 'filtro' => 'atencao', 'nota' => $n->id]) }}" class="font-semibold text-brand-600 no-underline hover:underline" title="Ver o erro e corrigir">Ver erro →</a>
                         @endif
                     </div>
                 </div>
@@ -82,4 +92,8 @@
             <div class="px-5 sm:px-6 py-3.5 tabela-linha">{{ $notas->links() }}</div>
         </div>
     </div>
+    @if ($emAndamento)
+        {{-- Há notas na fila: atualiza sozinho (sem perder filtro nem ordenação) até todas saírem --}}
+        <script>setTimeout(() => { if (!document.querySelector('input:focus, select:focus')) location.reload(); }, 6000);</script>
+    @endif
 </x-app-layout>

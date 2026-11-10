@@ -113,6 +113,8 @@ class EmitenteController extends Controller
             'inscricao_municipal' => ['nullable', 'string', 'max:15'],
             'codigo_municipio'    => ['required', 'digits:7'],
             'enviar_email_automatico' => ['nullable', 'boolean'],
+            'email_copia'         => ['nullable', 'email', 'max:255'],
+            'codigo_tributacao_municipal' => ['nullable', 'required_unless:op_simples_nacional,2', 'digits:3'],
             'codigo_servico_padrao' => ['nullable', 'digits:6', fn ($a, $v, $f) => ListaServicoNacional::existe((string) $v) ?: $f('Esse código não existe na lista nacional de serviços.')],
             'descricao_servico_padrao' => ['nullable', 'string', 'max:2000'],
             'codigo_nbs_padrao'   => ['nullable', 'digits:9'],
@@ -177,7 +179,7 @@ class EmitenteController extends Controller
 
         // Campos fiscais que entram na trilha de auditoria (nunca a senha nem o arquivo do certificado)
         $campos = ['razao_social', 'cnpj', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
-            'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente', 'enviar_email_automatico'];
+            'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente', 'enviar_email_automatico', 'email_copia', 'codigo_tributacao_municipal'];
         $antes = $novo ? [] : $emitente->only($campos);
 
         DB::transaction(function () use ($emitente, $dados, $pfx, $cert) {

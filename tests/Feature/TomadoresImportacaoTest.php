@@ -40,6 +40,7 @@ class TomadoresImportacaoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        GeraPlanilha::$clienteCompleto = false;   // aqui o cadastro do cliente é o assunto: cada teste informa o que quer
         Storage::fake('local');
         Queue::fake([EmitirNfseJob::class]);
         Http::fake(['servicodados.ibge.gov.br/*' => Http::response([
@@ -197,11 +198,16 @@ class TomadoresImportacaoTest extends TestCase
         $this->assertSame([], (new ValidadorXsd)->erros($xml));
     }
 
-    public function test_cliente_pendente_continua_emitindo_sem_endereco(): void
+    public function test_cliente_pendente_nao_emite_e_a_dps_nunca_leva_endereco_incompleto(): void
     {
         $this->confirmar($this->importar([['doc' => self::MALIX, 'nome_ref' => 'Malix', 'valor' => 452.5]]));
 
         $nota = NotaFiscal::semIsolamento()->with('tomador')->firstOrFail();
+        // Regra do negócio: cliente sem endereço completo e e-mail não recebe nota (fica à espera do cadastro)
+        $this->assertSame(StatusNota::Invalida, $nota->status);
+        $this->assertStringContainsString('Cadastro do cliente incompleto', $nota->erros[0]);
+        Queue::assertNothingPushed();
+
         $nota->numero_dps = 3;
         $nota->setRelation('emitente', $this->emitente);
         $xml = (new DpsBuilder)->montar($nota);

@@ -27,7 +27,8 @@ class ListaServicoNacional
     {
         $termo = self::normalizar($termo);
         if ($termo === '') {
-            return [];
+            // Sem texto: as primeiras opções, para o campo abrir já com a lista
+            return collect(self::todos())->take(50)->map(fn ($d, $c) => ['codigo' => (string) $c, 'descricao' => $d])->values()->all();
         }
         $palavras = array_filter(explode(' ', $termo));
         $achados = [];

@@ -263,7 +263,7 @@ class CancelamentoEmailAutomaticoTest extends TestCase
 
         $this->get(route('relatorios.index', ['mes' => '2026-11']))->assertOk()->assertSee('R$ 100,00')->assertDontSee('R$ 1.000,00');
         $this->get(route('notas.index'))->assertOk()->assertSee('Cancelada em');
-        $this->get(route('notas.cancelar.form', NotaFiscal::where('status', StatusNota::Cancelada)->firstOrFail()))->assertNotFound();
+        $this->get(route('notas.cancelar.form', NotaFiscal::where('status', StatusNota::Cancelada)->firstOrFail()))->assertRedirect(route('notas.index', ['q' => '8']));   // já cancelada: volta para Notas com aviso
     }
 
     // ---------- e-mail automático ----------
@@ -329,7 +329,7 @@ class CancelamentoEmailAutomaticoTest extends TestCase
     public function test_a_opcao_e_salva_no_formulario_da_empresa(): void
     {
         $dados = ['cnpj' => '19534920000118', 'razao_social' => 'Moneycar Ltda', 'codigo_municipio' => '3550308', 'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1,
-            'regime_especial' => 0, 'aliquota_simples' => 6, 'serie_dps' => '00001', 'ambiente' => 2];
+            'regime_especial' => 0, 'aliquota_simples' => 6, 'codigo_tributacao_municipal' => '001', 'serie_dps' => '00001', 'ambiente' => 2];
 
         $this->actingAs($this->dono)->put(route('emitentes.update', $this->emitente), $dados + ['enviar_email_automatico' => '1'])->assertSessionHasNoErrors();
         $this->assertTrue($this->emitente->fresh()->enviar_email_automatico);

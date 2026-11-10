@@ -48,6 +48,17 @@ class ExplicacaoErro
 
     private static function invalida(NotaFiscal $nota, array $tecnico): array
     {
+        if (str_starts_with((string) ($tecnico[0] ?? ''), \App\Services\Nfse\EnvioDeNotas::CADASTRO_INCOMPLETO)) {
+            return [
+                'titulo'          => 'Cadastro do cliente incompleto',
+                'o_que_aconteceu' => $tecnico[0].' Não emitimos nota para cliente sem endereço completo e ao menos 1 e-mail.',
+                'como_resolver'   => 'Complete o cadastro em Clientes (ou informe os dados na planilha) e clique em Reenviar. Esta nota ainda não gastou crédito.',
+                'campos'          => [],
+                'reenviar_direto' => true,
+                'tecnico'         => $tecnico,
+            ];
+        }
+
         // Revalida para saber exatamente quais campos estão errados
         $dados = ValidadorLinha::normalizar($nota->only(ValidadorLinha::CAMPOS) + ['data_competencia' => $nota->data_competencia?->toDateString()], $nota->emitente);
         $campos = array_keys(ValidadorLinha::validar($dados, $nota->emitente)->errors()->messages());

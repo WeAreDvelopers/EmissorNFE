@@ -15,7 +15,7 @@ class Emitente extends Model
         'conta_id', 'cnpj', 'razao_social', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
         'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples',
         'tributos_aprox', 'serie_dps', 'ambiente', 'certificado_arquivo', 'certificado_senha',
-        'certificado_validade', 'logo_arquivo', 'ativo', 'enviar_email_automatico',
+        'certificado_validade', 'logo_arquivo', 'ativo', 'enviar_email_automatico', 'email_copia', 'codigo_tributacao_municipal',
     ];
 
     protected $casts = [
@@ -39,6 +39,7 @@ class Emitente extends Model
     {
         return [
             'cnpj'                => $this->cnpj,
+            'codigo_tributacao_municipal' => $this->codigo_tributacao_municipal,
             'inscricao_municipal' => $this->inscricao_municipal,
             'codigo_municipio'    => $this->codigo_municipio,
             'op_simples_nacional' => $this->op_simples_nacional,

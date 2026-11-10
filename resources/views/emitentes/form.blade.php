@@ -151,8 +151,8 @@
                     </div>
 
                     <div x-show="op == 3" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <x-campo nome="regime_apuracao_sn" tipo="select" rotulo="Regime de apuração do Simples">
-                            @foreach ([1 => 'Tributos federais e municipal pelo Simples', 2 => 'Federais pelo Simples, ISSQN pela NFS-e', 3 => 'Federais e municipal pela NFS-e'] as $v => $r)
+                        <x-campo nome="regime_apuracao_sn" tipo="select" rotulo="Regime de Apuração dos Tributos no Simples Nacional" ajuda="Atenção: a segunda opção é só para empresas que ultrapassaram o sublimite de receita do Simples (R$ 3,6 milhões por ano) e passaram a recolher o ISS fora do DAS.">
+                            @foreach ([1 => 'Regime de apuração dos tributos federais e municipal pelo Simples Nacional', 2 => 'Regime de apuração dos tributos federais pelo Simples Nacional e o ISSQN pela NFS-e conforme respectiva legislação municipal do tributo', 3 => 'Regime de apuração dos tributos federais e municipal pela NFS-e conforme respectivas legislações federal e municipal de cada tributo'] as $v => $r)
                                 <option value="{{ $v }}" @selected(old('regime_apuracao_sn', $emitente->regime_apuracao_sn ?? 1) == $v)>{{ $r }}</option>
                             @endforeach
                         </x-campo>
@@ -169,13 +169,15 @@
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
- <x-busca-servico nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
+ <x-busca-servico class="sm:col-span-2" nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
+                        <x-campo nome="codigo_tributacao_municipal" rotulo="Código Complementar Municipal (obrigatório no portal, exceto MEI) *" :valor="$emitente->codigo_tributacao_municipal" maxlength="3" mono x-bind:required="op != 2" x-bind:disabled="op == 2" ajuda="3 dígitos (cTribMun), o final do código que o portal nacional mostra em “Código Complementar Municipal” (ex.: 01.07.01.001 → 001). Confirme com a contabilidade. MEI não usa." />
                         <x-campo nome="codigo_nbs_padrao" rotulo="NBS padrão (opcional)" :valor="$emitente->codigo_nbs_padrao" maxlength="9" mono ajuda="9 dígitos. Usado quando a planilha não traz NBS. Confirme com a contabilidade." />
                         <div class="sm:col-span-2">
                             <label for="descricao_servico_padrao" class="campo-rotulo">Descrição padrão do serviço</label>
                             <textarea id="descricao_servico_padrao" name="descricao_servico_padrao" rows="2" class="campo-entrada" placeholder="Ex.: Manutenção de programas de computação.">{{ old('descricao_servico_padrao', $emitente->descricao_servico_padrao) }}</textarea>
                             <p class="campo-ajuda">Vai em toda nota cuja linha da planilha não tiver descrição própria (coluna R).</p>
                         </div>
+                        <x-campo nome="email_copia" tipo="email" rotulo="E-mail da empresa (cópia das notas)" :valor="$emitente->email_copia" ajuda="Recebe cópia de toda NFS-e enviada ao cliente, para a empresa ter ciência." />
                         <div class="sm:col-span-2">
                             <input type="hidden" name="enviar_email_automatico" value="0">
                             <label class="flex items-start gap-2.5 text-sm cursor-pointer">

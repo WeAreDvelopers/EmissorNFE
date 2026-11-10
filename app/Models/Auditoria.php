@@ -35,6 +35,7 @@ class Auditoria extends Model
         'email_enviado'         => 'E-mail enviado ao cliente',
         'nota_cancelada'        => 'NFS-e cancelada',
         'usuario_convidado'     => 'Usuário convidado',
+        'clientes_importados'   => 'Clientes importados por planilha',
         'papel_alterado'        => 'Papel de usuário alterado',
         'usuario_removido'      => 'Usuário removido',
     ];

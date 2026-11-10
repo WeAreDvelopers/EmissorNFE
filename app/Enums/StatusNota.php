@@ -56,7 +56,7 @@ enum StatusNota: string
     public function selo(): string
     {
         if ($this === self::Cancelada) {
-            return 'bg-gray-200 text-ink-700';
+            return 'bg-perigo-600 text-white';
         }
 
         return match ($this->grupo()) {

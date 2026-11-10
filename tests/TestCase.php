@@ -11,6 +11,12 @@ abstract class TestCase extends BaseTestCase
     protected bool $seed = true;
     protected string $seeder = \Database\Seeders\SaasSeeder::class;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        \Tests\Support\GeraPlanilha::$clienteCompleto = true;   // estado estático: cada teste parte do padrão
+    }
+
     /**
      * Em produção cada requisição começa SEM conta ativa. Nos testes o mesmo processo atende várias
      * requisições e a conta ativa da anterior "vazava", escondendo erros de ordem de middleware

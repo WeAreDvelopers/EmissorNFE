@@ -41,7 +41,7 @@
                 <h2 class="text-base font-semibold">Histórico de alterações</h2>
                 @forelse ($alteracoes as $a)
                     <div class="tabela-linha py-3 text-sm">
-                        <div class="text-xs text-ink-600">{{ $a->created_at->format('d/m/Y H:i') }} · {{ $a->origem === 'importacao' ? 'importação' : 'edição manual' }}@if ($a->user) · {{ $a->user->name }}@endif</div>
+                        <div class="text-xs text-ink-600">{{ $a->created_at->format('d/m/Y H:i') }} · {{ match ($a->origem) { 'importacao' => 'importação de notas', 'planilha_clientes' => 'planilha de clientes', default => 'edição manual' } }}@if ($a->user) · {{ $a->user->name }}@endif</div>
                         @foreach ($a->campos as $campo => [$de, $para])
                             @if (isset($rotulos[$campo]))
                                 <div class="leading-snug"><b>{{ $rotulos[$campo] }}:</b> <span class="text-ink-600">{{ $fmt($de) }}</span> → {{ $fmt($para) }}</div>

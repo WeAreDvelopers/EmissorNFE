@@ -110,12 +110,12 @@ class EmitenteCertificadoTest extends TestCase
                 'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
                 'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
                 'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''], // o navegador envia os escondidos
-                'serie_dps' => '1', 'ambiente' => 2,
+                'serie_dps' => '1', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
                 'certificado' => UploadedFile::fake()->createWithContent('c.pfx', $this->pfx('segredo')), 'certificado_senha' => 'segredo',
             ])
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'op_simples_nacional' => 3]);
+        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'op_simples_nacional' => 3, 'codigo_tributacao_municipal' => '001']);
     }
 
     public function test_formulario_da_empresa_renderiza_e_raiz_redireciona(): void

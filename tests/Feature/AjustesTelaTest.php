@@ -299,7 +299,7 @@ João;10
         return $extra + [
             'cnpj' => '00000000000191', 'razao_social' => 'Padaria Teste', 'codigo_municipio' => '3549904',
             'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'regime_especial' => 0, 'aliquota_simples' => 6,
-            'serie_dps' => '00001', 'ambiente' => 2,
+            'serie_dps' => '00001', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
         ];
     }
 

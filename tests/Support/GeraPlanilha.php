@@ -16,6 +16,9 @@ class GeraPlanilha
         'Nome Fantasia (novo)', 'Razão Social/Nome (novo)', 'Logradouro', 'Número', 'Complemento', 'Bairro', 'Município', 'UF', 'CEP', 'E-mail',
         'Descrição dos Serviços (Opcional)', 'Código de Serviço (Opcional)', 'NBS (Opcional)'];
 
+    /** Linhas sem 'atualizar' já trazem endereço e e-mail (a emissão exige cliente completo). Testes do cadastro desligam isto. */
+    public static bool $clienteCompleto = true;
+
     public static function xlsx(string $cnpj, array $linhas, array $opcoes = []): UploadedFile
     {
         $livro = new Spreadsheet();
@@ -30,6 +33,10 @@ class GeraPlanilha
         foreach (array_values($linhas) as $n => $l) {
             $r = $n + 3;
             $soma += (float) ($l['valor'] ?? 0);
+            // Cliente completo por padrão (a emissão exige endereço + e-mail). Linhas que já definem 'atualizar' ficam como estão.
+            if (self::$clienteCompleto && ! array_key_exists('atualizar', $l)) {
+                $l += ['atualizar' => true, 'logradouro' => 'Rua das Flores', 'numero' => '100', 'bairro' => 'Centro', 'municipio' => 'São Paulo', 'uf' => 'SP', 'cep' => '01001000', 'emails' => 'financeiro@cliente.test'];
+            }
             $valores = [
                 1 => $l['data'] ?? now()->subDay()->toDateString(),
                 2 => $l['fantasia_ref'] ?? null, 3 => $l['nome_ref'] ?? null,

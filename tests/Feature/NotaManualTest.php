@@ -73,9 +73,23 @@ class NotaManualTest extends TestCase
         $this->assertNull($nota->importacao_id);
         $this->assertSame('010302', $nota->codigo_servico);
         $this->assertSame('452.50', (string) $nota->valor);
-        $this->assertSame(StatusNota::Pendente, $nota->status);   // modo teste: sem custo, vai direto para a fila
+        // Cliente novo criado só com nome e e-mail: sem endereço completo a nota espera o cadastro (não vai para a fila)
+        $this->assertSame(StatusNota::Invalida, $nota->status);
+        $this->assertStringContainsString('Cadastro do cliente incompleto', $nota->erros[0]);
         $this->assertNotNull($nota->tomador_id);
         $this->assertSame('Malix Automóveis Ltda', Tomador::firstOrFail()->nome);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_cliente_completo_vai_direto_para_a_fila(): void
+    {
+        $this->actingAs($this->user)->post(route('notas.manual.store'), $this->dados())->assertSessionHasNoErrors();
+        Tomador::firstOrFail()->update(['logradouro' => 'Rua A', 'numero' => '1', 'bairro' => 'Centro', 'municipio' => 'São Paulo', 'uf' => 'SP', 'codigo_municipio' => '3550308', 'cep' => '01001000']);
+
+        $nota = NotaFiscal::firstOrFail();
+        $this->actingAs($this->user)->post(route('notas.reenviar', $nota))->assertRedirect();
+
+        $this->assertSame(StatusNota::Pendente, $nota->fresh()->status);   // modo teste: sem custo, vai direto para a fila
         Queue::assertPushed(EmitirNfseJob::class);
     }
 

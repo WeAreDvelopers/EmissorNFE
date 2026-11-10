@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Tomadores\ImportadorClientes;
+use App\Support\Ordenacao;
 use App\Models\Tomador;
 use App\Models\TomadorAlteracao;
 use App\Support\MunicipiosIbge;
@@ -31,7 +33,10 @@ class TomadorController extends Controller
             $consulta->where('pendente', true);
         }
 
+        [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, ['cliente' => 'nome', 'cidade' => 'municipio', 'emails' => 'emails', 'situacao' => 'pendente']);
+
         return view('tomadores.index', [
+            'ordem' => $ordem, 'dir' => $dir,
             'tomadores'  => $consulta->paginate(25)->withQueryString(),
             'busca'      => $busca,
             'soPendentes' => $soPendentes,
@@ -39,9 +44,46 @@ class TomadorController extends Controller
         ]);
     }
 
+    /** Planilha modelo para cadastrar clientes em lote. */
+    public function modelo()
+    {
+        $this->authorize('consultar');
+
+        $livro = (new ImportadorClientes())->modelo();
+        $arquivo = tempnam(sys_get_temp_dir(), 'cli').'.xlsx';
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($livro))->save($arquivo);
+
+        return response()->download($arquivo, 'modelo-clientes.xlsx')->deleteFileAfterSend(true);
+    }
+
+    /** Importa a planilha de clientes: cria os novos e atualiza só o que veio preenchido nos já cadastrados. */
+    public function importar(Request $request, ImportadorClientes $importador)
+    {
+        $this->authorize('emitir');
+        $request->validate(['planilha' => ['required', 'file', 'max:5120', 'mimes:xlsx,xls,csv,txt']], [
+            'planilha.required' => 'Escolha a planilha de clientes.',
+            'planilha.mimes'    => 'Envie um arquivo .xlsx ou .csv (use a planilha modelo).',
+            'planilha.max'      => 'O arquivo passou de 5 MB.',
+        ]);
+
+        $arquivo = $request->file('planilha');
+        try {
+            $r = $importador->importar($arquivo->getRealPath(), $request->user()?->id);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['planilha' => $e->getMessage()]);
+        }
+
+        \App\Models\Auditoria::registrar('clientes_importados', "Planilha de clientes {$arquivo->getClientOriginalName()} importada.", [
+            'criados' => $r['criados'], 'atualizados' => $r['atualizados'], 'sem_mudanca' => $r['sem_mudanca'], 'com_erro' => count($r['erros']),
+        ]);
+
+        return redirect()->route('tomadores.index')->with('importacao_clientes', $r + ['arquivo' => $arquivo->getClientOriginalName()]);
+    }
+
     public function editar(Tomador $tomador)
     {
         $this->authorize('consultar');
+        $tomador->resolverMunicipio();
 
         return view('tomadores.editar', [
             'tomador'    => $tomador,

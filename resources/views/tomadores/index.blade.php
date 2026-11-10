@@ -2,10 +2,40 @@
     @php $f = fn ($n) => number_format($n, 0, ',', '.'); @endphp
 
     <div class="max-w-[1160px] mx-auto px-4 sm:px-8 py-8 space-y-6">
-        <div>
-            <h1 class="text-3xl font-semibold">Clientes</h1>
-            <p class="mt-1 text-[15px] text-ink-700">Quem recebe as suas notas. O cadastro é atualizado quando você importa uma planilha com a coluna “Atualizar” marcada e confirma o envio.</p>
+        <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-semibold">Clientes</h1>
+                <p class="mt-1 text-[15px] text-ink-700">Quem recebe as suas notas. Cadastre vários de uma vez por planilha, ou deixe o cadastro ser atualizado quando você importa notas com a coluna “Atualizar” marcada.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2" x-data>
+                <a href="{{ route('tomadores.modelo') }}" class="btn" title="Baixar a planilha modelo (.xlsx) para cadastrar clientes">Baixar planilha modelo</a>
+                @can('emitir')
+                    <form method="POST" action="{{ route('tomadores.importar') }}" enctype="multipart/form-data" x-ref="form">
+                        @csrf
+                        <input type="file" name="planilha" accept=".xlsx,.xls,.csv" class="sr-only" x-ref="arquivo" @change="if ($refs.arquivo.files.length) $refs.form.submit()">
+                        <button type="button" class="btn btn-primary" @click="$refs.arquivo.click()" title="Escolha a planilha preenchida; a importação começa na hora">Importar clientes</button>
+                    </form>
+                @endcan
+            </div>
         </div>
+
+        @error('planilha')<div role="alert" class="rounded-xl bg-warn-50 border border-warn-200 px-4 py-3 text-sm text-warn-900">{{ $message }}</div>@enderror
+        @if ($r = session('importacao_clientes'))
+            <div role="status" class="card p-4 sm:p-5 space-y-2 border-2 border-brand-600">
+                <div class="font-semibold">Planilha {{ $r['arquivo'] }} importada</div>
+                <div class="text-sm text-ink-700 flex flex-wrap gap-x-5 gap-y-1">
+                    <span><b class="font-mono text-ink-900">{{ $r['criados'] }}</b> {{ $r['criados'] === 1 ? 'cliente novo' : 'clientes novos' }}</span>
+                    <span><b class="font-mono text-ink-900">{{ $r['atualizados'] }}</b> {{ $r['atualizados'] === 1 ? 'atualizado' : 'atualizados' }}</span>
+                    <span><b class="font-mono text-ink-900">{{ $r['sem_mudanca'] }}</b> sem mudança</span>
+                    <span><b class="font-mono {{ count($r['erros']) ? 'text-warn-800' : 'text-ink-900' }}">{{ count($r['erros']) }}</b> {{ count($r['erros']) === 1 ? 'linha com problema' : 'linhas com problema' }}</span>
+                </div>
+                @if ($r['erros'])
+                    <ul class="text-sm text-warn-900 bg-warn-50 rounded-lg p-3 space-y-0.5 max-h-48 overflow-auto">
+                        @foreach ($r['erros'] as $e)<li>Linha {{ $e['linha'] }}: {{ $e['mensagem'] }}</li>@endforeach
+                    </ul>
+                @endif
+            </div>
+        @endif
 
         <form method="GET" class="flex flex-wrap gap-3 items-end">
             <div class="flex-1 min-w-[220px]">
@@ -19,7 +49,7 @@
         <div class="card overflow-x-auto">
             <table class="min-w-full text-sm">
                 <thead class="text-left text-xs uppercase tracking-wide text-ink-600 bg-chao/60 border-b border-linha">
-                    <tr><th class="px-5 py-3 font-medium">Cliente</th><th class="px-3 py-3 font-medium">Cidade</th><th class="px-3 py-3 font-medium">E-mails</th><th class="px-5 py-3 font-medium">Situação</th></tr>
+                    <tr><th class="px-5 py-3 font-medium"><x-ordenavel col="cliente" :ordem="$ordem" :dir="$dir">Cliente</x-ordenavel></th><th class="px-3 py-3 font-medium"><x-ordenavel col="cidade" :ordem="$ordem" :dir="$dir">Cidade</x-ordenavel></th><th class="px-3 py-3 font-medium"><x-ordenavel col="emails" :ordem="$ordem" :dir="$dir">E-mails</x-ordenavel></th><th class="px-5 py-3 font-medium"><x-ordenavel col="situacao" :ordem="$ordem" :dir="$dir">Situação</x-ordenavel></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($tomadores as $t)

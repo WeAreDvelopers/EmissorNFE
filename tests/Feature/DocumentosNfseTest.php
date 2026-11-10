@@ -183,14 +183,85 @@ class DocumentosNfseTest extends TestCase
         $this->actingAs($this->user)->get(route('importacoes.show', $this->importacao))->assertOk()
             ->assertSee(route('notas.danfse', $nota), false)->assertSee(route('notas.xml', $nota), false)
             ->assertSee('data-copiar="'.self::CHAVE.'"', false)->assertSee(route('notas.email', $nota), false)
-            ->assertSee('Enviar para cliente@exemplo.com.br?');
+            ->assertSee('Enviar por e-mail…')->assertSee('value="cliente@exemplo.com.br"', false);
     }
 
-    public function test_botao_de_email_fica_desativado_sem_email_do_cliente(): void
+    public function test_sem_email_do_cliente_o_envio_pede_para_informar_o_destinatario(): void
     {
         $nota = $this->notaEmitida(['tomador_email' => null]);
 
         $this->actingAs($this->user)->get(route('importacoes.show', $this->importacao))->assertOk()
-            ->assertDontSee(route('notas.email', $nota), false)->assertSee('não tem um e-mail válido');
+            ->assertSee(route('notas.email', $nota), false)->assertSee('Enviar por e-mail (informar)…');
+    }
+
+    public function test_email_vai_para_o_cliente_com_copia_para_o_emitente(): void
+    {
+        Mail::fake();
+        $this->emitente->update(['email_copia' => 'nfe@empresa.test']);
+        $nota = $this->notaEmitida();
+
+        $this->actingAs($this->user)->post(route('notas.email', $nota))->assertRedirect();
+
+        Mail::assertQueued(\App\Mail\NfseEmitidaMail::class, fn ($m) => $m->hasTo('cliente@exemplo.com.br') && $m->hasCc('nfe@empresa.test'));
+    }
+
+    public function test_da_para_trocar_os_emails_so_neste_envio(): void
+    {
+        Mail::fake();
+        $nota = $this->notaEmitida();
+
+        $this->actingAs($this->user)->post(route('notas.email', $nota), ['emails' => 'teste@nossa.test; outro@nossa.test, invalido'])->assertRedirect();
+
+        Mail::assertQueued(\App\Mail\NfseEmitidaMail::class, fn ($m) => $m->hasTo('teste@nossa.test') && $m->hasTo('outro@nossa.test') && ! $m->hasTo('cliente@exemplo.com.br'));
+    }
+
+    public function test_notas_ordenam_por_coluna_e_mostram_pendentes(): void
+    {
+        $this->notaEmitida(['valor' => 900]);
+        NotaFiscal::create([
+            'conta_id' => $this->conta->id, 'emitente_id' => $this->emitente->id, 'importacao_id' => $this->importacao->id, 'origem' => 'planilha',
+            'linha_planilha' => 3, 'status' => StatusNota::Pendente, 'serie_dps' => '00001', 'numero_dps' => 27,
+            'tomador_documento' => '19566539000130', 'tomador_nome' => 'Aaa Cliente', 'codigo_servico' => '010302', 'descricao' => 'x', 'valor' => 10, 'data_competencia' => '2026-11-05',
+        ]);
+
+        $this->actingAs($this->user)->get(route('notas.index', ['ordem' => 'cliente', 'dir' => 'asc']))->assertOk()
+            ->assertSeeInOrder(['Aaa Cliente', 'Malix'])->assertSee('Emitidas')->assertSee('Pendentes')->assertSee('R$ 10,00')->assertSee('setTimeout', false);   // há nota na fila: atualiza sozinho
+        $this->actingAs($this->user)->get(route('notas.index', ['ordem' => 'valor; drop table', 'dir' => 'asc']))->assertOk();   // coluna desconhecida é ignorada
+    }
+
+    public function test_cancelar_nota_ja_cancelada_volta_para_notas_sem_404(): void
+    {
+        $nota = $this->notaEmitida(['status' => StatusNota::Cancelada]);
+
+        $this->actingAs($this->user)->get(route('notas.cancelar.form', $nota))->assertRedirect()->assertSessionHas('ok');
+        $this->actingAs($this->user)->post(route('notas.cancelar', $nota), [])->assertRedirect()->assertSessionHas('ok');
+    }
+
+    public function test_municipio_com_texto_certo_mas_sem_codigo_ibge_e_resolvido_ao_enviar(): void
+    {
+        \Illuminate\Support\Facades\Http::fake(['servicodados.ibge.gov.br/*' => \Illuminate\Support\Facades\Http::response([['id' => 3547809, 'nome' => 'Santo André']])]);
+        // Em produção isto roda numa requisição/job com a conta ativa: aqui simulamos isso
+        app(ContaAtual::class)->como($this->conta->id, function () {
+            $t = \App\Models\Tomador::create(['conta_id' => $this->conta->id, 'documento' => '19566539000130', 'nome' => 'MBM', 'logradouro' => 'Av. dos Estados', 'numero' => '8000',
+                'bairro' => 'Pq. Capuava', 'cep' => '09290030', 'municipio' => 'Santo André', 'uf' => 'SP', 'emails' => ['a@b.co'], 'pendente' => true]);
+            $nota = $this->notaEmitida(['status' => StatusNota::Rascunho, 'tomador_id' => $t->id]);
+
+            $this->assertSame([], \App\Services\Nfse\EnvioDeNotas::faltaNoCadastro($nota));
+            $this->assertSame('3547809', $t->fresh()->codigo_municipio);
+            $this->assertFalse($t->fresh()->pendente);
+        });
+    }
+
+    public function test_etiqueta_cancelada_tem_fundo_vermelho(): void
+    {
+        $this->assertStringContainsString('bg-perigo-600', StatusNota::Cancelada->selo());
+    }
+
+    public function test_botao_de_cancelar_so_habilita_com_a_confirmacao(): void
+    {
+        $nota = $this->notaEmitida();
+
+        $this->actingAs($this->user)->get(route('notas.cancelar.form', $nota))->assertOk()
+            ->assertSee(':disabled="!confirmo"', false);
     }
 }

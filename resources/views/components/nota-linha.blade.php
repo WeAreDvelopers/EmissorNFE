@@ -8,7 +8,8 @@
     </div>
     <span class="font-mono sm:text-right col-start-2 sm:col-start-auto">R$ {{ number_format($nota->valor, 2, ',', '.') }}</span>
     <div class="col-start-2 sm:col-start-auto">
-        <span class="pill {{ $nota->status->selo() }}">{{ $nota->status->label() }}</span>
+        @php $dica = $precisa ? \App\Support\ExplicacaoErro::para($nota) : null; @endphp
+        <span class="pill {{ $nota->status->selo() }}" @if ($dica) title="{{ $dica['titulo'] }}: {{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 220) }}" @endif>{{ $nota->status->label() }}</span>
         @if ($nota->status === \App\Enums\StatusNota::Emitida && $nota->numero_nfse)<div class="text-[13px] text-ink-900 mt-1" @if ($nota->chave_acesso) title="Chave de acesso: {{ $nota->chave_acesso }}" @endif>NFS-e nº <b class="font-mono">{{ $nota->numero_nfse }}</b></div>@endif
         @if ($nota->status === \App\Enums\StatusNota::Cancelada)<div class="text-xs text-ink-600 mt-1" title="{{ $nota->cancelamento_motivo }}">NFS-e nº {{ $nota->numero_nfse }} · cancelada em {{ $nota->cancelada_em?->timezone('America/Sao_Paulo')->format('d/m') }}</div>@endif
         @if ($nota->status === \App\Enums\StatusNota::Enviando)<div class="text-xs text-ink-600 mt-1">Tentativa {{ max($nota->tentativas, 1) }}</div>@endif

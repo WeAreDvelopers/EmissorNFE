@@ -46,6 +46,21 @@ class Tomador extends Model
         return ($this->emails ?? [])[0] ?? null;
     }
 
+    /** Município e UF preenchidos mas sem código IBGE (a busca falhou na importação): tenta de novo e grava se achar. */
+    public function resolverMunicipio(): void
+    {
+        if ($this->codigo_municipio || blank($this->municipio) || blank($this->uf)) {
+            return;
+        }
+
+        if ($codigo = \App\Support\MunicipiosIbge::codigo($this->municipio, $this->uf)) {
+            // Grava o código primeiro e só então reavalia se o cadastro ainda tem pendência
+            $this->forceFill(['codigo_municipio' => $codigo]);
+            $this->pendente = ! $this->enderecoCompleto();   // mesma regra do cadastro e da edição
+            $this->save();
+        }
+    }
+
     /** Endereço completo o bastante para ir na DPS? (município IBGE + CEP + logradouro + número + bairro) */
     public function enderecoCompleto(): bool
     {

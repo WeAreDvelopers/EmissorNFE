@@ -13,10 +13,22 @@ use InvalidArgumentException;
 /** Cancelamento de NFS-e emitida. Ato fiscal sem volta: só o dono, com motivo e confirmação explícita. */
 class NotaCancelamentoController extends Controller
 {
+    /** Nota que não está mais emitida (já cancelada, por exemplo): volta para Notas com um aviso, sem página de erro. */
+    private function naoCancelavel(NotaFiscal $nota)
+    {
+        $msg = $nota->status === StatusNota::Cancelada
+            ? "A NFS-e nº {$nota->numero_nfse} já está cancelada."
+            : 'Esta nota não está emitida, então não pode ser cancelada.';
+
+        return redirect()->route('notas.index', ['q' => $nota->numero_nfse ?: null])->with('ok', $msg);
+    }
+
     public function form(NotaFiscal $nota)
     {
         $this->authorize('cancelar-nota');
-        abort_unless($nota->status === StatusNota::Emitida, 404);
+        if ($nota->status !== StatusNota::Emitida) {
+            return $this->naoCancelavel($nota);
+        }
 
         return view('notas.cancelar', ['nota' => $nota->load('emitente'), 'motivos' => CancelamentoNfse::MOTIVOS]);
     }
@@ -24,7 +36,9 @@ class NotaCancelamentoController extends Controller
     public function store(Request $request, NotaFiscal $nota, CancelamentoNfse $cancelamento)
     {
         $this->authorize('cancelar-nota');
-        abort_unless($nota->status === StatusNota::Emitida, 404);
+        if ($nota->status !== StatusNota::Emitida) {
+            return $this->naoCancelavel($nota);
+        }
 
         $dados = $request->validate([
             'motivo_codigo' => ['required', 'in:1,2,9'],

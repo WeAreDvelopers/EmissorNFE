@@ -6,6 +6,7 @@ use App\Enums\StatusNota;
 use App\Models\Emitente;
 use App\Models\NotaFiscal;
 use App\Services\Nfse\ConciliacaoNfse;
+use App\Support\Ordenacao;
 use Illuminate\Http\Request;
 
 /** Consulta de notas de todos os lotes: por cliente, número da NFS-e, chave, situação, empresa e competência. */
@@ -13,17 +14,25 @@ class NotaConsultaController extends Controller
 {
     public const GRUPOS = ['todas' => 'Todas', 'emitida' => 'Emitidas', 'andamento' => 'Em andamento', 'atencao' => 'Precisam de você'];
 
+    public const ORDENAVEIS = ['cliente' => 'tomador_nome', 'competencia' => 'data_competencia', 'valor' => 'valor', 'situacao' => 'status', 'nfse' => 'numero_nfse'];
+
     public function index(Request $request)
     {
         $this->authorize('consultar');
 
         $consulta = self::filtrar(NotaFiscal::with(['emitente', 'importacao', 'tomador']), $request)->orderByDesc('id');
+        [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, self::ORDENAVEIS);
 
         return view('notas.index', [
             'notas'     => $consulta->paginate(30)->withQueryString(),
             'emitentes' => Emitente::orderBy('razao_social')->get(['id', 'razao_social']),
             'grupos'    => self::GRUPOS,
             'filtros'   => $request->only(['q', 'grupo', 'emitente', 'de', 'ate']),
+            'ordem'     => $ordem,
+            'dir'       => $dir,
+            // Notas deste filtro que ainda não saíram: na fila, aguardando crédito ou com erro (não entram no total de emitidas)
+            'totalPendentes' => self::filtrar(NotaFiscal::query(), $request)->whereIn('status', [...StatusNota::andamento(), ...StatusNota::atencao()])->sum('valor'),
+            'emAndamento' => self::filtrar(NotaFiscal::query(), $request)->whereIn('status', StatusNota::andamento())->exists(),
             'totalEmitidas' => (float) self::filtrar(NotaFiscal::query(), $request)->where('status', StatusNota::Emitida)->sum('valor'),
         ]);
     }

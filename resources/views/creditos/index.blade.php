@@ -58,8 +58,8 @@
             <h2 class="text-lg font-semibold px-5 sm:px-6 pb-3">Extrato</h2>
             <table class="w-full text-sm">
                 <thead class="text-left text-[13px] text-ink-600 border-t border-linha bg-chao/60"><tr>
-                    <th class="px-5 sm:px-6 py-2.5 font-medium w-[150px]">Data</th><th class="py-2.5 font-medium">Movimento</th>
-                    <th class="py-2.5 font-medium text-right w-[90px]">Qtd.</th><th class="py-2.5 font-medium text-right w-[90px] {{ $temDescricao ? '' : 'pe-5 sm:pe-6' }}">Saldo</th>
+                    <th class="px-5 sm:px-6 py-2.5 font-medium w-[150px]"><x-ordenavel col="data" :ordem="$ordem" :dir="$dir">Data</x-ordenavel></th><th class="py-2.5 font-medium"><x-ordenavel col="movimento" :ordem="$ordem" :dir="$dir">Movimento</x-ordenavel></th>
+                    <th class="py-2.5 font-medium text-right w-[90px]"><x-ordenavel col="quantidade" :ordem="$ordem" :dir="$dir">Qtd.</x-ordenavel></th><th class="py-2.5 font-medium text-right w-[90px] {{ $temDescricao ? '' : 'pe-5 sm:pe-6' }}"><x-ordenavel col="saldo" :ordem="$ordem" :dir="$dir">Saldo</x-ordenavel></th>
                     @if ($temDescricao)<th class="ps-6 pe-5 sm:pe-6 py-2.5 font-medium">Descrição</th>@endif
                 </tr></thead>
                 <tbody>

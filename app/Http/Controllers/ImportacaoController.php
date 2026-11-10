@@ -11,6 +11,7 @@ use App\Models\Importacao;
 use App\Models\NotaFiscal;
 use App\Services\Creditos\CarteiraService;
 use App\Services\Nfse\EnvioDeNotas;
+use App\Support\Ordenacao;
 use App\Services\Tomadores\CadastroTomadores;
 use App\Support\ExplicacaoErro;
 use App\Support\Tenancy\ContaAtual;
@@ -23,10 +24,12 @@ class ImportacaoController extends Controller
     public function __construct(private ContaAtual $contaAtual) {}
 
     /** Lista de lotes, com resumo por lote e os números do topo. */
-    public function index()
+    public function index(Request $request)
     {
         $this->authorize('consultar');
-        $importacoes = Importacao::with('emitente')->latest()->paginate(20);
+        $consulta = Importacao::with('emitente')->latest();
+        [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, ['arquivo' => 'arquivo_nome', 'data' => 'created_at', 'situacao' => 'status']);
+        $importacoes = $consulta->paginate(20)->withQueryString();
 
         $resumos = NotaFiscal::whereIn('importacao_id', $importacoes->pluck('id'))
             ->selectRaw('importacao_id, status, count(*) as total')
@@ -36,7 +39,7 @@ class ImportacaoController extends Controller
                 fn ($s) => [$s->value => (int) ($linhas->firstWhere('status', $s->value)->total ?? 0)]
             )->all());
 
-        return view('importacoes.index', compact('importacoes', 'resumos'));
+        return view('importacoes.index', compact('importacoes', 'resumos', 'ordem', 'dir'));
     }
 
     /** Passo 1: escolher o arquivo. */
@@ -111,7 +114,10 @@ class ImportacaoController extends Controller
             default     => null,
         };
 
+        [$ordem, $dir] = Ordenacao::aplicar($linhas, $request, ['linha' => 'linha_planilha', 'situacao' => 'status', 'cliente' => 'tomador_nome', 'servico' => 'codigo_servico', 'descricao' => 'descricao', 'valor' => 'valor', 'competencia' => 'data_competencia']);
+
         return view('importacoes.conferir', [
+            'ordem' => $ordem, 'dir' => $dir,
             'linhas'     => $linhas->paginate(50, pageName: 'pagina')->withQueryString(),
             'ver'        => $ver,
             'importacao' => $importacao,
@@ -184,6 +190,7 @@ class ImportacaoController extends Controller
             'atencao'   => $consulta->whereIn('status', StatusNota::atencao()),
             default     => null,
         };
+        [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, ['linha' => 'linha_planilha', 'cliente' => 'tomador_nome', 'valor' => 'valor', 'situacao' => 'status']);
         $notas = $consulta->paginate(30)->withQueryString();
 
         $selecionada = $request->integer('nota')
@@ -194,6 +201,7 @@ class ImportacaoController extends Controller
         $limite = max((int) config('nfse.limite_por_minuto', 60), 1);
 
         return view('importacoes.show', [
+            'ordem' => $ordem, 'dir' => $dir,
             'importacao'  => $importacao,
             'resumo'      => $resumo,
             'filtro'      => $filtro,
@@ -220,7 +228,8 @@ class ImportacaoController extends Controller
     public function reenviar(NotaFiscal $nota, EnvioDeNotas $envio)
     {
         $this->authorize('emitir');
-        abort_unless($nota->status === StatusNota::Falhou, 422, 'Só notas com falha técnica podem ser reenviadas.');
+        $cadastro = $nota->status === StatusNota::Invalida && str_starts_with((string) (((array) $nota->erros)[0] ?? ''), EnvioDeNotas::CADASTRO_INCOMPLETO);
+        abort_unless($nota->status === StatusNota::Falhou || $cadastro, 422, 'Só notas com falha técnica ou cadastro de cliente incompleto podem ser reenviadas.');
 
         $envio->enviarNota($nota);
 

@@ -23,7 +23,7 @@
 
         <div class="card overflow-hidden">
             <div class="hidden sm:grid grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_auto] gap-4 px-6 py-3 text-xs font-medium text-ink-600 uppercase tracking-wide">
-                <span>Arquivo</span><span>Progresso</span><span class="text-right">Situação</span>
+                <x-ordenavel col="arquivo" :ordem="$ordem" :dir="$dir">Arquivo</x-ordenavel><x-ordenavel col="data" :ordem="$ordem" :dir="$dir">Enviada em</x-ordenavel><x-ordenavel col="situacao" :ordem="$ordem" :dir="$dir" class="justify-self-end">Situação</x-ordenavel>
             </div>
             @forelse ($importacoes as $i)
                 @php $r = $resumos[$i->id] ?? array_fill_keys(array_map(fn ($s) => $s->value, \App\Enums\StatusNota::cases()), 0); [$sit, $selo] = $i->situacao($r); @endphp

@@ -7,7 +7,7 @@
 {{-- Documentos da NFS-e emitida: PDF em destaque e o resto (XML, chave, e-mail, cancelar) no menu "⋯".
      O menu usa posição fixa para não ser cortado pela borda da tabela e abre para cima quando está no fim da tela. --}}
 <div class="flex justify-end gap-1.5 items-center"
-     x-data="{ aberto: false, x: 0, y: 0, cima: false,
+     x-data="{ aberto: false, emailAberto: false, x: 0, y: 0, cima: false,
                alternar(el) { const r = el.getBoundingClientRect(); this.cima = (window.innerHeight - r.bottom) < 250; this.x = window.innerWidth - r.right; this.y = this.cima ? window.innerHeight - r.top : r.bottom; this.aberto = ! this.aberto; } }"
      @keydown.escape.window="aberto = false" @scroll.window="aberto = false" @resize.window="aberto = false">
     <a href="{{ route('notas.danfse', $nota) }}" target="_blank" rel="noopener" class="btn-acao" title="Abrir o DANFSe (PDF) em outra aba">PDF</a>
@@ -26,15 +26,9 @@
             <svg class="w-4 h-4 text-ink-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>Copiar a chave de acesso
         </button>
         @can('emitir')
-            <button type="button" role="menuitem" class="{{ $item }} disabled:opacity-50 disabled:cursor-not-allowed"
-                    @if ($emails)
-                        data-acao-url="{{ route('notas.email', $nota) }}" data-metodo="POST" data-confirmar="{{ $rotuloEnvio }}" data-ajax-texto="Enviando…"
-                        title="Enviar o PDF e o XML por e-mail ao cliente"
-                    @else
-                        disabled title="O cliente desta nota não tem um e-mail válido"
-                    @endif>
+            <button type="button" role="menuitem" class="{{ $item }}" @click="aberto = false; $dispatch('abrir-email-{{ $nota->id }}')" title="Enviar o PDF e o XML por e-mail. Você pode trocar os destinatários só deste envio.">
                 <svg class="w-4 h-4 text-ink-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
-                <span>{{ $emails ? 'Enviar por e-mail' : 'Sem e-mail do cliente' }}</span>
+                <span>{{ $emails ? 'Enviar por e-mail…' : 'Enviar por e-mail (informar)…' }}</span>
             </button>
         @endcan
         @can('cancelar-nota')
@@ -45,6 +39,26 @@
         @endcan
     </div>
 </div>
+@can('emitir')
+    {{-- Envio por e-mail: já vem com os e-mails do cliente, mas dá para trocar só para este envio (ex.: mandar para o nosso e-mail para testar) --}}
+    <div x-data="{ aberto: false }" x-on:abrir-email-{{ $nota->id }}.window="aberto = true" @keydown.escape.window="aberto = false">
+        <div x-show="aberto" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Enviar NFS-e por e-mail">
+            <form method="POST" action="{{ route('notas.email', $nota) }}" @click.outside="aberto = false" class="card w-full max-w-md p-5 space-y-3 text-left">
+                @csrf
+                <h2 class="text-lg font-semibold">Enviar NFS-e nº {{ $nota->numero_nfse }} por e-mail</h2>
+                <div>
+                    <label for="emails-{{ $nota->id }}" class="campo-rotulo">Enviar para</label>
+                    <input id="emails-{{ $nota->id }}" name="emails" value="{{ implode(', ', $emails) }}" class="campo-entrada" placeholder="email@cliente.com, outro@cliente.com" required>
+                    <p class="campo-ajuda">Já vem com os e-mails do cliente. Pode trocar só para este envio (até 5, separados por vírgula).@if ($nota->emitente?->email_copia) A empresa ({{ $nota->emitente->email_copia }}) recebe cópia.@endif</p>
+                </div>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" class="btn" @click="aberto = false">Cancelar</button>
+                    <button class="btn btn-primary">Enviar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endcan
 @if ($nota->email_enviado_em)
     <div class="text-xs text-ink-600 mt-1 sm:text-right">E-mail enviado em {{ $nota->email_enviado_em->timezone('America/Sao_Paulo')->format('d/m H:i') }}</div>
 @endif

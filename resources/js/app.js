@@ -5,27 +5,47 @@ import Alpine from 'alpinejs';
 
 window.Alpine = Alpine;
 
-// Campo de código de serviço com busca na lista nacional (cadastro da empresa e correção de nota)
+// Campo de código de serviço no estilo select2: parece um select ("01.07.01 - Descrição"), e ao clicar
+// abre uma lista com busca na lista nacional (cadastro da empresa, nota manual e correção de nota)
 Alpine.data('buscaServico', (inicial, url) => ({
-    texto: inicial || '',
+    texto: inicial || '',      // código escolhido: é o que vai no formulário
     descricao: '',
+    termo: '',
     itens: [],
     aberto: false,
+    indice: 0,
     ctl: null,
-    init() { if (/^\d{6}$/.test(this.texto)) this.buscar(true); },
-    async buscar(silencioso = false) {
-        const q = this.texto.trim();
-        if (!q) { this.itens = []; this.aberto = false; this.descricao = ''; return; }
+    fmt(c) { return /^\d{6}$/.test(c) ? `${c.slice(0, 2)}.${c.slice(2, 4)}.${c.slice(4)}` : c; },
+    init() { if (/^\d{6}$/.test(this.texto)) this.carregarDescricao(); },
+    async consultar(q) {
         try {
             this.ctl?.abort(); this.ctl = new AbortController();
             const r = await fetch(`${url}?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' }, signal: this.ctl.signal });
-            this.itens = await r.json();
-        } catch (e) { return; }
-        const exato = this.itens.find(i => i.codigo === q);
-        this.descricao = exato ? exato.descricao : '';
-        this.aberto = !silencioso && !exato;
+            return await r.json();
+        } catch (e) { return null; }
     },
-    escolher(i) { this.texto = i.codigo; this.descricao = i.descricao; this.aberto = false; },
+    async carregarDescricao() {
+        const itens = await this.consultar(this.texto);
+        this.descricao = itens?.find(i => i.codigo === this.texto)?.descricao || '';
+    },
+    // Código vindo de fora (padrões da empresa na nota manual)
+    definir(codigo) { this.texto = codigo || ''; this.descricao = ''; if (/^\d{6}$/.test(this.texto)) this.carregarDescricao(); },
+    async abrir() {
+        this.aberto = true; this.termo = ''; this.indice = 0;
+        this.$nextTick(() => this.$refs.busca?.focus());
+        await this.buscar();
+    },
+    async buscar() {
+        const itens = await this.consultar(this.termo.trim());
+        if (itens) { this.itens = itens; this.indice = 0; }
+    },
+    mover(passo) {
+        if (!this.itens.length) return;
+        this.indice = (this.indice + passo + this.itens.length) % this.itens.length;
+        this.$nextTick(() => this.$refs.lista?.querySelectorAll('[role=option]')[this.indice]?.scrollIntoView({ block: 'nearest' }));
+    },
+    escolher(i) { if (!i) return; this.texto = i.codigo; this.descricao = i.descricao; this.aberto = false; this.$refs.gatilho?.focus(); },
+    limpar() { this.texto = ''; this.descricao = ''; this.aberto = false; },
 }));
 
 // Emissão manual: padrões da empresa vêm marcados; desmarcar libera a edição só nesta nota

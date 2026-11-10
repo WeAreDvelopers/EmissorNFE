@@ -121,7 +121,7 @@
                     @endforeach
                 </div>
                 <div class="hidden sm:grid grid-cols-[48px_minmax(0,1.4fr)_100px_minmax(0,1.5fr)_auto] gap-x-4 px-6 py-2 text-xs font-medium text-ink-600 uppercase tracking-wide border-t border-linha">
-                    <span>Linha</span><span>Cliente</span><span class="text-right">Valor</span><span>Situação</span><span></span>
+                    <x-ordenavel col="linha" :ordem="$ordem" :dir="$dir">Linha</x-ordenavel><x-ordenavel col="cliente" :ordem="$ordem" :dir="$dir">Cliente</x-ordenavel><x-ordenavel col="valor" :ordem="$ordem" :dir="$dir" class="justify-self-end">Valor</x-ordenavel><x-ordenavel col="situacao" :ordem="$ordem" :dir="$dir">Situação</x-ordenavel><span></span>
                 </div>
                 @forelse ($notas as $n)
                     <x-nota-linha :nota="$n" :href="route('importacoes.show', [$importacao, 'filtro' => $filtro, 'nota' => $n->id])" :selecionada="$selecionada?->id === $n->id" />

@@ -88,6 +88,8 @@ Route::middleware(['auth', 'conta'])->group(function () {
 
     // Clientes (tomadores): cadastro por conta, com histórico de alterações
     Route::get('/clientes', [TomadorController::class, 'index'])->name('tomadores.index');
+    Route::get('/clientes/modelo', [TomadorController::class, 'modelo'])->name('tomadores.modelo');
+    Route::post('/clientes/importar', [TomadorController::class, 'importar'])->name('tomadores.importar');
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');
     Route::put('/clientes/{tomador}', [TomadorController::class, 'update'])->name('tomadores.update');
 

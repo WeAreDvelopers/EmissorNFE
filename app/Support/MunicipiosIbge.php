@@ -30,7 +30,7 @@ class MunicipiosIbge
         }
 
         try {
-            $resposta = Http::timeout(8)->get("https://servicodados.ibge.gov.br/api/v1/localidades/estados/{$uf}/municipios");
+            $resposta = Http::timeout(10)->retry(2, 400, throw: false)->get("https://servicodados.ibge.gov.br/api/v1/localidades/estados/{$uf}/municipios");
             if (! $resposta->successful()) {
                 return [];
             }

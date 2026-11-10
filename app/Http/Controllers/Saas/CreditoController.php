@@ -8,6 +8,7 @@ use App\Models\Pacote;
 use App\Models\Pagamento;
 use App\Services\Creditos\CarteiraService;
 use App\Services\Pagamentos\PagamentoService;
+use App\Support\Ordenacao;
 use App\Support\Tenancy\ContaAtual;
 use Illuminate\Http\Request;
 use Throwable;
@@ -17,15 +18,18 @@ class CreditoController extends Controller
     public function __construct(private ContaAtual $contaAtual) {}
 
     /** Saldo, extrato e loja de pacotes da revenda da conta. */
-    public function index(CarteiraService $creditos)
+    public function index(Request $request, CarteiraService $creditos)
     {
         $this->authorize('consultar');
         $conta = $this->contaAtual->conta();
+        $consulta = MovimentoCredito::latest('id');
+        [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, ['data' => 'created_at', 'movimento' => 'tipo', 'quantidade' => 'quantidade', 'saldo' => 'disponivel_apos']);
 
         return view('creditos.index', [
             'carteira'   => $creditos->saldo($conta->id),
             'pacotes'    => $conta->revenda->pacotes,
-            'extrato'    => MovimentoCredito::latest('id')->paginate(30),
+            'ordem' => $ordem, 'dir' => $dir,
+            'extrato'    => $consulta->paginate(30)->withQueryString(),
             'podeComprar'=> request()->user()->pode('comprar-creditos'),
         ]);
     }

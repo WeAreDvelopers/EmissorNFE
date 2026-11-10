@@ -16,7 +16,7 @@
             @if ($nota->emitente?->ehHomologacao())<div class="mt-1.5">Esta empresa está em modo teste: o cancelamento vale só no ambiente de testes.</div>@endif
         </div>
 
-        <form method="POST" action="{{ route('notas.cancelar', $nota) }}" class="card p-5 sm:p-6 space-y-4">
+        <form method="POST" action="{{ route('notas.cancelar', $nota) }}" class="card p-5 sm:p-6 space-y-4" x-data="{ confirmo: {{ old('confirmo') ? 'true' : 'false' }} }">
             @csrf
             @error('cancelamento')<div class="rounded-lg bg-warn-50 border border-warn-200 px-4 py-3 text-sm text-warn-900" role="alert">{{ $message }}</div>@enderror
 
@@ -35,13 +35,13 @@
                 @error('motivo_texto')<p class="erro-campo">{{ $message }}</p>@enderror
             </div>
             <label class="flex items-start gap-2.5 text-sm cursor-pointer">
-                <input type="checkbox" name="confirmo" value="1" class="mt-0.5 rounded text-perigo-600 focus:ring-perigo-600" @checked(old('confirmo'))>
+                <input type="checkbox" name="confirmo" value="1" x-model="confirmo" class="mt-0.5 rounded text-perigo-600 focus:ring-perigo-600" @checked(old('confirmo'))>
                 <span>Entendo que o cancelamento não pode ser desfeito.</span>
             </label>
             @error('confirmo')<p class="erro-campo">{{ $message }}</p>@enderror
 
             <div class="flex items-center gap-4 pt-1">
-                <button class="btn btn-lg bg-perigo-600 border-perigo-600 text-white hover:bg-perigo-700">Cancelar esta NFS-e</button>
+                <button :disabled="!confirmo" class="btn btn-lg bg-perigo-600 border-perigo-600 text-white hover:bg-perigo-700 disabled:opacity-50 disabled:cursor-not-allowed">Cancelar esta NFS-e</button>
                 <a href="{{ route('notas.index', ['q' => $nota->numero_nfse]) }}" class="text-sm text-ink-700">Voltar sem cancelar</a>
             </div>
         </form>

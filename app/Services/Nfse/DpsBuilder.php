@@ -93,6 +93,10 @@ class DpsBuilder
         $this->el($doc, $loc, 'cLocPrestacao', $p['codigo_municipio']);
         $cServ = $this->el($doc, $serv, 'cServ');
         $this->el($doc, $cServ, 'cTribNac', $nota->codigo_servico);
+        // cTribMun (3 dígitos): complementar do município, proibido para MEI (E0313)
+        if (filled($p['codigo_tributacao_municipal'] ?? null) && (int) $p['op_simples_nacional'] !== 2) {
+            $this->el($doc, $cServ, 'cTribMun', str_pad($p['codigo_tributacao_municipal'], 3, '0', STR_PAD_LEFT));
+        }
         if ($nota->codigo_nbs) {
             $this->el($doc, $cServ, 'cNBS', $nota->codigo_nbs);
         }

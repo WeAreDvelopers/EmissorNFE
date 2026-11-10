@@ -57,7 +57,7 @@ class FinalizadorNota
                     return;
                 }
 
-                Mail::to($destinos)->queue(new \App\Mail\NfseEmitidaMail($nota));
+                Mail::to($destinos)->cc(\App\Http\Controllers\NotaDocumentoController::copia($nota, $destinos))->queue(new \App\Mail\NfseEmitidaMail($nota));
                 $nota->forceFill(['email_enviado_em' => now()])->save();
                 Auditoria::registrar('email_enviado', "NFS-e nº {$nota->numero_nfse} enviada por e-mail (automático).", ['nota' => $nota->id, 'destinatarios' => $destinos, 'automatico' => true], $nota->conta_id);
             });

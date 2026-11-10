@@ -279,13 +279,13 @@
                     </colgroup>
                     <thead class="text-left text-xs uppercase tracking-wide text-ink-600 bg-chao/60 border-y border-linha">
                         <tr>
-                            <th class="ps-5 sm:ps-6 pe-3 py-3 font-medium">Linha</th>
-                            <th class="pe-3 py-3 font-medium">Situação</th>
-                            <th class="pe-3 py-3 font-medium">Cliente</th>
-                            <th class="pe-3 py-3 font-medium">Serviço</th>
-                            <th class="pe-3 py-3 font-medium">Descrição</th>
-                            <th class="pe-5 py-3 font-medium text-right">Valor</th>
-                            <th class="pe-3 py-3 font-medium">Competência</th>
+                            <th class="ps-5 sm:ps-6 pe-3 py-3 font-medium"><x-ordenavel col="linha" :ordem="$ordem" :dir="$dir">Linha</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium"><x-ordenavel col="situacao" :ordem="$ordem" :dir="$dir">Situação</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium"><x-ordenavel col="cliente" :ordem="$ordem" :dir="$dir">Cliente</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium"><x-ordenavel col="servico" :ordem="$ordem" :dir="$dir">Serviço</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium"><x-ordenavel col="descricao" :ordem="$ordem" :dir="$dir">Descrição</x-ordenavel></th>
+                            <th class="pe-5 py-3 font-medium text-right"><x-ordenavel col="valor" :ordem="$ordem" :dir="$dir" class="justify-self-end">Valor</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium"><x-ordenavel col="competencia" :ordem="$ordem" :dir="$dir">Competência</x-ordenavel></th>
                             <th class="pe-5 sm:pe-6 py-3 font-medium"><span class="sr-only">Ação</span></th>
                         </tr>
                     </thead>

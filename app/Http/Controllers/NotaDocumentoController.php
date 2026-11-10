@@ -54,15 +54,35 @@ class NotaDocumentoController extends Controller
             ->unique(fn ($e) => strtolower($e))->take(5)->values()->all();
     }
 
+    /** Separa e valida e-mails digitados à mão (vírgula, ponto e vírgula ou espaço). */
+    public static function listaDeEmails(string $texto): array
+    {
+        return collect(preg_split('/[;,\s]+/', $texto, -1, PREG_SPLIT_NO_EMPTY))
+            ->filter(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->unique(fn ($e) => strtolower($e))->take(5)->values()->all();
+    }
+
+    /** Cópia para o e-mail da empresa emitente (ciência), sem repetir quem já é destinatário. */
+    public static function copia(NotaFiscal $nota, array $destinos): array
+    {
+        $copia = $nota->emitente?->email_copia;
+        $jaVai = collect($destinos)->map(fn ($e) => strtolower($e))->contains(strtolower((string) $copia));
+
+        return $copia && ! $jaVai && filter_var($copia, FILTER_VALIDATE_EMAIL) ? [$copia] : [];
+    }
+
     public function email(Request $request, NotaFiscal $nota)
     {
         $this->authorize('emitir');
         $this->emitida($nota);
 
-        $destinos = self::destinatarios($nota);
-        abort_if($destinos === [], 422, 'Esta nota não tem um e-mail válido do cliente. Corrija o e-mail na linha e tente de novo.');
+        // O usuário pode trocar os e-mails só para este envio (ex.: mandar para o próprio e-mail para testar)
+        $destinos = $request->filled('emails')
+            ? self::listaDeEmails((string) $request->input('emails'))
+            : self::destinatarios($nota);
+        abort_if($destinos === [], 422, 'Informe ao menos um e-mail válido para o envio.');
 
-        Mail::to($destinos)->queue(new NfseEmitidaMail($nota));
+        Mail::to($destinos)->cc(self::copia($nota, $destinos))->queue(new NfseEmitidaMail($nota));
         $nota->forceFill(['email_enviado_em' => now()])->save();
         \App\Models\Auditoria::registrar('email_enviado', "NFS-e nº {$nota->numero_nfse} enviada por e-mail.", ['nota' => $nota->id, 'destinatarios' => $destinos]);
 
