@@ -1,10 +1,11 @@
-@props(['nome', 'rotulo' => 'Código de serviço (6 dígitos)', 'valor' => null, 'ajuda' => null, 'id' => null, 'somenteLeitura' => 'false'])
+@props(['nome', 'rotulo' => 'Código de serviço (6 dígitos)', 'valor' => null, 'ajuda' => null, 'id' => null, 'somenteLeitura' => 'false',
+        'url' => null, 'obrigatorio' => false, 'tam' => 6, 'evento' => 'definir-servico', 'vazio' => 'Selecione o serviço (código ou nome da atividade)', 'nenhum' => 'Nenhum serviço encontrado. Tente outra palavra.'])
 @php $id = $id ?: $nome; @endphp
 {{-- Estilo select2: o gatilho mostra "01.07.01 - Descrição" junto (como no portal do governo); ao clicar abre a lista com busca.
      O valor enviado é sempre o código de 6 dígitos. --}}
-<div x-data="buscaServico(@js((string) $valor), @js(route('servicos.buscar')))" @click.outside="aberto = false" @keydown.escape="aberto = false"
-     @definir-servico.window="definir($event.detail)" {{ $attributes->class(['relative']) }}>
-    @if ($rotulo)<label for="{{ $id }}" class="campo-rotulo">{{ $rotulo }}</label>@endif
+<div x-data="buscaServico(@js((string) $valor), @js($url ?: route('servicos.buscar')), {{ (int) $tam }})" @click.outside="aberto = false" @keydown.escape="aberto = false"
+     x-on:{{ $evento }}.window="definir($event.detail)" {{ $attributes->class(['relative']) }}>
+    @if ($rotulo)<label for="{{ $id }}" class="campo-rotulo {{ $obrigatorio ? 'obrigatorio' : '' }}">{{ $rotulo }}</label>@endif
     <input type="hidden" name="{{ $nome }}" :value="texto">
 
     <button type="button" id="{{ $id }}" x-ref="gatilho" @click="aberto ? aberto = false : abrir()" :disabled="{{ $somenteLeitura }}"
@@ -14,7 +15,7 @@
             <template x-if="texto">
                 <span><span class="inline-block rounded-md bg-brand-50 px-1.5 py-0.5 font-mono font-semibold text-brand-700 align-baseline" x-text="fmt(texto)"></span><span class="text-ink-900" x-show="descricao"> - <span x-text="descricao"></span></span></span>
             </template>
-            <span x-show="!texto" class="text-ink-600">Selecione o serviço (código ou nome da atividade)</span>
+            <span x-show="!texto" class="text-ink-600">{{ $vazio }}</span>
         </span>
         <span class="flex items-center px-3 border-s border-gray-300 bg-gray-50 text-ink-700 group-hover:bg-gray-100"><svg class="w-4 h-4 shrink-0 transition-transform" :class="aberto ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
@@ -34,7 +35,7 @@
                     </button>
                 </li>
             </template>
-            <li x-show="!itens.length" class="px-3 py-2 text-sm text-ink-600">Nenhum serviço encontrado. Tente outra palavra.</li>
+            <li x-show="!itens.length" class="px-3 py-2 text-sm text-ink-600">{{ $nenhum }}</li>
         </ul>
         <button type="button" x-show="texto" @click="limpar()" class="w-full text-left px-3 py-2 text-[13px] text-ink-600 border-t border-gray-100 hover:bg-gray-50">Limpar seleção</button>
     </div>

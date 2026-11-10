@@ -56,6 +56,18 @@ Route::middleware(['auth', 'conta'])->group(function () {
         \App\Support\ListaServicoNacional::buscar((string) $r->query('q', ''))
     ))->middleware('throttle:120,1')->name('servicos.buscar');
 
+    // Busca na NBS 2.0 (lista suspensa do campo NBS)
+    Route::get('/nbs/buscar', fn (\Illuminate\Http\Request $r) => response()->json(
+        \App\Support\ListaNbs::buscar((string) $r->query('q', ''))
+    ))->middleware('throttle:120,1')->name('nbs.buscar');
+
+    // Consulta de CEP (endereço do cliente): 404 quando não existe ou os serviços estão fora do ar
+    Route::get('/cep/{cep}', function (string $cep) {
+        $d = app(\App\Services\ConsultaCep::class)->buscar($cep);
+
+        return $d ? response()->json($d) : response()->json(['erro' => 'CEP não encontrado'], 404);
+    })->where('cep', '[0-9\-]{8,9}')->middleware('throttle:60,1')->name('cep.buscar');
+
     // Créditos e Pix
     Route::get('/creditos', [CreditoController::class, 'index'])->name('creditos.index');
     Route::post('/creditos/pacotes/{pacote}/comprar', [CreditoController::class, 'comprar'])->name('creditos.comprar');
@@ -90,8 +102,11 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/clientes', [TomadorController::class, 'index'])->name('tomadores.index');
     Route::get('/clientes/modelo', [TomadorController::class, 'modelo'])->name('tomadores.modelo');
     Route::post('/clientes/importar', [TomadorController::class, 'importar'])->name('tomadores.importar');
+    Route::get('/clientes/novo', [TomadorController::class, 'criar'])->name('tomadores.criar');
+    Route::post('/clientes', [TomadorController::class, 'store'])->name('tomadores.store');
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');
     Route::put('/clientes/{tomador}', [TomadorController::class, 'update'])->name('tomadores.update');
+    Route::delete('/clientes/{tomador}', [TomadorController::class, 'excluir'])->name('tomadores.excluir');
 
     // Cancelamento de NFS-e emitida (somente o dono)
     Route::get('/notas/{nota}/cancelar', [\App\Http\Controllers\NotaCancelamentoController::class, 'form'])->name('notas.cancelar.form');

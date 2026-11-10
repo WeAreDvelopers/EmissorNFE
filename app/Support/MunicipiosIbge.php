@@ -21,6 +21,33 @@ class MunicipiosIbge
         return $mapa[self::chave($municipio)] ?? null;
     }
 
+    /** "Cidade/UF" a partir do código IBGE (cache de 30 dias); null se a consulta falhar. */
+    public static function rotulo(?string $codigo): ?string
+    {
+        if (! preg_match('/^\d{7}$/', (string) $codigo)) {
+            return null;
+        }
+
+        if ($guardado = Cache::get("ibge:rotulo:{$codigo}")) {
+            return $guardado;
+        }
+
+        try {
+            $r = Http::timeout(3)->get("https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{$codigo}");
+            $m = $r->successful() ? $r->json() : null;
+            $uf = $m['microrregiao']['mesorregiao']['UF']['sigla'] ?? $m['regiao-imediata']['regiao-intermediaria']['UF']['sigla'] ?? null;
+            if (! isset($m['nome'], $uf)) {
+                return null;
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        Cache::put("ibge:rotulo:{$codigo}", $rotulo = "{$m['nome']}/{$uf}", now()->addDays(30));
+
+        return $rotulo;
+    }
+
     /** @return array<string,string> nome normalizado => código */
     private static function porUf(string $uf): array
     {

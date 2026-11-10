@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Saas;
 
 use App\Http\Controllers\Controller;
+use App\Models\CodigoMunicipal;
 use App\Models\Emitente;
 use App\Services\Nfse\Certificado;
 use App\Services\Nfse\NumeracaoDps;
 use App\Support\Documento;
 use App\Support\ListaServicoNacional;
+use App\Support\MunicipiosIbge;
+use App\Support\TabelasDps;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -107,6 +111,17 @@ class EmitenteController extends Controller
     {
         $novo = ! $emitente->exists;
 
+        // Linhas em branco da lista de códigos municipais (adicionadas na tela e não preenchidas) são ignoradas
+        $request->merge(['codigos' => array_values(array_filter((array) $request->input('codigos', []), fn ($c) => is_array($c) && (filled($c['codigo'] ?? null) || filled($c['descricao'] ?? null) || filled($c['servico'] ?? null))))]);
+
+        // O que é obrigatório muda com o regime e com a forma de informar o valor aproximado dos tributos
+        $op = (int) $request->input('op_simples_nacional');
+        $permitidos = Emitente::modosPermitidos($op);
+        $modo = in_array($request->input('modo_tributos_aprox'), $permitidos, true) ? $request->input('modo_tributos_aprox') : $permitidos[0];
+        $comPercentuais = in_array($modo, ['percentual', 'monetario'], true);
+        $federal = $op === 1;
+        $pisComAliquota = $federal && $request->input('pis_cofins_cst', '00') !== '00';
+
         $dados = $request->validate([
             'cnpj'                => ['required', fn ($a, $v, $f) => Documento::valido($v) && strlen(preg_replace('/\D/', '', $v)) === 14 ?: $f('CNPJ inválido.')],
             'razao_social'        => ['required', 'string', 'max:255'],
@@ -121,11 +136,28 @@ class EmitenteController extends Controller
             'op_simples_nacional' => ['required', 'in:1,2,3'],
             'regime_apuracao_sn'  => ['nullable', 'required_if:op_simples_nacional,3', 'in:1,2,3'],
             'regime_especial'     => ['required', 'in:0,1,2,3,4,5,6,9'],
-            'aliquota_simples'    => ['nullable', 'required_if:op_simples_nacional,3', 'numeric', 'between:0,100'],
+            'modo_tributos_aprox' => ['nullable', Rule::in($permitidos)],
+            'codigos'             => ['nullable', 'array', 'max:300'],
+            'codigos.*.codigo'    => ['required', 'digits:3'],
+            'codigos.*.descricao' => ['nullable', 'string', 'max:500'],
+            'codigos.*.servico'   => ['nullable', 'digits:6', fn ($a, $v, $f) => ListaServicoNacional::existe((string) $v) ?: $f('Esse serviço não existe na lista nacional de serviços.')],
+            'trib_issqn'          => ['nullable', 'in:1,2,4'],
+            'tp_imunidade'        => [$request->input('trib_issqn') === '2' ? 'required' : 'nullable', 'in:1,2,3,4,5'],
+            'retencao_issqn'      => ['nullable', 'in:1,2'],
+            'deducao_tipo'        => ['nullable', 'in:none,percentual,valor'],
+            'deducao_valor'       => ['nullable', in_array($request->input('deducao_tipo'), ['percentual', 'valor'], true) ? 'required' : 'nullable', 'numeric', 'gt:0', $request->input('deducao_tipo') === 'percentual' ? 'lte:100' : 'lt:999999999999'],
+            'municipio_prestacao' => ['nullable', 'string', 'max:120'],
+            'uf_prestacao'        => ['nullable', 'string', 'size:2'],
+            'aliquota_simples'    => ['nullable', $modo === 'simples' ? 'required' : 'nullable', 'numeric', 'between:0,100'],
             'tributos_aprox'           => ['nullable', 'array'],
-            'tributos_aprox.federal'   => ['nullable', 'required_if:op_simples_nacional,1', 'numeric', 'between:0,100'],
-            'tributos_aprox.estadual'  => ['nullable', 'required_if:op_simples_nacional,1', 'numeric', 'between:0,100'],
-            'tributos_aprox.municipal' => ['nullable', 'required_if:op_simples_nacional,1', 'numeric', 'between:0,100'],
+            'tributos_aprox.federal'   => ['nullable', $comPercentuais ? 'required' : 'nullable', 'numeric', 'between:0,100'],
+            'tributos_aprox.estadual'  => ['nullable', $comPercentuais ? 'required' : 'nullable', 'numeric', 'between:0,100'],
+            'tributos_aprox.municipal' => ['nullable', $comPercentuais ? 'required' : 'nullable', 'numeric', 'between:0,100'],
+            'pis_cofins_cst'      => [$federal ? 'required' : 'nullable', Rule::in(array_keys(TabelasDps::CST_PIS_COFINS))],
+            // no padrão da empresa só entram os tipos de retenção sem CSLL retida (os demais pedem o valor em cada nota)
+            'tp_ret_pis_cofins'   => [$federal ? 'required' : 'nullable', 'in:0,2'],
+            'aliquota_pis'        => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
+            'aliquota_cofins'     => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
             'serie_dps'           => ['required', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
             'ambiente'            => ['required', 'in:1,2'],
             'logo'                => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
@@ -135,13 +167,67 @@ class EmitenteController extends Controller
         ]);
 
         $dados['cnpj'] = preg_replace('/\D/', '', $dados['cnpj']);
+
+        $dados['trib_issqn'] ??= 1;
+        $dados['retencao_issqn'] ??= 1;
+
+        // Códigos complementares municipais: sem repetição, e o código padrão da empresa sempre consta na lista
+        $codigos = collect($dados['codigos'] ?? [])->map(fn ($c) => ['codigo' => $c['codigo'], 'descricao' => trim((string) ($c['descricao'] ?? '')) ?: null, 'codigo_servico' => $c['servico'] ?? null ?: null]);
+        if ($codigos->pluck('codigo')->duplicates()->isNotEmpty()) {
+            throw ValidationException::withMessages(['codigos' => 'O código '.$codigos->pluck('codigo')->duplicates()->first().' aparece mais de uma vez na lista de códigos municipais.']);
+        }
+        if (filled($dados['codigo_tributacao_municipal'] ?? null) && ! $codigos->contains('codigo', $dados['codigo_tributacao_municipal'])) {
+            $codigos->push(['codigo' => $dados['codigo_tributacao_municipal'], 'descricao' => null, 'codigo_servico' => null]);
+        }
+
+        // Tributação municipal padrão: as mesmas travas da SEFIN valem para a empresa (E0172, E0435, E0436, E0438, E0441, E0580, E0583, E0588)
+        $trib = (int) $dados['trib_issqn'];
+        $deducao = in_array($dados['deducao_tipo'] ?? null, ['percentual', 'valor'], true) ? $dados['deducao_tipo'] : null;
+        $semRegimeEspecial = (int) $dados['regime_especial'] === 0;
+        $erros = [];
+        if ($trib !== 1 && ! $semRegimeEspecial) {
+            $erros['trib_issqn'] = 'Com imunidade ou não incidência o regime especial de tributação precisa ser "Nenhum".';
+        }
+        if ($trib !== 1 && (int) $dados['retencao_issqn'] === 2) {
+            $erros['retencao_issqn'] = 'Com imunidade ou não incidência não pode haver retenção do ISSQN.';
+        }
+        if ((int) $dados['retencao_issqn'] === 2 && ($op === 2 || ! $semRegimeEspecial)) {
+            $erros['retencao_issqn'] = $op === 2 ? 'MEI não pode ter retenção do ISSQN pelo tomador.' : 'Com regime especial de tributação não pode haver retenção do ISSQN.';
+        }
+        if ($deducao && ($trib !== 1 || ! $semRegimeEspecial || ! ($op === 1 || ($op === 3 && (int) ($dados['regime_apuracao_sn'] ?? 0) === 2)))) {
+            $erros['deducao_tipo'] = $op === 2 ? 'MEI não pode ter dedução/redução da base de cálculo.' : 'Dedução/redução só vale para operação tributável, sem regime especial, de empresa não optante ou ME/EPP com o ISSQN apurado pela NFS-e.';
+        }
+        $codigoPrestacao = null;
+        if (filled($dados['municipio_prestacao'] ?? null) || filled($dados['uf_prestacao'] ?? null)) {
+            $codigoPrestacao = MunicipiosIbge::codigo($dados['municipio_prestacao'] ?? null, $dados['uf_prestacao'] ?? null);
+            if (! $codigoPrestacao) {
+                $erros['municipio_prestacao'] = 'Município da prestação não reconhecido: confira o nome e a UF.';
+            }
+        }
+        if ($erros) {
+            throw ValidationException::withMessages($erros);
+        }
+        $dados['tp_imunidade'] = $trib === 2 ? (int) $dados['tp_imunidade'] : null;
+        $dados['deducao_tipo'] = $deducao;
+        $dados['deducao_valor'] = $deducao ? $dados['deducao_valor'] : null;
+        $dados['codigo_municipio_prestacao'] = $codigoPrestacao && $codigoPrestacao !== $dados['codigo_municipio'] ? $codigoPrestacao : null;
         // Só guarda o que vale para o regime escolhido (os campos escondidos na tela também são enviados, vazios)
-        if ((int) $dados['op_simples_nacional'] !== 1) {
+        $dados['modo_tributos_aprox'] = $modo;
+        if (! $comPercentuais) {
             $dados['tributos_aprox'] = null;
         }
-        if ((int) $dados['op_simples_nacional'] !== 3) {
+        if ($modo !== 'simples') {
             $dados['aliquota_simples'] = null;
+        }
+        if ($op !== 3) {
             $dados['regime_apuracao_sn'] = null;
+        }
+        if (! $federal) {   // tributação federal só existe para o não optante
+            $dados['pis_cofins_cst'] = '00';
+            $dados['tp_ret_pis_cofins'] = 0;
+        }
+        if (! $pisComAliquota) {
+            $dados['aliquota_pis'] = $dados['aliquota_cofins'] = null;
         }
         $dados['serie_dps'] = str_pad($dados['serie_dps'], 5, '0', STR_PAD_LEFT);
 
@@ -179,12 +265,26 @@ class EmitenteController extends Controller
 
         // Campos fiscais que entram na trilha de auditoria (nunca a senha nem o arquivo do certificado)
         $campos = ['razao_social', 'cnpj', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
-            'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente', 'enviar_email_automatico', 'email_copia', 'codigo_tributacao_municipal'];
+            'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente', 'enviar_email_automatico', 'email_copia', 'codigo_tributacao_municipal',
+            'modo_tributos_aprox', 'pis_cofins_cst', 'tp_ret_pis_cofins', 'aliquota_pis', 'aliquota_cofins',
+            'trib_issqn', 'tp_imunidade', 'retencao_issqn', 'deducao_tipo', 'deducao_valor', 'codigo_municipio_prestacao'];
         $antes = $novo ? [] : $emitente->only($campos);
+        if (! $novo) {   // empresa antiga, sem escolha gravada: o padrão do regime conta como valor anterior (não é mudança)
+            $antes['modo_tributos_aprox'] = $emitente->modoTributosAprox();
+            $antes['pis_cofins_cst'] = $emitente->pis_cofins_cst ?: '00';
+            $antes['tp_ret_pis_cofins'] = (int) $emitente->tp_ret_pis_cofins;
+            $antes['trib_issqn'] = (int) ($emitente->trib_issqn ?: 1);
+            $antes['retencao_issqn'] = (int) ($emitente->retencao_issqn ?: 1);
+        }
 
-        DB::transaction(function () use ($emitente, $dados, $pfx, $cert) {
-            $emitente->fill(collect($dados)->except(['certificado', 'certificado_senha', 'logo', 'remover_logo'])->all());
+        DB::transaction(function () use ($emitente, $dados, $pfx, $cert, $codigos) {
+            $emitente->fill(collect($dados)->except(['certificado', 'certificado_senha', 'logo', 'remover_logo', 'codigos'])->all());
             $emitente->save();
+
+            CodigoMunicipal::where('emitente_id', $emitente->id)->delete();
+            foreach ($codigos as $c) {
+                CodigoMunicipal::create($c + ['conta_id' => $emitente->conta_id, 'emitente_id' => $emitente->id]);
+            }
 
             if ($pfx) {
                 $emitente->update([

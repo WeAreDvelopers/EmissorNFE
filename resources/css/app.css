@@ -19,6 +19,7 @@
 
     .campo-rotulo { @apply block text-sm font-medium text-ink-900; }
     .campo-entrada { @apply mt-1 block w-full min-h-[44px] rounded-lg border-gray-400 shadow-sm text-[15px] focus:border-brand-600 focus:ring-brand-600; }
+    .obrigatorio::after { content: ' *'; color: #C62828; font-weight: 600; }
     .campo-ajuda { @apply mt-1 text-[13px] text-ink-600; }
 
     .link { @apply text-brand-600 font-medium hover:underline; }

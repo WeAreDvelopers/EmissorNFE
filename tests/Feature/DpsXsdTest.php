@@ -57,4 +57,23 @@ class DpsXsdTest extends TestCase
             $this->assertSame([], (new ValidadorXsd)->erros($xml), "regime {$regime}");
         }
     }
+
+    public function test_nao_optante_leva_tributacao_federal_do_portal_e_os_demais_nao(): void
+    {
+        foreach ([1 => true, 2 => false, 3 => false] as $regime => $leva) {
+            $xml = (new DpsBuilder)->montar($this->nota([], [
+                'op_simples_nacional' => $regime,
+                'tributos_aprox' => ['federal' => 13.45, 'estadual' => 0, 'municipal' => 2.70],
+            ]));
+
+            $this->assertSame($leva, str_contains($xml, '<tribFed><piscofins><CST>00</CST><tpRetPisCofins>0</tpRetPisCofins></piscofins></tribFed>'), "regime {$regime}");
+            $this->assertStringNotContainsString('vRetIRRF', $xml);
+            $this->assertStringNotContainsString('vRetCP', $xml);
+            $this->assertStringNotContainsString('vRetCSLL', $xml);
+            $this->assertSame([], (new ValidadorXsd)->erros($xml), "regime {$regime}");
+        }
+
+        $xml = (new DpsBuilder)->montar($this->nota([], ['op_simples_nacional' => 1, 'tributos_aprox' => ['federal' => 13.45, 'estadual' => 0, 'municipal' => 2.70]]));
+        $this->assertStringContainsString('<pTotTribFed>13.45</pTotTribFed><pTotTribEst>0.00</pTotTribEst><pTotTribMun>2.70</pTotTribMun>', $xml);
+    }
 }

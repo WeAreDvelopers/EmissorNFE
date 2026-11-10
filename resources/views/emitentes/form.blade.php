@@ -9,6 +9,15 @@
     <div class="max-w-[1120px] mx-auto px-4 sm:px-8 py-8 space-y-6"
          x-data="{
             op: '{{ $op }}',
+            modo: @js(old('modo_tributos_aprox', $emitente->exists ? $emitente->modoTributosAprox() : '')),
+            cst: @js(old('pis_cofins_cst', $emitente->pis_cofins_cst ?: '00')),
+            trib: @js((string) old('trib_issqn', $emitente->trib_issqn ?: 1)),
+            codigos: @js(old('codigos', $emitente->listaCodigosMunicipais())),
+            addCodigo() { this.codigos.push({ codigo: '', descricao: '', servico: '' }); },
+            removerCodigo(i) { this.codigos.splice(i, 1); },
+            ded: @js(old('deducao_tipo', $emitente->deducao_tipo ?: 'none')),
+            get modos() { return ({ 1: ['percentual', 'monetario'], 3: ['simples', 'percentual', 'monetario'], 2: ['nenhum', 'percentual', 'monetario'] })[this.op] || []; },
+            get modoAtual() { return this.modos.includes(this.modo) ? this.modo : this.modos[0]; },
             cnpj: @js(old('cnpj', \App\Support\Documento::formatar($emitente->cnpj))),
             razao: @js(old('razao_social', $emitente->razao_social)),
             lendo: false, lido: false, erro: null, validade: null, vencido: false,
@@ -75,11 +84,11 @@
                     @endif
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label for="certificado" class="campo-rotulo">Arquivo do certificado</label>
+                            <label for="certificado" class="campo-rotulo {{ $emitente->exists ? '' : 'obrigatorio' }}">Arquivo do certificado</label>
                             <input id="certificado" name="certificado" type="file" accept=".pfx,.p12" x-ref="certificado" @change="lido = false; erro = null" class="campo-entrada py-2" @required($novo)>
                         </div>
                         <div>
-                            <label for="certificado_senha" class="campo-rotulo">Senha do certificado</label>
+                            <label for="certificado_senha" class="campo-rotulo {{ $emitente->exists ? '' : 'obrigatorio' }}">Senha do certificado</label>
                             <input id="certificado_senha" name="certificado_senha" type="password" autocomplete="off" x-ref="senha" @change="lido = false; erro = null" class="campo-entrada">
                             <p class="campo-ajuda">Fica guardada criptografada. Nunca aparece em tela nem em registro.</p>
                         </div>
@@ -97,7 +106,7 @@
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">2. Dados da empresa</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <x-campo nome="cnpj" rotulo="CNPJ" mono x-model="cnpj" ajuda="Vem do certificado quando possível." required />
+                        <x-campo nome="cnpj" obrigatorio rotulo="CNPJ" mono x-model="cnpj" ajuda="Vem do certificado quando possível." required />
                         <x-campo nome="razao_social" rotulo="Razão social" x-model="razao" required />
                         <x-campo nome="inscricao_municipal" rotulo="Inscrição municipal (se tiver)" :valor="$emitente->inscricao_municipal" placeholder="Opcional" />
 
@@ -138,12 +147,12 @@
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">3. Como a empresa é tributada</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <x-campo nome="op_simples_nacional" tipo="select" rotulo="Situação no Simples Nacional" x-model="op" ajuda="Não sabe? Pergunte ao seu contador ou veja no cartão CNPJ.">
+                        <x-campo nome="op_simples_nacional" obrigatorio tipo="select" rotulo="Situação no Simples Nacional" x-model="op" ajuda="Não sabe? Pergunte ao seu contador ou veja no cartão CNPJ.">
                             <option value="1">Não optante</option>
                             <option value="2">MEI</option>
                             <option value="3">ME/EPP optante</option>
                         </x-campo>
-                        <x-campo nome="regime_especial" tipo="select" rotulo="Regime especial de tributação">
+                        <x-campo nome="regime_especial" obrigatorio tipo="select" rotulo="Regime especial de tributação">
                             @foreach ([0 => 'Nenhum', 1 => 'Ato cooperado', 2 => 'Estimativa', 3 => 'Sociedade de profissionais', 4 => 'Cooperativa', 5 => 'MEI', 6 => 'ME/EPP', 9 => 'Outros'] as $v => $r)
                                 <option value="{{ $v }}" @selected(old('regime_especial', $emitente->regime_especial ?? 0) == $v)>{{ $r }}</option>
                             @endforeach
@@ -151,18 +160,102 @@
                     </div>
 
                     <div x-show="op == 3" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <x-campo nome="regime_apuracao_sn" tipo="select" rotulo="Regime de Apuração dos Tributos no Simples Nacional" ajuda="Atenção: a segunda opção é só para empresas que ultrapassaram o sublimite de receita do Simples (R$ 3,6 milhões por ano) e passaram a recolher o ISS fora do DAS.">
+                        <x-campo nome="regime_apuracao_sn" obrigatorio tipo="select" rotulo="Regime de Apuração dos Tributos no Simples Nacional" ajuda="Atenção: a segunda opção é só para empresas que ultrapassaram o sublimite de receita do Simples (R$ 3,6 milhões por ano) e passaram a recolher o ISS fora do DAS.">
                             @foreach ([1 => 'Regime de apuração dos tributos federais e municipal pelo Simples Nacional', 2 => 'Regime de apuração dos tributos federais pelo Simples Nacional e o ISSQN pela NFS-e conforme respectiva legislação municipal do tributo', 3 => 'Regime de apuração dos tributos federais e municipal pela NFS-e conforme respectivas legislações federal e municipal de cada tributo'] as $v => $r)
                                 <option value="{{ $v }}" @selected(old('regime_apuracao_sn', $emitente->regime_apuracao_sn ?? 1) == $v)>{{ $r }}</option>
                             @endforeach
                         </x-campo>
-                        <x-campo nome="aliquota_simples" rotulo="Alíquota do Simples (%)" tipo="number" step="0.01" :valor="$emitente->aliquota_simples" />
                     </div>
 
-                    <div x-show="op == 1" x-cloak class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <x-campo nome="tributos_aprox[federal]" rotulo="Tributos aprox. federal (%)" tipo="number" step="0.01" :valor="$trib['federal'] ?? null" />
-                        <x-campo nome="tributos_aprox[estadual]" rotulo="Estadual (%)" tipo="number" step="0.01" :valor="$trib['estadual'] ?? null" />
-                        <x-campo nome="tributos_aprox[municipal]" rotulo="Municipal (%)" tipo="number" step="0.01" :valor="$trib['municipal'] ?? null" />
+                    {{-- Tributação municipal (ISSQN) padrão: o que o Emissor Nacional pergunta na tela Tributação Municipal --}}
+                    <fieldset class="space-y-3 pt-2">
+                        <legend class="text-sm font-semibold">Tributação municipal (ISSQN)</legend>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <x-campo nome="trib_issqn" obrigatorio tipo="select" rotulo="O serviço é caso de imunidade, exportação ou não incidência do ISSQN?" x-model="trib" ajuda="Quase sempre é operação tributável. Exportação de serviço ainda não está disponível (exige tomador no exterior).">
+                                @foreach (\App\Support\TabelasDps::TRIBUTACAO_ISSQN as $v => $r)
+                                    <option value="{{ $v }}" @selected((string) old('trib_issqn', $emitente->trib_issqn ?: 1) === (string) $v)>{{ $v === 1 ? 'Não: operação tributável' : 'Sim: '.mb_strtolower($r) }}</option>
+                                @endforeach
+                            </x-campo>
+                            <div x-show="trib == '2'" x-cloak>
+                                <x-campo nome="tp_imunidade" obrigatorio tipo="select" rotulo="Tipo de imunidade">
+                                    <option value="">Escolha…</option>
+                                    @foreach (\App\Support\TabelasDps::IMUNIDADES as $v => $r)
+                                        <option value="{{ $v }}" @selected((string) old('tp_imunidade', $emitente->tp_imunidade) === (string) $v)>{{ \Illuminate\Support\Str::limit($r, 80) }}</option>
+                                    @endforeach
+                                </x-campo>
+                            </div>
+                            <div x-show="trib == '1'">
+                                <x-campo nome="retencao_issqn" obrigatorio tipo="select" rotulo="Há retenção do ISSQN pelo tomador?" ajuda="Com retenção, o cliente precisa ter o endereço completo no cadastro. Também dá para decidir em cada nota.">
+                                    <option value="1" @selected((int) old('retencao_issqn', $emitente->retencao_issqn ?: 1) === 1)>Não</option>
+                                    <option value="2" @selected((int) old('retencao_issqn', $emitente->retencao_issqn ?: 1) === 2)>Sim, o tomador retém o ISSQN</option>
+                                </x-campo>
+                            </div>
+                            <input type="hidden" name="retencao_issqn" value="1" :disabled="trib == '1'">
+                            <div x-show="trib == '1' && (op == 1 || op == 3)" x-cloak class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <x-campo nome="deducao_tipo" tipo="select" rotulo="Será aplicado algum tipo de dedução/redução à base de cálculo do ISSQN?" x-model="ded" ajuda="Só vale para não optante ou ME/EPP com o ISSQN apurado pela NFS-e, e a prefeitura precisa permitir para o serviço.">
+                                    <option value="none">Não</option>
+                                    <option value="percentual" @selected(old('deducao_tipo', $emitente->deducao_tipo) === 'percentual')>Sim, por percentual (%)</option>
+                                    <option value="valor" @selected(old('deducao_tipo', $emitente->deducao_tipo) === 'valor')>Sim, por valor (R$)</option>
+                                </x-campo>
+                                <div x-show="ded != 'none'" x-cloak>
+                                    <x-campo nome="deducao_valor" obrigatorio rotulo="Valor da dedução/redução" tipo="number" step="0.01" :valor="$emitente->deducao_valor" />
+                                </div>
+                            </div>
+                            <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                <x-campo nome="municipio_prestacao" class="sm:col-span-3" rotulo="Município da prestação, se for sempre outro" :valor="$emitente->codigo_municipio_prestacao ? strtok((string) \App\Support\MunicipiosIbge::rotulo($emitente->codigo_municipio_prestacao), '/') : null" ajuda="Em branco, a prestação é no município da empresa." />
+                                <x-campo nome="uf_prestacao" rotulo="UF" maxlength="2" mono :valor="$emitente->codigo_municipio_prestacao ? substr((string) strrchr((string) \App\Support\MunicipiosIbge::rotulo($emitente->codigo_municipio_prestacao), '/'), 1) : null" />
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-chao px-3.5 py-3 text-[13px] leading-relaxed text-ink-700">
+                            Estes campos o próprio Emissor Nacional bloqueia, por isso não são enviados: exigibilidade do ISSQN suspensa, benefício municipal, código indicador da operação e IBS/CBS.
+                        </div>
+                    </fieldset>
+
+                    {{-- Valor aproximado dos tributos: as formas que o Emissor Nacional oferece (as que a SEFIN aceita para o regime) --}}
+                    <fieldset class="space-y-2 pt-2">
+                        <legend class="text-sm font-semibold">Valor aproximado dos tributos</legend>
+                        @foreach (\App\Models\Emitente::MODOS_TRIBUTOS_APROX as $valor => $rotulo)
+                            <label class="flex items-start gap-2.5 text-sm cursor-pointer" x-show="modos.includes('{{ $valor }}')" x-cloak>
+                                <input type="radio" name="modo_tributos_aprox" value="{{ $valor }}" :checked="modoAtual === '{{ $valor }}'" @change="modo = '{{ $valor }}'" class="mt-0.5 text-brand-600 focus:ring-brand-600">
+                                <span>{{ $rotulo }}</span>
+                            </label>
+                        @endforeach
+                        @error('modo_tributos_aprox')<p class="text-[13px] text-warn-800" role="alert">{{ $message }}</p>@enderror
+                    </fieldset>
+
+                    <div x-show="modoAtual === 'simples'" x-cloak class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <x-campo nome="aliquota_simples" obrigatorio rotulo="Alíquota do Simples Nacional (%)" tipo="number" step="0.01" :valor="$emitente->aliquota_simples" />
+                    </div>
+                    <div x-show="modoAtual === 'percentual' || modoAtual === 'monetario'" x-cloak class="space-y-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <x-campo nome="tributos_aprox[federal]" obrigatorio rotulo="Federal (%)" tipo="number" step="0.01" :valor="$trib['federal'] ?? null" />
+                            <x-campo nome="tributos_aprox[estadual]" obrigatorio rotulo="Estadual (%)" tipo="number" step="0.01" :valor="$trib['estadual'] ?? null" />
+                            <x-campo nome="tributos_aprox[municipal]" obrigatorio rotulo="Municipal (%)" tipo="number" step="0.01" :valor="$trib['municipal'] ?? null" />
+                        </div>
+                        <p class="campo-ajuda" x-show="modoAtual === 'monetario'">Os valores em R$ são preenchidos em cada nota. Nas notas importadas por planilha o valor é calculado com estes percentuais.</p>
+                    </div>
+
+                    {{-- Tributação federal padrão (só não optante) --}}
+                    <div x-show="op == 1" x-cloak class="space-y-3 pt-2">
+                        <h3 class="text-sm font-semibold">Tributação federal</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <x-campo nome="pis_cofins_cst" obrigatorio tipo="select" rotulo="Situação tributária do PIS/COFINS" x-model="cst">
+                                @foreach (\App\Support\TabelasDps::CST_PIS_COFINS as $v => $r)
+                                    <option value="{{ $v }}" @selected(old('pis_cofins_cst', $emitente->pis_cofins_cst ?: '00') == $v)>{{ $v }} - {{ $r }}</option>
+                                @endforeach
+                            </x-campo>
+                            <x-campo nome="tp_ret_pis_cofins" obrigatorio tipo="select" rotulo="Tipo de retenção do PIS/COFINS/CSLL" ajuda="Os tipos com retenção de CSLL pedem o valor em cada nota (nota completa personalizada).">
+                                @foreach ([0, 2] as $v)
+                                    <option value="{{ $v }}" @selected(old('tp_ret_pis_cofins', $emitente->tp_ret_pis_cofins ?? 0) == $v)>{{ $v }} - {{ \App\Support\TabelasDps::RETENCAO_PIS_COFINS[$v] }}</option>
+                                @endforeach
+                            </x-campo>
+                        </div>
+                        <div x-show="cst !== '00'" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <x-campo nome="aliquota_pis" obrigatorio rotulo="Alíquota do PIS (%)" tipo="number" step="0.01" :valor="$emitente->aliquota_pis" />
+                            <x-campo nome="aliquota_cofins" obrigatorio rotulo="Alíquota da COFINS (%)" tipo="number" step="0.01" :valor="$emitente->aliquota_cofins" />
+                            <p class="sm:col-span-2 campo-ajuda">A base de cálculo é o valor do serviço de cada nota.</p>
+                        </div>
+                        <p class="text-[13px] text-ink-600">IRRF, contribuições sociais retidas e contribuição previdenciária retida ficam sem preenchimento (se precisar, informe na nota completa personalizada).</p>
                     </div>
                 </section>
 
@@ -170,8 +263,33 @@
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <x-busca-servico class="sm:col-span-2" nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
-                        <x-campo nome="codigo_tributacao_municipal" rotulo="Código Complementar Municipal (obrigatório no portal, exceto MEI) *" :valor="$emitente->codigo_tributacao_municipal" maxlength="3" mono x-bind:required="op != 2" x-bind:disabled="op == 2" ajuda="3 dígitos (cTribMun), o final do código que o portal nacional mostra em “Código Complementar Municipal” (ex.: 01.07.01.001 → 001). Confirme com a contabilidade. MEI não usa." />
-                        <x-campo nome="codigo_nbs_padrao" rotulo="NBS padrão (opcional)" :valor="$emitente->codigo_nbs_padrao" maxlength="9" mono ajuda="9 dígitos. Usado quando a planilha não traz NBS. Confirme com a contabilidade." />
+                        <x-campo nome="codigo_tributacao_municipal" obrigatorio list="lista-codigos-municipais" autocomplete="off" rotulo="Código Complementar Municipal (obrigatório no portal, exceto MEI)" :valor="$emitente->codigo_tributacao_municipal" maxlength="3" mono x-bind:required="op != 2" x-bind:disabled="op == 2" ajuda="3 dígitos (cTribMun), o final do código que o portal nacional mostra em “Código Complementar Municipal” (ex.: 01.07.01.001 → 001). Confirme com a contabilidade. MEI não usa." />
+                        <div class="sm:col-span-2 space-y-3 rounded-xl border border-gray-200 p-4">
+                            <div>
+                                <h3 class="text-sm font-semibold">Códigos complementares municipais da prefeitura</h3>
+                                <p class="campo-ajuda">Cada prefeitura tem a sua lista. Cadastre aqui os códigos que esta empresa usa (copie do Emissor Nacional, no campo "Código Complementar Municipal"). Eles aparecem como opções no código padrão acima e na nota completa personalizada.</p>
+                            </div>
+                            <datalist id="lista-codigos-municipais">
+                                <template x-for="c in codigos" :key="c.codigo"><option :value="c.codigo" x-text="c.descricao"></option></template>
+                            </datalist>
+                            <template x-for="(c, i) in codigos" :key="i">
+                                <div class="grid grid-cols-12 gap-2 items-start">
+                                    <input :name="`codigos[${i}][codigo]`" x-model="c.codigo" maxlength="3" inputmode="numeric" placeholder="001" aria-label="Código" class="campo-entrada font-mono col-span-3 sm:col-span-2 !mt-0">
+                                    <input :name="`codigos[${i}][descricao]`" x-model="c.descricao" placeholder="Descrição, como na prefeitura" aria-label="Descrição" class="campo-entrada col-span-9 sm:col-span-5 !mt-0">
+                                    <input :name="`codigos[${i}][servico]`" x-model="c.servico" maxlength="6" inputmode="numeric" placeholder="Serviço (opcional)" aria-label="Código de serviço a que pertence" class="campo-entrada font-mono col-span-9 sm:col-span-4 !mt-0">
+                                    <button type="button" @click="removerCodigo(i)" class="btn-excluir col-span-3 sm:col-span-1 !px-2" aria-label="Remover este código" title="Remover">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
+                                    </button>
+                                </div>
+                            </template>
+                            <p class="text-[13px] text-ink-600" x-show="!codigos.length">Nenhum código cadastrado ainda.</p>
+                            @php $erroCodigos = collect($errors->get('codigos*'))->flatten()->first(); @endphp
+                            @if ($erroCodigos)<p class="erro-campo" role="alert">{{ $erroCodigos }}</p>@endif
+                            <button type="button" class="btn btn-sm" @click="addCodigo()">Adicionar código</button>
+                        </div>
+                        <x-busca-servico class="sm:col-span-2" nome="codigo_nbs_padrao" rotulo="NBS padrão (opcional)" :valor="old('codigo_nbs_padrao', $emitente->codigo_nbs_padrao)"
+                                         :url="route('nbs.buscar')" :tam="9" vazio="Selecione o item da NBS (código ou nome do serviço)" nenhum="Nenhum item da NBS encontrado. Tente outra palavra."
+                                         ajuda="Usado quando a planilha não traz NBS. Confirme com a contabilidade." />
                         <div class="sm:col-span-2">
                             <label for="descricao_servico_padrao" class="campo-rotulo">Descrição padrão do serviço</label>
                             <textarea id="descricao_servico_padrao" name="descricao_servico_padrao" rows="2" class="campo-entrada" placeholder="Ex.: Manutenção de programas de computação.">{{ old('descricao_servico_padrao', $emitente->descricao_servico_padrao) }}</textarea>
@@ -185,13 +303,19 @@
                                 <span><b>Enviar a NFS-e ao cliente por e-mail assim que for emitida</b><span class="block text-[13px] text-ink-600">PDF e XML vão para os e-mails do cadastro do cliente. Só funciona em produção: em modo teste o envio é sempre manual.</span></span>
                             </label>
                         </div>
-                        <x-campo nome="serie_dps" rotulo="Série" :valor="$emitente->serie_dps" maxlength="5" mono ajuda="Já vem pronta (00001). Só mude se o seu contador pedir." required />
-                        <x-campo nome="ambiente" tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera depois de emitir uma nota em teste.">
+                        <x-campo nome="serie_dps" obrigatorio rotulo="Série" :valor="$emitente->serie_dps" maxlength="5" mono ajuda="Já vem pronta (00001). Só mude se o seu contador pedir." required />
+                        <x-campo nome="ambiente" obrigatorio tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera depois de emitir uma nota em teste.">
                             <option value="2" @selected(old('ambiente', $emitente->ambiente ?? 2) == 2)>Teste (as notas não têm valor fiscal)</option>
                             <option value="1" @selected(old('ambiente', $emitente->ambiente ?? 2) == 1)>Produção (notas com valor fiscal)</option>
                         </x-campo>
                     </div>
                 </section>
+
+                <details class="card p-5 sm:p-6">
+                    <summary class="cursor-pointer text-lg font-semibold">Ver todos os campos que vão na nota</summary>
+                    <p class="text-[13px] text-ink-600 mt-1 mb-4">Os valores abaixo são os do cadastro salvo; depois de salvar, refletem as mudanças acima.</p>
+                    <x-resumo-fiscal :grupos="$emitente->camposFiscais()" :legenda="false" />
+                </details>
 
                 <div class="flex items-center gap-4">
                     <button class="btn btn-primary btn-lg">Salvar{{ $semEmpresaAinda ? ' e continuar' : '' }}</button>

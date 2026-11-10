@@ -17,7 +17,7 @@ class NotaFiscal extends Model
         'conta_id', 'emitente_id', 'importacao_id', 'origem', 'linha_planilha', 'status',
         'ciclo_credito', 'serie_dps', 'numero_dps',
         'tomador_id', 'duplicidade_de_id', 'duplicidade_aprovada', 'tomador_documento', 'tomador_nome', 'tomador_email', 'sem_tomador',
-        'codigo_servico', 'codigo_nbs', 'descricao', 'valor', 'data_competencia',
+        'codigo_servico', 'codigo_nbs', 'descricao', 'parametros_dps', 'valor', 'data_competencia',
         'chave_acesso', 'numero_nfse', 'xml_dps', 'xml_nfse', 'erros',
         'tentativas', 'emitida_em', 'conciliada_em',
     ];
@@ -27,6 +27,7 @@ class NotaFiscal extends Model
         'valor'            => 'decimal:2',
         'data_competencia' => 'date',
         'erros'            => 'array',
+        'parametros_dps'   => 'array',
         'emitida_em'       => 'datetime',
         'cancelada_em'     => 'datetime',
         'conciliada_em'    => 'datetime',

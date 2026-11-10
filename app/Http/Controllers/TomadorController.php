@@ -6,8 +6,11 @@ use App\Services\Tomadores\ImportadorClientes;
 use App\Support\Ordenacao;
 use App\Models\Tomador;
 use App\Models\TomadorAlteracao;
+use App\Enums\StatusNota;
+use App\Support\Documento;
 use App\Support\MunicipiosIbge;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 /** Cadastro de clientes (tomadores) da conta: consultar, editar e ver o histórico das alterações. */
 class TomadorController extends Controller
@@ -19,7 +22,8 @@ class TomadorController extends Controller
         $busca = trim((string) $request->query('q', ''));
         $soPendentes = $request->boolean('pendentes');
 
-        $consulta = Tomador::query()->orderBy('nome');
+        $consulta = Tomador::query()->orderBy('nome')
+            ->withCount(['notas as notas_emitidas' => fn ($q) => $q->whereIn('status', [StatusNota::Emitida->value, StatusNota::Cancelada->value])]);
         if ($busca !== '') {
             $digitos = preg_replace('/\D/', '', $busca);
             $consulta->where(function ($q) use ($busca, $digitos) {
@@ -80,21 +84,52 @@ class TomadorController extends Controller
         return redirect()->route('tomadores.index')->with('importacao_clientes', $r + ['arquivo' => $arquivo->getClientOriginalName()]);
     }
 
-    public function editar(Tomador $tomador)
-    {
-        $this->authorize('consultar');
-        $tomador->resolverMunicipio();
-
-        return view('tomadores.editar', [
-            'tomador'    => $tomador,
-            'alteracoes' => $tomador->alteracoes()->with('user')->limit(30)->get(),
-        ]);
-    }
-
-    public function update(Request $request, Tomador $tomador)
+    /** Tela de cadastro de um cliente novo. */
+    public function criar()
     {
         $this->authorize('emitir');
 
+        return view('tomadores.criar', ['tomador' => new Tomador]);
+    }
+
+    public function store(Request $request)
+    {
+        $this->authorize('emitir');
+
+        $documento = preg_replace('/\D/', '', (string) $request->input('documento'));
+        $request->merge(['documento' => $documento]);
+        $request->validate([
+            'documento' => ['required', 'regex:/^(\d{11}|\d{14})$/', function ($campo, $valor, $falhar) {
+                if (! Documento::valido($valor)) {
+                    $falhar('CPF ou CNPJ inválido: confira os números (a prefeitura recusa dígito verificador errado).');
+                }
+            }],
+        ], [
+            'documento.required' => 'Informe o CPF ou CNPJ do cliente.',
+            'documento.regex'    => 'O CPF tem 11 números e o CNPJ tem 14.',
+        ]);
+
+        if ($existente = Tomador::where('documento', $documento)->first()) {
+            return back()->withInput()->withErrors(['documento' => "Este documento já está cadastrado como “{$existente->nome}”. Abra o cadastro dele para alterar."]);
+        }
+
+        $dados = $this->camposDoFormulario($request);
+        $dados['codigo_municipio'] = MunicipiosIbge::codigo($dados['municipio'] ?? null, $dados['uf'] ?? null);
+
+        $tomador = new Tomador($dados + ['documento' => $documento]);
+        $tomador->pendente = ! $tomador->enderecoCompleto();
+        $tomador->save();
+
+        \App\Models\Auditoria::registrar('cliente_cadastrado', "Cliente {$tomador->nome} cadastrado pela tela.", ['tomador' => $tomador->id]);
+
+        $aviso = $tomador->pendente ? ' O endereço está incompleto: as notas saem sem o endereço dele até você completar.' : '';
+
+        return redirect()->route('tomadores.index')->with('ok', "Cliente “{$tomador->nome}” cadastrado.".$aviso);
+    }
+
+    /** Valida e limpa os campos do formulário de cliente (cadastro e edição): texto aparado, CEP só números, UF maiúscula, e-mails em lista. */
+    private function camposDoFormulario(Request $request): array
+    {
         $dados = $request->validate([
             'nome'          => ['required', 'string', 'max:300'],
             'nome_fantasia' => ['nullable', 'string', 'max:300'],
@@ -116,7 +151,7 @@ class TomadorController extends Controller
             ->map(fn ($e) => strtolower(trim($e)))->unique()->values();
         $invalidos = $emails->reject(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL));
         if ($invalidos->isNotEmpty()) {
-            return back()->withInput()->withErrors(['emails' => 'E-mail inválido: '.$invalidos->implode(', ').'.']);
+            throw ValidationException::withMessages(['emails' => 'E-mail inválido: '.$invalidos->implode(', ').'.']);
         }
 
         $novos = collect($dados)->map(fn ($v) => is_string($v) ? (trim($v) === '' ? null : trim($v)) : $v)->all();
@@ -124,6 +159,26 @@ class TomadorController extends Controller
         $novos['uf'] = isset($novos['uf']) ? strtoupper($novos['uf']) : null;
         $novos['cep'] = isset($novos['cep']) ? (preg_replace('/\D/', '', $novos['cep']) ?: null) : null;
         $novos['emails'] = $emails->all() ?: null;
+
+        return $novos;
+    }
+
+    public function editar(Tomador $tomador)
+    {
+        $this->authorize('consultar');
+        $tomador->resolverMunicipio();
+
+        return view('tomadores.editar', [
+            'tomador'    => $tomador,
+            'alteracoes' => $tomador->alteracoes()->with('user')->limit(30)->get(),
+        ]);
+    }
+
+    public function update(Request $request, Tomador $tomador)
+    {
+        $this->authorize('emitir');
+
+        $novos = $this->camposDoFormulario($request);
 
         // Mudou município ou UF: procura o código IBGE de novo
         if (($novos['municipio'] ?? null) !== $tomador->municipio || ($novos['uf'] ?? null) !== $tomador->uf) {
@@ -150,5 +205,25 @@ class TomadorController extends Controller
         }
 
         return redirect()->route('tomadores.index')->with('ok', "Cliente “{$tomador->nome}” atualizado.");
+    }
+
+    /** Exclui o cadastro. Só quando não há nota emitida (nem cancelada depois) para o cliente; notas em andamento ou com erro ficam com o nome e o documento que já guardam. */
+    public function excluir(Request $request, Tomador $tomador)
+    {
+        $this->authorize('emitir');
+
+        $emitidas = $tomador->notasEmitidas();
+        if ($emitidas > 0) {
+            $msg = 'Não dá para excluir “'.$tomador->nome.'”: há '.$emitidas.($emitidas === 1 ? ' nota emitida' : ' notas emitidas').' para este cliente.';
+
+            return $request->expectsJson() ? response()->json(['message' => $msg], 422) : back()->withErrors(['cliente' => $msg]);
+        }
+
+        \App\Models\Auditoria::registrar('cliente_excluido', "Cliente {$tomador->nome} excluído.", ['documento' => $tomador->documento]);
+        $tomador->delete();
+
+        $msg = "Cliente “{$tomador->nome}” excluído.";
+
+        return $request->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : redirect()->route('tomadores.index')->with('ok', $msg);
     }
 }

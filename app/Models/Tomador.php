@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\StatusNota;
 use App\Models\Concerns\PertenceAConta;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -34,6 +35,17 @@ class Tomador extends Model
     ];
 
     protected $casts = ['emails' => 'array', 'pendente' => 'boolean'];
+
+    public function notas(): HasMany
+    {
+        return $this->hasMany(NotaFiscal::class);
+    }
+
+    /** Notas já emitidas (inclui as depois canceladas) deste cliente: com elas o cadastro não pode ser excluído. */
+    public function notasEmitidas(): int
+    {
+        return $this->notas()->whereIn('status', [StatusNota::Emitida->value, StatusNota::Cancelada->value])->count();
+    }
 
     public function alteracoes(): HasMany
     {

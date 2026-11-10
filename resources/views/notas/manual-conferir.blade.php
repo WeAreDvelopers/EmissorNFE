@@ -13,8 +13,9 @@
         <form method="POST" action="{{ route('notas.manual.store') }}" class="max-w-3xl space-y-5" data-carregando="Enviando a nota…"
               x-data="{ confirmo: false, outra: false, duplicada: @js($temDuplicidade) }">
             @csrf
-            @foreach ($campos as $nome => $valor)
-                <input type="hidden" name="{{ $nome }}" value="{{ $valor }}">
+            {{-- os campos aninhados (ajustes) voltam como ajustes[campo] --}}
+            @foreach (\Illuminate\Support\Arr::dot($campos) as $nome => $valor)
+                <input type="hidden" name="{{ preg_replace('/^([^.]+)\.(.+)$/', '$1[$2]', $nome) }}" value="{{ $valor }}">
             @endforeach
 
             @if ($emitente->ehHomologacao())
@@ -61,6 +62,21 @@
                             <div class="text-[13px] text-ink-600">NBS</div>
                             <div class="font-mono">{{ $dados['codigo_nbs'] }}</div>
                         </div>
+                    @endif
+                </div>
+
+                <div class="p-5 sm:p-6">
+                    <div class="text-[13px] text-ink-600">Dados fiscais</div>
+                    @if ($ajustes)
+                        <div class="font-medium">Diferentes do padrão da empresa, só nesta nota:</div>
+                        <ul class="mt-1.5 space-y-1 text-sm">
+                            @foreach ($ajustes as [$rotulo, $de, $para])
+                                <li><span class="text-ink-700">{{ $rotulo }}:</span> <span class="text-ink-600 line-through">{{ $de }}</span> → <b>{{ $para }}</b></li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <div class="font-medium">Padrões da empresa</div>
+                        <div class="text-[13px] text-ink-600">Município, regime, tributos aproximados e código municipal como estão no cadastro da empresa.</div>
                     @endif
                 </div>
 

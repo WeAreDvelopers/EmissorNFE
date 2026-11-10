@@ -36,7 +36,13 @@ class DpsBuilder
 
     public function montar(NotaFiscal $nota): string
     {
-        $p = $nota->emitente->paraDps();   // cada CNPJ da conta tem seu regime, município e série
+        // Cada CNPJ da conta tem seu regime, município e série. Na emissão manual com "todos os campos"
+        // a nota pode trazer ajustes só dela (parametros_dps), que valem no lugar dos da empresa.
+        $padraoEmpresa = $nota->emitente->paraDps();
+        $ajustes = array_replace($this->padroesDaEmpresa($padraoEmpresa), $nota->parametros_dps ?? []);
+        $p = array_replace($padraoEmpresa, array_intersect_key($ajustes, array_flip([
+            'codigo_tributacao_municipal', 'regime_especial', 'aliquota_simples', 'tributos_aprox',
+        ])));
 
         $doc = new DOMDocument('1.0', 'UTF-8');
         $doc->preserveWhiteSpace = false;
@@ -90,7 +96,7 @@ class DpsBuilder
         // Serviço
         $serv = $this->el($doc, $inf, 'serv');
         $loc = $this->el($doc, $serv, 'locPrest');
-        $this->el($doc, $loc, 'cLocPrestacao', $p['codigo_municipio']);
+        $this->el($doc, $loc, 'cLocPrestacao', $ajustes['cod_municipio_prestacao'] ?? $p['codigo_municipio']);
         $cServ = $this->el($doc, $serv, 'cServ');
         $this->el($doc, $cServ, 'cTribNac', $nota->codigo_servico);
         // cTribMun (3 dígitos): complementar do município, proibido para MEI (E0313)
@@ -108,14 +114,26 @@ class DpsBuilder
         $vsp = $this->el($doc, $valores, 'vServPrest');
         $this->el($doc, $vsp, 'vServ', number_format((float) $nota->valor, 2, '.', ''));
 
+        // Dedução/redução da base de cálculo do ISSQN (só emissão manual com ajuste): percentual OU valor
+        if (($ajustes['deducao']['tipo'] ?? 'none') !== 'none') {
+            $aj = $this->el($doc, $valores, 'vAjusteBC');
+            $this->el($doc, $aj, $ajustes['deducao']['tipo'] === 'percentual' ? 'pAjusteBCISSQN' : 'vAjusteBCISSQN', number_format((float) $ajustes['deducao']['valor'], 2, '.', ''));
+        }
+
         $trib = $this->el($doc, $valores, 'trib');
         $tribMun = $this->el($doc, $trib, 'tribMun');
-        $this->el($doc, $tribMun, 'tribISSQN', '1');   // 1 = operação tributável
-        $this->el($doc, $tribMun, 'tpRetISSQN', '1');  // 1 = não retido
-        // pAliq NÃO é enviado: com município conveniado ativo e sem retenção,
-        // o Anexo I proíbe informar alíquota (E0617 não optante, E0625 ME/EPP).
+        $tribIssqn = (int) ($ajustes['trib_issqn'] ?? 1);   // 1 tributável (padrão), 2 imunidade, 4 não incidência
+        $this->el($doc, $tribMun, 'tribISSQN', (string) $tribIssqn);
+        if ($tribIssqn === 2) {
+            $this->el($doc, $tribMun, 'tpImunidade', (string) $ajustes['tp_imunidade']);
+        }
+        $retido = (int) ($ajustes['retencao_issqn'] ?? 1) === 2;   // 2 = retido pelo tomador (só emissão manual com ajuste)
+        $this->el($doc, $tribMun, 'tpRetISSQN', $retido ? '2' : '1');
+        // pAliq NÃO é enviado: com município conveniado ativo, o Anexo I proíbe informar alíquota
+        // (E0617 não optante, E0625 ME/EPP), com ou sem retenção.
 
-        $this->totaisAproximados($doc, $trib, $p);
+        $this->tributacaoFederal($doc, $trib, $p, $ajustes, (float) $nota->valor);
+        $this->totaisAproximados($doc, $trib, $p, $ajustes, (float) $nota->valor);
 
         // IBSCBS: opcional no XSD 1.01. Se informado, exige cNBS (E0322).
         // Incluir quando o município/cliente exigir (fase 3).
@@ -124,12 +142,55 @@ class DpsBuilder
     }
 
     /**
-     * Total aproximado de tributos: o campo permitido muda com o regime (Anexo I):
-     * - MEI (2):          indTotTrib = 0                      (E0710 proíbe pTotTribSN)
-     * - ME/EPP (3):       pTotTribSN = alíquota do Simples    (E0712 proíbe indTotTrib)
-     * - Não optante (1):  pTotTrib fed/est/mun                (E0713 proíbe indTotTrib e pTotTribSN)
+     * Tributação federal (só não optante; MEI não pode, E0676, e o optante do Simples segue sem o grupo).
+     * Vale o padrão da empresa, como no Emissor Nacional: situação do PIS/COFINS (padrão "00 - Nenhum") e tipo de retenção
+     * (padrão "0 - não retidos"); IRRF, contribuição social e previdenciária retidas ficam sem preenchimento.
+     * Com situação diferente de 00 a base é o valor do serviço e as alíquotas vêm da empresa.
+     * Na nota completa personalizada, a nota pode trazer o que mudar (situação, base, alíquotas, retenção e valores retidos).
      */
-    private function totaisAproximados(DOMDocument $doc, DOMElement $trib, array $p): void
+    private function tributacaoFederal(DOMDocument $doc, DOMElement $trib, array $p, array $ajustes = [], float $valorServico = 0.0): void
+    {
+        if ((int) $p['op_simples_nacional'] !== 1) {
+            return;
+        }
+
+        $dec = fn ($v) => number_format((float) $v, 2, '.', '');
+        $cst = (string) ($p['pis_cofins_cst'] ?? '00');
+        $pc = $ajustes['pis_cofins'] ?? ['cst' => $cst, 'tp_ret' => (int) ($p['tp_ret_pis_cofins'] ?? 0)];
+        if (! isset($ajustes['pis_cofins']) && $cst !== '00') {
+            if ($p['aliquota_pis'] === null || $p['aliquota_cofins'] === null) {
+                throw new \RuntimeException('Alíquotas de PIS e COFINS não configuradas no emitente (situação tributária diferente de 00).');
+            }
+            $pc += ['bc' => $valorServico, 'aliq_pis' => (float) $p['aliquota_pis'], 'aliq_cofins' => (float) $p['aliquota_cofins']];
+        }
+
+        $fed = $this->el($doc, $trib, 'tribFed');
+        $pis = $this->el($doc, $fed, 'piscofins');
+        $this->el($doc, $pis, 'CST', (string) $pc['cst']);
+        if (isset($pc['bc'])) {   // XSD: CST, base, alíquotas, valores e, por último, o tipo de retenção
+            $this->el($doc, $pis, 'vBCPisCofins', $dec($pc['bc']));
+            $this->el($doc, $pis, 'pAliqPis', $dec($pc['aliq_pis']));
+            $this->el($doc, $pis, 'pAliqCofins', $dec($pc['aliq_cofins']));
+            $this->el($doc, $pis, 'vPis', $dec(round((float) $pc['bc'] * (float) $pc['aliq_pis'] / 100, 2)));        // E0694: valor = base × alíquota
+            $this->el($doc, $pis, 'vCofins', $dec(round((float) $pc['bc'] * (float) $pc['aliq_cofins'] / 100, 2)));  // E0696
+        }
+        $this->el($doc, $pis, 'tpRetPisCofins', (string) $pc['tp_ret']);
+
+        foreach (['ret_cp' => 'vRetCP', 'ret_irrf' => 'vRetIRRF', 'ret_csll' => 'vRetCSLL'] as $chave => $tag) {
+            if (isset($ajustes[$chave])) {
+                $this->el($doc, $fed, $tag, $dec($ajustes[$chave]));
+            }
+        }
+    }
+
+    /**
+     * Total aproximado de tributos, na forma escolhida (empresa ou nota). O que a SEFIN aceita muda com o regime:
+     * - MEI (2):          indTotTrib = 0, ou percentuais/valores  (E0710 proíbe pTotTribSN)
+     * - ME/EPP (3):       pTotTribSN, percentuais ou valores      (E0712 proíbe indTotTrib)
+     * - Não optante (1):  percentuais ou valores                  (E0713 proíbe indTotTrib e pTotTribSN)
+     * Valores em R$ ("preencher em cada NFS-e"): os da nota, ou o percentual da empresa aplicado ao valor do serviço.
+     */
+    private function totaisAproximados(DOMDocument $doc, DOMElement $trib, array $p, array $ajustes = [], float $valorServico = 0.0): void
     {
         $totTrib = $this->el($doc, $trib, 'totTrib');
         $fmt = function ($v) {
@@ -140,16 +201,59 @@ class DpsBuilder
             return number_format((float) $v, 2, '.', '');
         };
 
-        match ((int) $p['op_simples_nacional']) {
-            2 => $this->el($doc, $totTrib, 'indTotTrib', '0'),
-            3 => $this->el($doc, $totTrib, 'pTotTribSN', $fmt($p['aliquota_simples'])),
-            default => (function () use ($doc, $totTrib, $p, $fmt) {
+        $modo = $ajustes['modo_tributos_aprox'] ?? $p['modo_tributos_aprox'] ?? match ((int) $p['op_simples_nacional']) {
+            2 => 'nenhum', 3 => 'simples', default => 'percentual',
+        };
+
+        switch ($modo) {
+            case 'nenhum':
+                $this->el($doc, $totTrib, 'indTotTrib', '0');
+                break;
+            case 'simples':
+                $this->el($doc, $totTrib, 'pTotTribSN', $fmt($p['aliquota_simples']));
+                break;
+            case 'monetario':
+                $v = $ajustes['valores_tributos'] ?? array_map(
+                    fn ($pct) => $pct === null || $pct === '' ? $fmt(null) : round($valorServico * (float) $pct / 100, 2),
+                    $p['tributos_aprox'] + ['federal' => null, 'estadual' => null, 'municipal' => null],
+                );
+                $mon = $this->el($doc, $totTrib, 'vTotTrib');
+                $this->el($doc, $mon, 'vTotTribFed', $fmt($v['federal']));
+                $this->el($doc, $mon, 'vTotTribEst', $fmt($v['estadual']));
+                $this->el($doc, $mon, 'vTotTribMun', $fmt($v['municipal']));
+                break;
+            default:   // percentual
                 $pct = $this->el($doc, $totTrib, 'pTotTrib');
                 $this->el($doc, $pct, 'pTotTribFed', $fmt($p['tributos_aprox']['federal']));
                 $this->el($doc, $pct, 'pTotTribEst', $fmt($p['tributos_aprox']['estadual']));
                 $this->el($doc, $pct, 'pTotTribMun', $fmt($p['tributos_aprox']['municipal']));
-            })(),
-        };
+        }
+    }
+
+    /**
+     * Tributação municipal padrão da empresa, no mesmo formato dos ajustes da nota (a nota sobrepõe o que mudar).
+     * Só entra o que foge do padrão do sistema, para a DPS comum continuar igual.
+     */
+    private function padroesDaEmpresa(array $p): array
+    {
+        $a = [];
+        if ((int) ($p['trib_issqn'] ?? 1) !== 1) {
+            $a['trib_issqn'] = (int) $p['trib_issqn'];
+            if (! empty($p['tp_imunidade'])) {
+                $a['tp_imunidade'] = (int) $p['tp_imunidade'];
+            }
+        }
+        if ((int) ($p['retencao_issqn'] ?? 1) === 2) {
+            $a['retencao_issqn'] = 2;
+        }
+        if (! empty($p['deducao_tipo']) && $p['deducao_valor'] !== null) {
+            $a['deducao'] = ['tipo' => $p['deducao_tipo'], 'valor' => (float) $p['deducao_valor']];
+        }
+        if (! empty($p['codigo_municipio_prestacao'])) {
+            $a['cod_municipio_prestacao'] = $p['codigo_municipio_prestacao'];
+        }
+
+        return $a;
     }
 
     /** Endereço do cadastro do cliente, só quando está completo (município IBGE, CEP, logradouro, número e bairro). */
