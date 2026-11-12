@@ -34,6 +34,9 @@ class SaasServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // @cobranca ... @endcobranca: só aparece quando a empresa ativa paga por nota (cobrança ligada)
+        \Illuminate\Support\Facades\Blade::if('cobranca', fn () => ! app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca());
+
         // Cada permissão da matriz vira um Gate; admin da plataforma pode tudo
         Gate::before(fn (User $user) => $user->admin_plataforma ? true : null);
         foreach (Papel::permissoes() as $permissao) {

@@ -9,8 +9,8 @@
     $empresaAtiva = $contaAtiva ? app(\App\Support\Tenancy\EmitenteAtual::class)->emitente() : null;
     $empresasMenu = $emitentesAtivos->isNotEmpty() ? \App\Models\Emitente::where('ativo', true)->orderBy('razao_social')->get() : collect();
     $ambientes  = $empresaAtiva ? collect([$empresaAtiva->ambiente]) : collect();
-    // Conta isenta: todas as empresas ativas estão com a cobrança desligada (pelo master) → não mostra "Créditos"
-    $semCreditos = $emitentesAtivos->isNotEmpty() && $emitentesAtivos->every(fn ($e) => (bool) $e->cobranca_desligada);
+    // Empresa ativa com a cobrança desligada (pelo master) → não mostra nada de créditos
+    $semCreditos = app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca();
     $modoTeste  = $ambientes->isNotEmpty() && $ambientes->contains(2);
     $emProducao = $ambientes->isNotEmpty() && ! $modoTeste;
 

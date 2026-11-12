@@ -12,7 +12,7 @@
     <div class="max-w-[1240px] mx-auto px-4 sm:px-8 py-8 space-y-6">
         <div>
             <h1 class="text-3xl font-semibold">Precisa de você</h1>
-            <p class="mt-1 text-[15px] text-ink-700">Notas de todas as importações que dependem de uma ação sua. Nenhuma delas gastou crédito.</p>
+            <p class="mt-1 text-[15px] text-ink-700">Notas de todas as importações que dependem de uma ação sua.@cobranca Nenhuma delas gastou crédito.@endcobranca</p>
         </div>
 
         <div class="flex flex-wrap items-start gap-5">

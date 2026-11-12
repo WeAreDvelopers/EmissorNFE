@@ -36,6 +36,12 @@ class EmitenteAtual
         return $this->cache ??= Emitente::find($this->id);
     }
 
+    /** A empresa ativa está com a cobrança desligada: nenhuma tela mostra crédito, saldo ou recarga. */
+    public function semCobranca(): bool
+    {
+        return (bool) $this->emitente()?->cobranca_desligada;
+    }
+
     /** Executa um trecho "dentro" de outra empresa e restaura a anterior. */
     public function como(?int $emitenteId, Closure $fn): mixed
     {

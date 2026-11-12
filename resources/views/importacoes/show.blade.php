@@ -51,7 +51,7 @@
                 <span><span class="inline-block w-2.5 h-2.5 rounded-sm bg-warn-600 me-1.5"></span>{{ $f($atencao) }} precisam de você</span>
                 <span><span class="inline-block w-2.5 h-2.5 rounded-sm bg-gray-200 border border-gray-400 me-1.5"></span>{{ $f($andamento) }} em andamento</span>
             </div>
-            @if ($resumo['aguardando_credito'])
+            @if ($resumo['aguardando_credito'] && ! app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca())
                 <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center gap-3 justify-between">
                     <span><b>{{ $f($resumo['aguardando_credito']) }} aguardando crédito.</b> Voltam para a fila sozinhas depois da recarga.</span>
                     @can('comprar-creditos')<a href="{{ route('creditos.index') }}" class="btn btn-primary btn-sm">Recarregar créditos</a>@endcan
@@ -88,14 +88,14 @@
                     @if ($resumo['rejeitada'])
                         <div class="card border-warn-200 p-4 space-y-2">
                             <div class="font-semibold">{{ $f($resumo['rejeitada']) }} recusadas pela prefeitura</div>
-                            <div class="text-[13px] text-ink-700 leading-snug">Nenhuma gastou crédito. Abra uma para ver o motivo e como corrigir.</div>
+                            <div class="text-[13px] text-ink-700 leading-snug">@cobranca Nenhuma gastou crédito. @endcobranca Abra uma para ver o motivo e como corrigir.</div>
                             <a href="{{ route('importacoes.show', [$importacao, 'filtro' => 'atencao']) }}" class="btn btn-sm">Ver e corrigir</a>
                         </div>
                     @endif
                     @if ($resumo['invalida'])
                         <div class="card border-warn-200 p-4 space-y-2">
                             <div class="font-semibold">{{ $f($resumo['invalida']) }} {{ $resumo['invalida'] === 1 ? 'linha com dado inválido' : 'linhas com dado inválido' }}</div>
-                            <div class="text-[13px] text-ink-700 leading-snug">Não gastaram crédito. Corrija o campo indicado.</div>
+                            <div class="text-[13px] text-ink-700 leading-snug">@cobranca Não gastaram crédito. @endcobranca Corrija o campo indicado.</div>
                             <a href="{{ route('importacoes.show', [$importacao, 'filtro' => 'atencao']) }}" class="btn btn-sm">Corrigir linhas</a>
                         </div>
                     @endif

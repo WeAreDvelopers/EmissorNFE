@@ -21,6 +21,9 @@ class CreditoController extends Controller
     public function index(Request $request, CarteiraService $creditos)
     {
         $this->authorize('consultar');
+        if (app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca()) {
+            return redirect()->route('inicio');   // empresa sem cobrança: não há créditos para ver nem comprar
+        }
         $conta = $this->contaAtual->conta();
         $consulta = MovimentoCredito::latest('id');
         [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, ['data' => 'created_at', 'movimento' => 'tipo', 'quantidade' => 'quantidade', 'saldo' => 'disponivel_apos']);
@@ -37,6 +40,7 @@ class CreditoController extends Controller
     public function comprar(Request $request, Pacote $pacote, PagamentoService $pagamentos)
     {
         $this->authorize('comprar-creditos');
+        abort_if(app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca(), 404);
 
         try {
             $pagamento = $pagamentos->iniciarCompra($this->contaAtual->conta(), $pacote, $request->user()->id);

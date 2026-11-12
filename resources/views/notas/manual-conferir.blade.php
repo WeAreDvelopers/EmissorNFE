@@ -92,6 +92,7 @@
                 </div>
             </section>
 
+            @cobranca
             <div class="rounded-lg bg-chao px-3.5 py-3 text-[13px] leading-relaxed text-ink-700">
                 @if ($emitente->semCobranca())
                     Esta empresa não gasta crédito para emitir ({{ $emitente->ehHomologacao() ? 'modo teste' : 'sem cobrança' }}).
@@ -99,6 +100,7 @@
                     Ao emitir, 1 crédito é reservado e só é cobrado se a prefeitura autorizar.
                 @endif
             </div>
+            @endcobranca
 
             <label class="flex items-start gap-3 rounded-xl border-2 border-brand-600 bg-white px-4 py-3.5 cursor-pointer">
                 <input type="checkbox" name="confirmo" value="1" x-model="confirmo" class="mt-1 w-5 h-5 rounded text-brand-600 focus:ring-brand-600">

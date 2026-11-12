@@ -31,13 +31,13 @@
                 <span class="w-10 h-10 rounded-full bg-warn-100 flex items-center justify-center shrink-0" aria-hidden="true"><svg class="w-5 h-5 text-warn-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 17h.01"/></svg></span>
                 <div class="flex-1 min-w-[240px]">
                     <div class="text-lg font-semibold text-warn-900">{{ $atencao }} {{ $atencao === 1 ? 'nota precisa' : 'notas precisam' }} de você</div>
-                    <div class="text-sm text-warn-800 mt-0.5">Nenhuma delas gastou crédito. Resolva por grupo, em poucos cliques.</div>
+                    <div class="text-sm text-warn-800 mt-0.5">@cobranca Nenhuma delas gastou crédito. @endcobranca Resolva por grupo, em poucos cliques.</div>
                 </div>
                 <a href="{{ route('pendencias') }}" class="btn btn-atencao">Resolver agora</a>
             </div>
         @endif
 
-        @if ($aguardandoCredito > 0)
+        @if ($aguardandoCredito > 0 && ! app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca())
             <div class="card bg-amber-50 border-amber-200 p-5 sm:px-6 flex flex-wrap items-center gap-5">
                 <div class="flex-1 min-w-[240px]">
                     <div class="text-lg font-semibold text-amber-900">{{ $aguardandoCredito }} {{ $aguardandoCredito === 1 ? 'nota está aguardando' : 'notas estão aguardando' }} crédito</div>
@@ -47,7 +47,7 @@
             </div>
         @endif
 
-        @php $semCreditos = \App\Models\Emitente::where('ativo', true)->get(['cobranca_desligada'])->pipe(fn ($c) => $c->isNotEmpty() && $c->every(fn ($e) => (bool) $e->cobranca_desligada)); @endphp
+        @php $semCreditos = app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca(); @endphp
         <div class="grid grid-cols-1 {{ $semCreditos ? 'sm:grid-cols-2' : 'sm:grid-cols-3' }} gap-4">
             @unless ($semCreditos)
             <div class="card p-5">

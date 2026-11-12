@@ -130,6 +130,7 @@
                         <div class="rounded-xl bg-chao border border-linha p-4"><div class="font-mono text-2xl font-semibold leading-9">R$ {{ number_format($somaValores, 2, ',', '.') }}</div><div class="text-sm font-medium text-ink-700">soma das notas prontas</div></div>
                     </div>
 
+                    @cobranca
                     @if ($semCusto)
                         <div class="rounded-lg bg-ok-50 border border-brand-200 px-4 py-3.5 text-sm leading-relaxed text-ok-800">
                             @if ($cobrancaDesligada)
@@ -151,6 +152,7 @@
                             @can('comprar-creditos')<a href="{{ route('creditos.index') }}" class="link ms-1">Recarregar antes</a>@endcan
                         </div>
                     @endif
+                    @endcobranca
 
                     <div class="border-t border-gray-200 pt-4">
                         <h3 class="text-sm font-semibold mb-2">Depois de enviar</h3>

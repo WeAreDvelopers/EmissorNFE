@@ -52,7 +52,7 @@ class ExplicacaoErro
             return [
                 'titulo'          => 'Cadastro do cliente incompleto',
                 'o_que_aconteceu' => $tecnico[0].' Não emitimos nota para cliente sem endereço completo e ao menos 1 e-mail.',
-                'como_resolver'   => 'Complete o cadastro em Clientes (ou informe os dados na planilha) e clique em Reenviar. Esta nota ainda não gastou crédito.',
+                'como_resolver'   => 'Complete o cadastro em Clientes (ou informe os dados na planilha) e clique em Reenviar. '.(app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca() ? '' : 'Esta nota ainda não gastou crédito.'),
                 'campos'          => [],
                 'reenviar_direto' => true,
                 'tecnico'         => $tecnico,
@@ -66,7 +66,7 @@ class ExplicacaoErro
         return [
             'titulo'          => 'Dado inválido na planilha',
             'o_que_aconteceu' => implode(' ', $tecnico) ?: 'Algum dado desta linha não passou na conferência.',
-            'como_resolver'   => 'Corrija o campo abaixo e confirme. Esta nota ainda não gastou crédito.',
+            'como_resolver'   => 'Corrija o campo abaixo e confirme. '.(app(\App\Support\Tenancy\EmitenteAtual::class)->semCobranca() ? '' : 'Esta nota ainda não gastou crédito.'),
             'campos'          => $campos ?: array_keys(self::ROTULOS),
             'reenviar_direto' => false,
             'tecnico'         => $tecnico,

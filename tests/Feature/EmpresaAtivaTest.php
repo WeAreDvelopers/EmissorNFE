@@ -173,6 +173,35 @@ class EmpresaAtivaTest extends TestCase
         $this->assertSame($this->alfa->id, $sem->fresh()->emitente_id);                       // sem notas: primeira empresa da conta
     }
 
+    public function test_empresa_com_cobranca_desligada_nao_mostra_credito_nem_cobranca_em_lugar_nenhum(): void
+    {
+        $nota = $this->nota($this->alfa, 'Cliente');
+        $nota->forceFill(['status' => StatusNota::Invalida->value, 'erros' => ['x']])->save();
+        $this->actingAs($this->user);
+
+        // cobrança ligada: créditos aparecem no menu, na tela de recarga e no aviso do painel
+        $this->get(route('inicio'))->assertSee('Créditos')->assertSee('Recarregar');
+        $this->get(route('creditos.index'))->assertOk();
+        $this->get(route('notas.manual'))->assertSee('crédito é reservado');
+
+        // desliga a cobrança da empresa ativa (o master faz isso)
+        $this->alfa->forceFill(['cobranca_desligada' => true])->save();
+
+        $inicio = $this->get(route('inicio'))->assertOk();
+        foreach (['Créditos', 'Recarregar', 'aguardando crédito', 'gastou crédito', 'Créditos disponíveis'] as $texto) {
+            $inicio->assertDontSee($texto);
+        }
+        $this->get(route('creditos.index'))->assertRedirect(route('inicio'));
+        $this->post(route('creditos.comprar', 1))->assertNotFound();
+        $this->get(route('notas.manual'))->assertOk()->assertDontSee('crédito é reservado')->assertDontSee('gasta crédito');
+        $this->get(route('pendencias'))->assertOk()->assertDontSee('gastou crédito');
+        $this->get(route('pendencias', ['nota' => $nota->id]))->assertOk()->assertDontSee('gastou crédito')->assertDontSee('gasta crédito')->assertDontSee('reservado');
+
+        // a outra empresa continua com cobrança
+        $this->post(route('emitentes.administrar', $this->beta));
+        $this->get(route('inicio'))->assertSee('Créditos');
+    }
+
     public function test_lista_de_emitentes_marca_a_em_uso_e_oferece_administrar_a_outra(): void
     {
         $this->actingAs($this->user)->get(route('emitentes.index'))->assertOk()

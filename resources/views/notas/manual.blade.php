@@ -364,10 +364,12 @@
                 </div>
             </section>
 
+            @cobranca
             <div class="rounded-lg bg-chao px-3.5 py-3 text-[13px] leading-relaxed text-ink-700">
                 <span x-show="padroes[emitente]?.sem_custo" x-cloak>{{ 'Esta empresa não gasta crédito para emitir (modo teste ou sem cobrança).' }}</span>
                 <span x-show="!padroes[emitente]?.sem_custo" x-cloak>Ao emitir (no próximo passo), 1 crédito é reservado e só é cobrado se a prefeitura autorizar.</span>
             </div>
+            @endcobranca
 
             <div class="flex items-center gap-4">
                 <button class="btn btn-primary btn-lg">Conferir dados</button>
