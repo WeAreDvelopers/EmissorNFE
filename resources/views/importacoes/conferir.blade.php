@@ -264,7 +264,18 @@
             <div class="px-5 sm:px-6 pb-3 space-y-3">
                 <div>
                     <h2 class="text-lg font-semibold">Todas as linhas da planilha</h2>
-                    <p class="text-sm text-ink-600 mt-1">Confira o que será emitido. Use <b>Editar</b> para ajustar qualquer linha antes de enviar.</p>
+                    <p class="text-sm text-ink-600 mt-1">Todos os dados lidos da planilha. O que está <b class="text-perigo-700">em vermelho</b> precisa de correção: passe o mouse (ou use a tecla Tab) para ver o motivo. Use <b>Editar</b> para ajustar qualquer linha antes de enviar.</p>
+                </div>
+                {{-- Prévia: quantas linhas estão corretas e quais precisam de correção --}}
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border {{ $qtdInvalidas ? 'border-perigo-200 bg-perigo-50' : 'border-brand-200 bg-ok-50' }} px-4 py-3 text-sm">
+                    <span class="inline-flex items-center gap-2"><b class="font-mono text-xl text-ok-800">{{ $fmt($prontas) }}</b> <span class="text-ink-900">{{ $prontas === 1 ? 'linha correta' : 'linhas corretas' }}</span></span>
+                    <span class="inline-flex items-center gap-2"><b class="font-mono text-xl {{ $qtdInvalidas ? 'text-perigo-700' : 'text-ink-600' }}">{{ $fmt($qtdInvalidas) }}</b> <span class="text-ink-900">{{ $qtdInvalidas === 1 ? 'precisa de correção' : 'precisam de correção' }}</span></span>
+                    @if ($linhasComProblema->isNotEmpty())
+                        <span class="text-ink-700">Linhas:
+                            @foreach ($linhasComProblema as $lp)<a href="{{ route('importacoes.conferir', [$importacao, 'ver' => 'problemas']) }}#linha-{{ $lp->id }}" class="font-mono font-semibold text-perigo-700 hover:underline">{{ $lp->linha_planilha }}</a>@unless ($loop->last), @endunless @endforeach
+                            @if ($qtdInvalidas > $linhasComProblema->count()) e mais {{ $fmt($qtdInvalidas - $linhasComProblema->count()) }} @endif
+                        </span>
+                    @endif
                 </div>
                 <div class="flex flex-wrap gap-2" data-regiao="filtros" data-versao="{{ $total }}-{{ $prontas }}-{{ $qtdInvalidas }}-{{ $ver }}">
                     @foreach (['todas' => ['Todas', $total], 'prontas' => ['Prontas', $prontas], 'problemas' => ['Com problema', $qtdInvalidas]] as $chave => [$rotulo, $qtd])
@@ -274,17 +285,21 @@
             </div>
 
             {{-- overflow-x-auto só como rede de segurança em telas pequenas; em tela larga a tabela cabe inteira --}}
+            {{-- overflow-x-auto: a tabela mostra todos os dados da planilha e rola para o lado em tela estreita --}}
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[920px] table-fixed text-sm">
+                <table class="w-full min-w-[1320px] text-sm">
                     <colgroup>
-                        <col class="w-[64px]"><col class="w-[112px]"><col class="w-[27%]"><col class="w-[104px]"><col><col class="w-[124px]"><col class="w-[124px]"><col class="w-[210px]">
+                        <col class="w-[60px]"><col class="w-[120px]"><col class="w-[150px]"><col class="w-[18%]"><col class="w-[15%]"><col class="w-[96px]"><col class="w-[104px]"><col><col class="w-[112px]"><col class="w-[108px]"><col class="w-[150px]">
                     </colgroup>
                     <thead class="text-left text-xs uppercase tracking-wide text-ink-600 bg-chao/60 border-y border-linha">
                         <tr>
                             <th class="ps-5 sm:ps-6 pe-3 py-3 font-medium"><x-ordenavel col="linha" :ordem="$ordem" :dir="$dir">Linha</x-ordenavel></th>
                             <th class="pe-3 py-3 font-medium"><x-ordenavel col="situacao" :ordem="$ordem" :dir="$dir">Situação</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium">CPF/CNPJ</th>
                             <th class="pe-3 py-3 font-medium"><x-ordenavel col="cliente" :ordem="$ordem" :dir="$dir">Cliente</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium">E-mail</th>
                             <th class="pe-3 py-3 font-medium"><x-ordenavel col="servico" :ordem="$ordem" :dir="$dir">Serviço</x-ordenavel></th>
+                            <th class="pe-3 py-3 font-medium">NBS</th>
                             <th class="pe-3 py-3 font-medium"><x-ordenavel col="descricao" :ordem="$ordem" :dir="$dir">Descrição</x-ordenavel></th>
                             <th class="pe-5 py-3 font-medium text-right"><x-ordenavel col="valor" :ordem="$ordem" :dir="$dir" class="justify-self-end">Valor</x-ordenavel></th>
                             <th class="pe-3 py-3 font-medium"><x-ordenavel col="competencia" :ordem="$ordem" :dir="$dir">Competência</x-ordenavel></th>
@@ -297,37 +312,39 @@
                             $comErro = (int) old('_nota') === $l->id;   // a edição falhou na validação: reabre com o que a pessoa digitou
                             $v = fn ($campo, $atual) => $comErro ? old($campo) : $atual;
                             $entrada = 'mt-1 block w-full min-h-[40px] rounded-lg border-gray-400 text-sm focus:border-brand-600 focus:ring-brand-600';
+                            $e = $errosCampo[$l->id] ?? [];
+                            $cel = fn ($campo) => $e[$campo] ?? null;
                         @endphp
                         <tbody x-data="{ editando: {{ $comErro ? 'true' : 'false' }} }" id="linha-{{ $l->id }}" data-regiao="linha-{{ $l->id }}" data-versao="{{ $l->updated_at?->timestamp }}-{{ $l->status->value }}" data-item="t{{ $l->id }}">
-                            <tr @class(['tabela-linha align-middle', 'bg-warn-50' => $problema, 'hover:bg-gray-50' => ! $problema]) x-show="!editando">
+                            <tr @class(['tabela-linha align-top', 'bg-perigo-50/40' => $problema, 'hover:bg-gray-50' => ! $problema]) x-show="!editando">
                                 <td class="ps-5 sm:ps-6 pe-3 py-3.5 font-mono text-ink-600">{{ $l->linha_planilha }}</td>
                                 <td class="pe-3 py-3.5 whitespace-nowrap">
-                                    @if ($problema)<span class="pill bg-warn-100 text-warn-800">Com problema</span>
+                                    @if ($problema)<x-celula-erro :msg="$cel('_linha')" titulo="Motivo"><span class="pill bg-perigo-50 text-perigo-700">Com problema</span></x-celula-erro>
                                     @else<span class="pill bg-ok-100 text-ok-800">Pronta</span>@endif
                                 </td>
-                                <td class="pe-4 py-3.5">
-                                    <div class="font-medium truncate" title="{{ $l->tomador_rotulo }}">{{ $l->tomador_rotulo }}</div>
-                                    @unless ($l->sem_tomador)<div class="text-xs text-ink-600 mt-0.5 truncate"><span class="font-mono">{{ \App\Support\Documento::formatar($l->tomador_documento) }}</span>@if ($l->tomador_email) · {{ $l->tomador_email }}@endif</div>@endunless
+                                <td class="pe-3 py-3.5 font-mono text-[13px] whitespace-nowrap">
+                                    @if ($l->sem_tomador)<span class="text-ink-600">sem destinatário</span>
+                                    @else<x-celula-erro :msg="$cel('tomador_documento')">{{ $l->tomador_documento ? \App\Support\Documento::formatar($l->tomador_documento) : '—' }}</x-celula-erro>@endif
                                 </td>
-                                <td class="pe-3 py-3.5 whitespace-nowrap">
-                                    <div class="font-mono text-[13px]">{{ $l->codigo_servico }}</div>
-                                    @if ($l->codigo_nbs)<div class="font-mono text-xs text-ink-600">NBS {{ $l->codigo_nbs }}</div>@endif
-                                </td>
-                                <td class="pe-4 py-3.5 text-ink-900 leading-snug">{{ $l->descricao }}</td>
-                                <td class="pe-5 py-3.5 font-mono text-right whitespace-nowrap">R$ {{ number_format($l->valor, 2, ',', '.') }}</td>
-                                <td class="pe-3 py-3.5 whitespace-nowrap text-ink-700">{{ $l->data_competencia?->format('d/m/Y') }}</td>
+                                <td class="pe-4 py-3.5 leading-snug"><x-celula-erro :msg="$cel('tomador_nome')"><span class="font-medium">{{ $l->tomador_nome ?: ($l->sem_tomador ? '—' : '(sem nome)') }}</span></x-celula-erro></td>
+                                <td class="pe-4 py-3.5 leading-snug break-all"><x-celula-erro :msg="$cel('tomador_email')">{{ $l->tomador_email ?: '—' }}</x-celula-erro></td>
+                                <td class="pe-3 py-3.5 whitespace-nowrap font-mono text-[13px]"><x-celula-erro :msg="$cel('codigo_servico')">{{ $l->codigo_servico ?: '—' }}</x-celula-erro></td>
+                                <td class="pe-3 py-3.5 whitespace-nowrap font-mono text-[13px]"><x-celula-erro :msg="$cel('codigo_nbs')">{{ $l->codigo_nbs ?: '—' }}</x-celula-erro></td>
+                                <td class="pe-4 py-3.5 text-ink-900 leading-snug"><x-celula-erro :msg="$cel('descricao')">{{ $l->descricao ?: '—' }}</x-celula-erro></td>
+                                <td class="pe-5 py-3.5 font-mono text-right whitespace-nowrap"><x-celula-erro :msg="$cel('valor')">{{ $l->valor > 0 ? 'R$ '.number_format($l->valor, 2, ',', '.') : '—' }}</x-celula-erro></td>
+                                <td class="pe-3 py-3.5 whitespace-nowrap text-ink-700"><x-celula-erro :msg="$cel('data_competencia')">{{ $l->data_competencia?->format('d/m/Y') ?: '—' }}</x-celula-erro></td>
                                 <td class="pe-4 sm:pe-5 py-2 text-right whitespace-nowrap">
                                     @can('emitir')<button type="button" class="inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" @click="editando = true" aria-label="Editar a linha {{ $l->linha_planilha }}"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Editar</button>
                                     <button type="button" class="btn-excluir" data-acao-url="{{ route('notas.excluir', $l) }}" data-confirmar="Excluir mesmo?" data-saindo="self" aria-label="Excluir a linha {{ $l->linha_planilha }}"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>Excluir</button>@endcan
                                 </td>
                             </tr>
                             @if ($problema && $l->erros)
-                                <tr class="bg-warn-50" x-show="!editando"><td></td><td></td><td colspan="6" class="pb-3 pe-6 text-[13px] text-warn-800">{{ implode(' ', (array) $l->erros) }}</td></tr>
+                                <tr class="bg-perigo-50/40" x-show="!editando"><td></td><td></td><td colspan="9" class="pb-3 pe-6 text-[13px] text-perigo-700">{{ implode(' ', (array) $l->erros) }}</td></tr>
                             @endif
 
                             @can('emitir')
                             <tr x-show="editando" x-cloak class="bg-brand-50 border-t border-brand-200">
-                                <td colspan="8" class="px-5 sm:px-6 py-4">
+                                <td colspan="11" class="px-5 sm:px-6 py-4">
                                     <form method="POST" action="{{ route('notas.corrigir', $l) }}" class="space-y-3" data-ajax data-ajax-texto="Salvando…">
                                         @csrf @method('PATCH')
                                         <input type="hidden" name="_nota" value="{{ $l->id }}">
@@ -368,7 +385,7 @@
                             @endcan
                         </tbody>
                     @empty
-                        <tbody><tr class="tabela-linha"><td colspan="8" class="px-6 py-8 text-center text-ink-700">Nenhuma linha neste filtro.</td></tr></tbody>
+                        <tbody><tr class="tabela-linha"><td colspan="11" class="px-6 py-8 text-center text-ink-700">Nenhuma linha neste filtro.</td></tr></tbody>
                     @endforelse
                 </table>
             </div>

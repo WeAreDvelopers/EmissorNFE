@@ -116,9 +116,29 @@ class ImportacaoController extends Controller
 
         [$ordem, $dir] = Ordenacao::aplicar($linhas, $request, ['linha' => 'linha_planilha', 'situacao' => 'status', 'cliente' => 'tomador_nome', 'servico' => 'codigo_servico', 'descricao' => 'descricao', 'valor' => 'valor', 'competencia' => 'data_competencia']);
 
+        $pagina = $linhas->paginate(50, pageName: 'pagina')->withQueryString();
+
+        // O que está errado em cada campo de cada linha da página (vermelho + tooltip na tela)
+        $errosCampo = [];
+        foreach ($pagina as $l) {
+            if ($l->status !== StatusNota::Invalida) {
+                continue;
+            }
+            $erros = array_values((array) $l->erros);
+            if (str_starts_with((string) ($erros[0] ?? ''), \App\Services\Nfse\EnvioDeNotas::CADASTRO_INCOMPLETO)) {
+                $errosCampo[$l->id] = ['tomador_documento' => $erros[0].' Não emitimos nota para cliente sem endereço completo e ao menos 1 e-mail.'];
+                continue;
+            }
+            $dados = \App\Support\ValidadorLinha::normalizar($l->only(\App\Support\ValidadorLinha::CAMPOS) + ['data_competencia' => $l->data_competencia?->toDateString()], $importacao->emitente);
+            $mensagens = collect(\App\Support\ValidadorLinha::validar($dados, $importacao->emitente)->errors()->messages())->map(fn ($m) => implode(' ', $m))->all();
+            $errosCampo[$l->id] = $mensagens ?: ['_linha' => implode(' ', $erros) ?: 'Algum dado desta linha não passou na conferência.'];
+        }
+
         return view('importacoes.conferir', [
             'ordem' => $ordem, 'dir' => $dir,
-            'linhas'     => $linhas->paginate(50, pageName: 'pagina')->withQueryString(),
+            'errosCampo' => $errosCampo,
+            'linhasComProblema' => $importacao->notas()->where('status', StatusNota::Invalida)->orderBy('linha_planilha')->limit(40)->get(['id', 'linha_planilha']),
+            'linhas'     => $pagina,
             'ver'        => $ver,
             'importacao' => $importacao,
             'prontas'    => $prontas,
