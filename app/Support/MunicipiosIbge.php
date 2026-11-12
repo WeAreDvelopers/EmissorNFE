@@ -2,13 +2,23 @@
 
 namespace App\Support;
 
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
-/** Código IBGE (7 dígitos) a partir de município + UF, pela API pública do IBGE (cache de 30 dias por UF). */
+/**
+ * Município x código IBGE (7 dígitos), pela tabela oficial do IBGE guardada no projeto (database/data/municipios_ibge.json).
+ *
+ * É local de propósito: a API pública do IBGE ficou inacessível a partir do servidor e cada consulta travava a tela por segundos.
+ * Os códigos dos municípios mudam raramente; para atualizar a tabela, baixe de
+ * https://servicodados.ibge.gov.br/api/v1/localidades/municipios e regrave o arquivo como [[codigo, nome, uf], ...].
+ */
 class MunicipiosIbge
 {
+    /** @var array<int,array{0:string,1:string,2:string}>|null */
+    private static ?array $tabela = null;
+
+    /** @var array<string,array<string,string>>|null uf => (nome normalizado => código) */
+    private static ?array $porUf = null;
+
     public static function codigo(?string $municipio, ?string $uf): ?string
     {
         $uf = strtoupper(trim((string) $uf));
@@ -16,59 +26,41 @@ class MunicipiosIbge
             return null;
         }
 
-        $mapa = self::porUf($uf);
-
-        return $mapa[self::chave($municipio)] ?? null;
+        return self::mapa()[$uf][self::chave($municipio)] ?? null;
     }
 
-    /** "Cidade/UF" a partir do código IBGE (cache de 30 dias); null se a consulta falhar. */
+    /** "Cidade/UF" a partir do código IBGE; null se o código não existir. */
     public static function rotulo(?string $codigo): ?string
     {
         if (! preg_match('/^\d{7}$/', (string) $codigo)) {
             return null;
         }
 
-        if ($guardado = Cache::get("ibge:rotulo:{$codigo}")) {
-            return $guardado;
-        }
-
-        try {
-            $r = Http::timeout(3)->get("https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{$codigo}");
-            $m = $r->successful() ? $r->json() : null;
-            $uf = $m['microrregiao']['mesorregiao']['UF']['sigla'] ?? $m['regiao-imediata']['regiao-intermediaria']['UF']['sigla'] ?? null;
-            if (! isset($m['nome'], $uf)) {
-                return null;
+        foreach (self::tabela() as [$cod, $nome, $uf]) {
+            if ($cod === $codigo) {
+                return "{$nome}/{$uf}";
             }
-        } catch (\Throwable) {
-            return null;
         }
 
-        Cache::put("ibge:rotulo:{$codigo}", $rotulo = "{$m['nome']}/{$uf}", now()->addDays(30));
-
-        return $rotulo;
+        return null;
     }
 
-    /** @return array<string,string> nome normalizado => código */
-    private static function porUf(string $uf): array
+    /** @return array<string,array<string,string>> */
+    private static function mapa(): array
     {
-        $mapa = Cache::get("ibge:municipios:{$uf}");
-        if (is_array($mapa)) {
-            return $mapa;
-        }
-
-        try {
-            $resposta = Http::timeout(10)->retry(2, 400, throw: false)->get("https://servicodados.ibge.gov.br/api/v1/localidades/estados/{$uf}/municipios");
-            if (! $resposta->successful()) {
-                return [];
+        if (self::$porUf === null) {
+            self::$porUf = [];
+            foreach (self::tabela() as [$cod, $nome, $uf]) {
+                self::$porUf[$uf][self::chave($nome)] = $cod;
             }
-            $mapa = collect($resposta->json())->mapWithKeys(fn ($m) => [self::chave($m['nome']) => (string) $m['id']])->all();
-        } catch (\Throwable) {
-            return [];                                  // sem rede: não guarda no cache, tenta de novo na próxima
         }
 
-        Cache::put("ibge:municipios:{$uf}", $mapa, now()->addDays(30));
+        return self::$porUf;
+    }
 
-        return $mapa;
+    private static function tabela(): array
+    {
+        return self::$tabela ??= (json_decode((string) @file_get_contents(database_path('data/municipios_ibge.json')), true) ?: []);
     }
 
     private static function chave(string $nome): string

@@ -263,6 +263,18 @@ class ClienteCadastroTelaTest extends TestCase
         $this->get(route('tomadores.index', ['tipo' => 'pj']))->assertSee('Marcelo Dias Cordeiro')->assertDontSee('Vaner Bertoluzzi');
     }
 
+    public function test_codigo_ibge_vem_da_tabela_local_sem_chamar_nenhuma_api(): void
+    {
+        Http::fake(fn () => throw new \RuntimeException('não deve chamar a rede'));
+
+        $this->assertSame('3550308', \App\Support\MunicipiosIbge::codigo('SÃO PAULO', 'sp'));
+        $this->assertSame('3549904', \App\Support\MunicipiosIbge::codigo('São José dos Campos', 'SP'));
+        $this->assertSame('3304557', \App\Support\MunicipiosIbge::codigo('Rio de Janeiro', 'RJ'));
+        $this->assertNull(\App\Support\MunicipiosIbge::codigo('Cidadelandia', 'RJ'));
+        $this->assertSame('São Paulo/SP', \App\Support\MunicipiosIbge::rotulo('3550308'));
+        $this->assertNull(\App\Support\MunicipiosIbge::rotulo('1234567'));
+    }
+
     public function test_tela_de_edicao_segue_funcionando_com_o_formulario_compartilhado(): void
     {
         $this->post(route('tomadores.store'), $this->dados());

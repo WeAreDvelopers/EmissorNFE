@@ -152,7 +152,7 @@ class TomadoresImportacaoTest extends TestCase
         $this->confirmar($imp);
 
         $c = $this->cliente(self::MIA);
-        $this->assertSame('3538907', $c->codigo_municipio);
+        $this->assertSame('3537800', $c->codigo_municipio);   // tabela oficial do IBGE (local)
         $this->assertSame('18170005', $c->cep);
         $this->assertFalse($c->pendente);
     }
