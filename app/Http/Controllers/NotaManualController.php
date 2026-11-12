@@ -35,7 +35,7 @@ class NotaManualController extends Controller
     {
         $this->authorize('emitir');
 
-        $emitentes = Emitente::where('ativo', true)->orderBy('razao_social')->get();
+        $emitentes = Emitente::where('ativo', true)->whereKey(app(\App\Support\Tenancy\EmitenteAtual::class)->id())->get();   // só a empresa ativa
 
         return view('notas.manual', [
             'emitentes' => $emitentes,
@@ -55,7 +55,7 @@ class NotaManualController extends Controller
     {
         $this->authorize('emitir');
 
-        $emitente = Emitente::where('ativo', true)->findOrFail($request->input('emitente_id'));
+        $emitente = Emitente::where('ativo', true)->findOrFail(app(\App\Support\Tenancy\EmitenteAtual::class)->id());   // sempre a empresa ativa
         $dados = $this->normalizar($request, $emitente);
 
         $validador = ValidadorLinha::validar($dados, $emitente);
@@ -132,7 +132,7 @@ class NotaManualController extends Controller
     {
         $this->authorize('emitir');
 
-        $emitente = Emitente::where('ativo', true)->findOrFail($request->input('emitente_id'));
+        $emitente = Emitente::where('ativo', true)->findOrFail(app(\App\Support\Tenancy\EmitenteAtual::class)->id());   // sempre a empresa ativa
         $volta = fn () => redirect()->route('notas.manual')->withInput($request->only(self::CAMPOS_FORM));
 
         if (! $request->boolean('confirmo')) {

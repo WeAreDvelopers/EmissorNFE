@@ -11,6 +11,14 @@ class ImportarPlanilhaRequest extends FormRequest
         return true; // ajuste para sua política de acesso
     }
 
+    /** A importação é sempre da empresa que está sendo administrada: não dá para importar para outra. */
+    protected function prepareForValidation(): void
+    {
+        if ($id = app(\App\Support\Tenancy\EmitenteAtual::class)->id()) {
+            $this->merge(['emitente_id' => $id]);
+        }
+    }
+
     public function rules(): array
     {
         return [

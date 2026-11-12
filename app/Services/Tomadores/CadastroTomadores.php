@@ -116,7 +116,7 @@ class CadastroTomadores
 
     private function aplicarItem(Importacao $importacao, array $item, ?int $userId): void
     {
-        $tomador = Tomador::firstOrNew(['documento' => $item['documento']], ['conta_id' => $importacao->conta_id]);
+        $tomador = Tomador::firstOrNew(['documento' => $item['documento']], ['conta_id' => $importacao->conta_id, 'emitente_id' => $importacao->emitente_id]);
         $tomador->conta_id = $importacao->conta_id;
 
         $historico = [];

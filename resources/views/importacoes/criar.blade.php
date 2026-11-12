@@ -53,13 +53,10 @@
                     <span class="text-sm text-ink-700">As notas desta importação serão emitidas por esta empresa.</span>
                 </div>
 
-                <x-campo nome="emitente_id" tipo="select" rotulo="Empresa que emite" x-model="emitente">
-                    @foreach ($emitentes as $e)
-                        <option value="{{ $e->id }}" @selected(old('emitente_id') == $e->id)>{{ $e->razao_social }} · {{ \App\Support\Documento::formatar($e->cnpj) }}</option>
-                    @endforeach
-                </x-campo>
+                <input type="hidden" name="emitente_id" value="{{ $emitentes->first()->id }}">
+                <p class="text-[15px]"><span class="campo-rotulo block">Empresa que emite</span><b>{{ $emitentes->first()->razao_social }}</b> <span class="font-mono text-ink-600">· {{ \App\Support\Documento::formatar($emitentes->first()->cnpj) }}</span></p>
 
-                <p class="text-sm text-ink-700 -mb-2">Use a planilha no modelo da empresa: <a :href="'{{ route('importacoes.modelo') }}?emitente=' + emitente" class="link">baixar modelo desta empresa</a> (já vem com o CNPJ na célula A1).</p>
+                <p class="text-sm text-ink-700 -mb-2">Use a planilha no modelo da empresa: <a href="{{ route('importacoes.modelo') }}" class="link">baixar modelo desta empresa</a> (já vem com o CNPJ na célula A1).</p>
 
                 <label for="planilha"
                        @dragover.prevent="soltando = true" @dragleave.prevent="soltando = false"

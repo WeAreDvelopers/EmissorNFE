@@ -109,7 +109,7 @@ class TomadoresImportacaoTest extends TestCase
     public function test_so_a_linha_com_x_atualiza_e_campo_vazio_preserva_o_que_existe(): void
     {
         app(ContaAtual::class)->como($this->conta->id, fn () => Tomador::create([
-            'documento' => self::CEMAR, 'nome' => 'Cemar Antiga', 'nome_fantasia' => 'Racing', 'logradouro' => 'Rua Velha', 'numero' => '1',
+            'emitente_id' => $this->emitente->id, 'documento' => self::CEMAR, 'nome' => 'Cemar Antiga', 'nome_fantasia' => 'Racing', 'logradouro' => 'Rua Velha', 'numero' => '1',
             'bairro' => 'Centro', 'municipio' => 'São Paulo', 'uf' => 'SP', 'codigo_municipio' => '3550308', 'cep' => '01001000', 'emails' => ['velho@x.com'],
         ]));
 

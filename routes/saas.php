@@ -49,6 +49,7 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/emitentes/{emitente}/editar', [EmitenteController::class, 'editar'])->name('emitentes.editar');
     Route::post('/emitentes',[EmitenteController::class, 'store'])->name('emitentes.store');
     Route::put('/emitentes/{emitente}', [EmitenteController::class, 'update'])->name('emitentes.update');
+    Route::post('/emitentes/{emitente}/administrar', [EmitenteController::class, 'administrar'])->name('emitentes.administrar');
     Route::post('/emitentes/{emitente}/numeracao', [EmitenteController::class, 'ajustarNumeracao'])->name('emitentes.numeracao');
 
     // Busca na lista nacional de serviços (autocomplete do campo "código de serviço")

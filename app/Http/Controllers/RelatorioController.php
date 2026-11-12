@@ -17,7 +17,7 @@ class RelatorioController extends Controller
         $this->authorize('consultar');
         [$inicio, $fim, $mes] = $this->periodo($request);
 
-        $base = fn () => NotaFiscal::query()->whereBetween('data_competencia', [$inicio, $fim])->when($request->filled('emitente'), fn ($q) => $q->where('emitente_id', $request->integer('emitente')));
+        $base = fn () => NotaFiscal::query()->whereBetween('data_competencia', [$inicio, $fim]);
         $emitidas = fn () => $base()->where('status', StatusNota::Emitida);
 
         $porStatus = $base()->where('status', '!=', StatusNota::Rascunho)->selectRaw('status, count(*) as qtd')->groupBy('status')->pluck('qtd', 'status');
@@ -25,8 +25,7 @@ class RelatorioController extends Controller
         return view('relatorios.index', [
             'mes'        => $mes,
             'inicio'     => Carbon::parse($inicio),
-            'emitentes'  => Emitente::orderBy('razao_social')->get(['id', 'razao_social']),
-            'empresa'    => $request->query('emitente'),
+            'empresa'    => app(\App\Support\Tenancy\EmitenteAtual::class)->emitente(),
             'qtdEmitidas' => (int) $emitidas()->count(),
             'valorEmitido' => (float) $emitidas()->sum('valor'),
             'recusadas'  => (int) ($porStatus[StatusNota::Rejeitada->value] ?? 0),
@@ -47,7 +46,6 @@ class RelatorioController extends Controller
         [$inicio, $fim, $mes] = $this->periodo($request);
 
         $notas = NotaFiscal::with('emitente')->where('status', StatusNota::Emitida)->whereBetween('data_competencia', [$inicio, $fim])
-            ->when($request->filled('emitente'), fn ($q) => $q->where('emitente_id', $request->integer('emitente')))
             ->orderBy('data_competencia')->orderBy('id');
 
         return response()->streamDownload(function () use ($notas) {

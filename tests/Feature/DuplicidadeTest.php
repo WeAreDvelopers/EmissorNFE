@@ -175,6 +175,7 @@ class DuplicidadeTest extends TestCase
             'cnpj' => '11444777000161', 'razao_social' => 'Outra', 'codigo_municipio' => '3550308', 'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1,
             'regime_especial' => 0, 'aliquota_simples' => 6, 'serie_dps' => '00001', 'ambiente' => 2, 'codigo_servico_padrao' => '010302', 'descricao_servico_padrao' => 'x',
         ]));
+        $this->post(route('emitentes.administrar', $outra));   // escolhe a outra empresa no menu lateral
         $this->post(route('importacoes.store'), ['emitente_id' => $outra->id, 'planilha' => GeraPlanilha::xlsx($outra->cnpj, [$this->linha()])])->assertSessionHasNoErrors();
 
         $this->assertSame(0, NotaFiscal::semIsolamento()->where('emitente_id', $outra->id)->whereNotNull('duplicidade_de_id')->count());

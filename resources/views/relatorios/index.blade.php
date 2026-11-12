@@ -7,17 +7,13 @@
                 <h1 class="text-3xl font-semibold">Relatório do mês</h1>
                 <p class="mt-1 text-[15px] text-ink-700">Notas por mês de competência, para conferir com a contabilidade.</p>
             </div>
-            <a href="{{ route('relatorios.csv', array_filter(['mes' => $mes, 'emitente' => $empresa])) }}" class="btn btn-primary">Baixar planilha (CSV)</a>
+            <a href="{{ route('relatorios.csv', array_filter(['mes' => $mes])) }}" class="btn btn-primary">Baixar planilha (CSV)</a>
         </div>
 
         <form method="GET" class="flex flex-wrap gap-3 items-end">
             <div>
                 <label for="mes" class="campo-rotulo">Mês</label>
                 <input id="mes" name="mes" type="month" value="{{ $mes }}" class="campo-entrada">
-            </div>
-            <div class="min-w-[220px]">
-                <label for="emitente" class="campo-rotulo">Empresa</label>
-                <select id="emitente" name="emitente" class="campo-entrada"><option value="">Todas</option>@foreach ($emitentes as $e)<option value="{{ $e->id }}" @selected($empresa == $e->id)>{{ \Illuminate\Support\Str::limit($e->razao_social, 34) }}</option>@endforeach</select>
             </div>
             <button class="btn btn-primary">Ver</button>
         </form>

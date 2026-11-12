@@ -27,7 +27,14 @@
                             @else até {{ $e->certificado_validade->format('d/m/Y') }}
                             @endif
                         </td>
-                        <td class="px-5 py-3 text-right">@can('gerenciar-emitentes')<a class="link" href="{{ route('emitentes.editar', $e) }}">Editar</a>@endcan</td>
+                        <td class="px-5 py-3 text-right whitespace-nowrap">
+                            @if ($e->id === $empresaAtivaId)
+                                <span class="pill bg-ok-100 text-ok-800">em uso</span>
+                            @else
+                                <form method="POST" action="{{ route('emitentes.administrar', $e) }}" class="inline">@csrf<button class="btn-acao" title="Passar a administrar esta empresa: notas, importações e tomadores mudam para ela">Administrar</button></form>
+                            @endif
+                            @can('gerenciar-emitentes')<a class="link ms-3" href="{{ route('emitentes.editar', $e) }}">Editar</a>@endcan
+                        </td>
                     </tr>
                 @empty
                     <tr class="tabela-linha"><td colspan="6" class="px-5 py-10 text-center text-ink-700">Nenhuma empresa cadastrada ainda.</td></tr>

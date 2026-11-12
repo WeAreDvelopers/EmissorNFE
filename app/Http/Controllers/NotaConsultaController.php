@@ -25,9 +25,8 @@ class NotaConsultaController extends Controller
 
         return view('notas.index', [
             'notas'     => $consulta->paginate(30)->withQueryString(),
-            'emitentes' => Emitente::orderBy('razao_social')->get(['id', 'razao_social']),
             'grupos'    => self::GRUPOS,
-            'filtros'   => $request->only(['q', 'grupo', 'emitente', 'de', 'ate']),
+            'filtros'   => $request->only(['q', 'grupo', 'de', 'ate']),
             'ordem'     => $ordem,
             'dir'       => $dir,
             // Notas deste filtro que ainda não saíram: na fila, aguardando crédito ou com erro (não entram no total de emitidas)
@@ -59,9 +58,6 @@ class NotaConsultaController extends Controller
             default     => null,
         };
 
-        if ($request->filled('emitente')) {
-            $consulta->where('emitente_id', $request->integer('emitente'));
-        }
         if ($request->filled('de')) {
             $consulta->whereDate('data_competencia', '>=', $request->query('de'));
         }

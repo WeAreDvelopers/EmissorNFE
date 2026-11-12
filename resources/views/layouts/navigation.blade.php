@@ -5,7 +5,10 @@
 
     // Selo de ambiente sempre visível: o medo de emitir "de verdade" sem querer é real.
     $emitentesAtivos = $contaAtiva ? \App\Models\Emitente::where('ativo', true)->get(['ambiente', 'cobranca_desligada']) : collect();
-    $ambientes  = $emitentesAtivos->pluck('ambiente');
+    // Empresa que o usuário está administrando (escolhida no menu lateral): tudo na tela é só dela
+    $empresaAtiva = $contaAtiva ? app(\App\Support\Tenancy\EmitenteAtual::class)->emitente() : null;
+    $empresasMenu = $emitentesAtivos->isNotEmpty() ? \App\Models\Emitente::where('ativo', true)->orderBy('razao_social')->get() : collect();
+    $ambientes  = $empresaAtiva ? collect([$empresaAtiva->ambiente]) : collect();
     // Conta isenta: todas as empresas ativas estão com a cobrança desligada (pelo master) → não mostra "Créditos"
     $semCreditos = $emitentesAtivos->isNotEmpty() && $emitentesAtivos->every(fn ($e) => (bool) $e->cobranca_desligada);
     $modoTeste  = $ambientes->isNotEmpty() && $ambientes->contains(2);
@@ -86,6 +89,34 @@
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
     </div>
+
+    {{-- Empresa que está sendo administrada: logo, nome e troca. Notas, importações e tomadores são só dela. --}}
+    @if ($empresaAtiva && ! $noMaster)
+        <div class="mx-4 mb-3 rounded-xl bg-white/[.09] ring-1 ring-white/15 p-3 space-y-2.5" aria-label="Empresa que você está administrando">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-[#5FD1A0]">Empresa que você administra</div>
+            <div class="flex items-center gap-3">
+                <span class="w-12 h-12 shrink-0 rounded-lg bg-white flex items-center justify-center overflow-hidden text-casca font-semibold text-lg" aria-hidden="true">
+                    @if ($empresaAtiva->logo_url)<img src="{{ $empresaAtiva->logo_url }}" alt="" class="max-w-full max-h-full object-contain">@else{{ \Illuminate\Support\Str::of($empresaAtiva->razao_social)->substr(0, 1)->upper() }}@endif
+                </span>
+                <span class="min-w-0 leading-tight">
+                    <span class="block text-[15px] font-semibold text-white break-words" title="{{ $empresaAtiva->razao_social }}">{{ \Illuminate\Support\Str::limit($empresaAtiva->razao_social, 42) }}</span>
+                    <span class="block text-xs font-mono text-casca-texto/80 mt-0.5">{{ \App\Support\Documento::formatar($empresaAtiva->cnpj) }}</span>
+                </span>
+            </div>
+            @if ($empresasMenu->count() > 1)
+                <form method="POST" action="{{ route('emitentes.administrar', ['emitente' => $empresaAtiva->id]) }}" data-base="{{ route('emitentes.administrar', ['emitente' => '__ID__']) }}">
+                    @csrf
+                    <label for="trocar-empresa" class="sr-only">Trocar de empresa</label>
+                    <select id="trocar-empresa" class="w-full rounded-lg border-0 bg-white text-ink-900 text-sm font-medium py-2.5 ps-3 pe-8 focus:ring-2 focus:ring-[#5FD1A0]"
+                            onchange="this.form.action = this.form.dataset.base.replace('__ID__', this.value); this.form.submit();">
+                        @foreach ($empresasMenu as $e)
+                            <option value="{{ $e->id }}" @selected($e->id === $empresaAtiva->id)>{{ $e->razao_social }}</option>
+                        @endforeach
+                    </select>
+                </form>
+            @endif
+        </div>
+    @endif
 
     @if ($noMaster)
         <div class="mx-4 mb-2 rounded-lg bg-white/10 px-3 py-2 text-[13px] text-white">Área master · somente leitura</div>

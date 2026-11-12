@@ -59,7 +59,8 @@ class TomadorController extends Controller
         $this->authorize('consultar');
 
         // A linha 1 do modelo traz o CNPJ e a razão social do emitente escolhido (ou o primeiro ativo)
-        $emitente = \App\Models\Emitente::where('ativo', true)->find($request->integer('emitente')) ?? \App\Models\Emitente::where('ativo', true)->orderBy('razao_social')->first();
+        // Sempre a empresa que está sendo administrada (não dá para baixar o modelo de outra)
+        $emitente = app(\App\Support\Tenancy\EmitenteAtual::class)->emitente();
         $livro = (new ImportadorClientes())->modelo($emitente);
         $arquivo = tempnam(sys_get_temp_dir(), 'cli').'.xlsx';
         (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($livro))->save($arquivo);
@@ -73,7 +74,7 @@ class TomadorController extends Controller
         $this->authorize('emitir');
 
         return view('tomadores.importar', [
-            'emitentes' => \App\Models\Emitente::where('ativo', true)->orderBy('razao_social')->get(),
+            'empresa'   => app(\App\Support\Tenancy\EmitenteAtual::class)->emitente(),
             'limite'    => ImportadorClientes::LIMITE_LINHAS,
             'temVideo'  => is_file(public_path('videos/tutorial-planilha-tomadores.mp4')),
         ]);

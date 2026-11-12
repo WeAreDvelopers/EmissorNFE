@@ -48,7 +48,7 @@ class ImportacaoController extends Controller
         $this->authorize('emitir');
 
         return view('importacoes.criar', [
-            'emitentes' => Emitente::where('ativo', true)->orderBy('razao_social')->get(),
+            'emitentes' => Emitente::where('ativo', true)->whereKey(app(\App\Support\Tenancy\EmitenteAtual::class)->id())->get(),   // só a empresa ativa
         ]);
     }
 
@@ -299,7 +299,8 @@ class ImportacaoController extends Controller
         $this->authorize('consultar');
 
         // O CNPJ da empresa vem preenchido em A1: é com ele que o app confere se a planilha é da empresa certa
-        $empresa = Emitente::where('ativo', true)->find($request->integer('emitente')) ?? Emitente::where('ativo', true)->orderBy('razao_social')->first();
+        // Sempre o modelo da empresa que está sendo administrada (não dá para baixar o de outra)
+        $empresa = app(\App\Support\Tenancy\EmitenteAtual::class)->emitente();
 
         $livro = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $aba = $livro->getActiveSheet()->setTitle('Notas');

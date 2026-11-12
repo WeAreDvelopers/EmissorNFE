@@ -5,7 +5,7 @@
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div>
                 <h1 class="text-3xl font-semibold">Tomadores (Clientes)</h1>
-                <p class="mt-1 text-[15px] text-ink-700">Quem recebe as suas notas. Cadastre vários de uma vez por planilha, ou deixe o cadastro ser atualizado quando você importa notas com a coluna “Atualizar” marcada.</p>
+                <p class="mt-1 text-[15px] text-ink-700">Quem recebe as notas de <b>{{ app(\App\Support\Tenancy\EmitenteAtual::class)->emitente()?->razao_social ?? 'sua empresa' }}</b>. Cadastre vários de uma vez por planilha, ou deixe o cadastro ser atualizado quando você importa notas com a coluna “Atualizar” marcada.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2" x-data>
                 <a href="{{ route('tomadores.modelo') }}" class="btn" title="Baixar a planilha modelo (.xlsx) para cadastrar tomadores">Baixar planilha modelo</a>

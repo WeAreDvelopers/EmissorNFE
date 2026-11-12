@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Enums\StatusNota;
 use App\Models\Concerns\PertenceAConta;
+use App\Models\Concerns\PertenceAoEmitente;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /** Cliente (tomador do serviço) de uma conta. */
 class Tomador extends Model
 {
-    use PertenceAConta;
+    use PertenceAConta, PertenceAoEmitente;
 
     protected $table = 'tomadores';
 
@@ -32,7 +33,7 @@ class Tomador extends Model
 
     protected $fillable = [
         'conta_id', 'documento', 'nome', 'nome_fantasia', 'logradouro', 'numero', 'complemento', 'bairro',
-        'municipio', 'codigo_municipio', 'uf', 'cep', 'emails', 'observacoes', 'pendente', 'ativo',
+        'municipio', 'codigo_municipio', 'uf', 'cep', 'emails', 'observacoes', 'pendente', 'ativo', 'emitente_id',
     ];
 
     protected $casts = ['emails' => 'array', 'pendente' => 'boolean', 'ativo' => 'boolean'];

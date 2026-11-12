@@ -131,17 +131,34 @@ class EmitenteCertificadoTest extends TestCase
         $this->actingAs($u)->post(route('emitentes.store'), $dados())->assertSessionHasErrors('cnpj');
     }
 
-    public function test_serie_70000_de_producao_e_aceita_e_salva_sem_certificado(): void
+    public function test_serie_vai_de_1_a_49999_e_salva_sem_certificado(): void
     {
         $dados = [
             'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
             'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
             'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
-            'serie_dps' => '70000', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
+            'informar_serie_dps' => '1', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
+        ];
+        $u = $this->usuarioDono();
+        foreach (['70000', '50000', '0'] as $recusada) {
+            $this->actingAs($u)->post(route('emitentes.store'), $dados + ['serie_dps' => $recusada])->assertSessionHasErrors('serie_dps');
+        }
+        $this->assertSame(0, \App\Models\Emitente::count());
+
+        $this->actingAs($u)->post(route('emitentes.store'), $dados + ['serie_dps' => '49999'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'serie_dps' => '49999']);
+    }
+
+    public function test_sem_informar_serie_vale_a_00001(): void
+    {
+        $dados = [
+            'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
+            'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
+            'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
+            'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
         ];
         $this->actingAs($this->usuarioDono())->post(route('emitentes.store'), $dados)->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'serie_dps' => '70000']);
-        $this->get(route('inicio'))->assertSee('falta o certificado digital A1');
+        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'serie_dps' => '00001', 'informar_serie_dps' => 0]);
     }
 
     public function test_producao_exige_certificado_cadastrado(): void
@@ -150,7 +167,7 @@ class EmitenteCertificadoTest extends TestCase
             'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
             'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
             'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
-            'serie_dps' => '70000', 'ambiente' => 1, 'codigo_tributacao_municipal' => '001',
+            'serie_dps' => '1', 'ambiente' => 1, 'codigo_tributacao_municipal' => '001',
         ];
         $this->actingAs($this->usuarioDono())->post(route('emitentes.store'), $dados)->assertSessionHasErrors('ambiente');
     }

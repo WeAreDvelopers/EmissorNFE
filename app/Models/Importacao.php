@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Enums\StatusNota;
 use App\Models\Concerns\PertenceAConta;
+use App\Models\Concerns\PertenceAoEmitente;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Importacao extends Model
 {
-    use PertenceAConta;
+    use PertenceAConta, PertenceAoEmitente;
 
     protected $table = 'importacoes';
 

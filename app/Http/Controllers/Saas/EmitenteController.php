@@ -24,7 +24,10 @@ class EmitenteController extends Controller
     {
         $this->authorize('consultar');
 
-        return view('emitentes.index', ['emitentes' => Emitente::orderBy('razao_social')->get()]);
+        return view('emitentes.index', [
+            'emitentes'      => Emitente::orderBy('razao_social')->get(),
+            'empresaAtivaId' => app(\App\Support\Tenancy\EmitenteAtual::class)->id(),
+        ]);
     }
 
     public function criar()
@@ -94,6 +97,15 @@ class EmitenteController extends Controller
         return back()->with('ok', 'Numeração ajustada. A próxima DPS será a nº '.number_format((int) $dados['proximo'], 0, ',', '.').'.');
     }
 
+    /** Escolhe a empresa que o usuário vai administrar (menu lateral). Notas, importações e tomadores passam a ser só dela. */
+    public function administrar(Request $request, Emitente $emitente)
+    {
+        abort_unless($emitente->ativo, 404);
+        $request->user()->forceFill(['emitente_atual_id' => $emitente->id])->save();
+
+        return redirect()->route('inicio')->with('ok', "Agora você está administrando {$emitente->razao_social}.");
+    }
+
     public function store(Request $request)
     {
         $this->authorize('gerenciar-emitentes');
@@ -161,7 +173,7 @@ class EmitenteController extends Controller
             'tp_ret_pis_cofins'   => [$federal ? 'required' : 'nullable', 'in:0,2'],
             'aliquota_pis'        => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
             'aliquota_cofins'     => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
-            'serie_dps'           => [$request->boolean('informar_serie_dps') ? 'required' : 'nullable', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => (((int) $v >= 1 && (int) $v <= 49999) || ((int) $v >= 70000 && (int) $v <= 79999)) ?: $f('Série deve estar entre 00001 e 49999 (teste) ou entre 70000 e 79999 (produção) (E0010).')],
+            'serie_dps'           => [$request->boolean('informar_serie_dps') ? 'required' : 'nullable', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
             'ambiente'            => ['required', 'in:1,2'],
             'logo'                => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'remover_logo'        => ['nullable', 'boolean'],
@@ -241,9 +253,9 @@ class EmitenteController extends Controller
         if (! $pisComAliquota) {
             $dados['aliquota_pis'] = $dados['aliquota_cofins'] = null;
         }
-        // Sem "informar série e número", vale a série do Emissor Nacional (70000) e a numeração é toda automática
+        // Sem "informar série e número", vale a série padrão (00001) e a numeração é toda automática
         $dados['informar_serie_dps'] = $request->boolean('informar_serie_dps');
-        $dados['serie_dps'] = str_pad($dados['informar_serie_dps'] ? $dados['serie_dps'] : '70000', 5, '0', STR_PAD_LEFT);
+        $dados['serie_dps'] = str_pad($dados['informar_serie_dps'] ? $dados['serie_dps'] : '1', 5, '0', STR_PAD_LEFT);
 
         // Sem certificado não há como assinar nem emitir: produção só com certificado cadastrado
         if ((int) $dados['ambiente'] === 1 && ! $request->hasFile('certificado') && ! $emitente->certificado_arquivo) {
@@ -251,7 +263,7 @@ class EmitenteController extends Controller
         }
 
         // Produção só depois de ter emitido em homologação (evita nota fiscal real por engano)
-        if ((int) $dados['ambiente'] === 1 && ! $emitente->notas()->where('status', 'emitida')->exists()) {
+        if ((int) $dados['ambiente'] === 1 && ! \App\Models\NotaFiscal::semIsolamento()->where('emitente_id', $emitente->id)->where('status', 'emitida')->exists()) {
             throw ValidationException::withMessages(['ambiente' => 'Emita ao menos uma nota em produção restrita antes de ativar produção.']);
         }
 

@@ -378,10 +378,10 @@
                         <div class="space-y-3">
                             <label class="flex items-start gap-2.5 text-sm cursor-pointer">
                                 <input type="checkbox" name="informar_serie_dps" value="1" x-model="informarSerie" class="mt-0.5 rounded text-brand-600 focus:ring-brand-600">
-                                <span><b>Informar série e número da DPS</b><span class="block text-[13px] text-ink-600">Como no Emissor Nacional. Desmarcado, a série é a 70000 (a do portal) e a numeração é toda automática.</span></span>
+                                <span><b>Informar série e número da DPS</b><span class="block text-[13px] text-ink-600">Como no Emissor Nacional. Desmarcado, a série é a 00001 e a numeração é toda automática.</span></span>
                             </label>
                             <div x-show="informarSerie" x-cloak>
-                                <x-campo nome="serie_dps" obrigatorio rotulo="Série" :valor="$emitente->informar_serie_dps ? $emitente->serie_dps : '70000'" maxlength="5" mono ajuda="Teste: 00001. Produção: 70000, a série do Emissor Nacional. Só mude se o seu contador pedir." x-bind:required="informarSerie" />
+                                <x-campo nome="serie_dps" obrigatorio rotulo="Série" :valor="$emitente->informar_serie_dps ? $emitente->serie_dps : '00001'" maxlength="5" mono ajuda="De 00001 a 49999. Já vem 00001; só mude se o seu contador pedir." x-bind:required="informarSerie" />
                             </div>
                         </div>
                         <x-campo nome="ambiente" obrigatorio tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera com o certificado cadastrado e depois de emitir uma nota em teste.">

@@ -23,6 +23,7 @@ class SaasServiceProvider extends ServiceProvider
     {
         // Uma conta ativa por requisição/job
         $this->app->scoped(ContaAtual::class);
+        $this->app->scoped(\App\Support\Tenancy\EmitenteAtual::class);
 
         $this->app->bind(GatewayPagamento::class, fn () => match (config('saas.gateway')) {
             'inter' => new InterGateway(),   // Pix direto no Banco Inter PJ (sem split)

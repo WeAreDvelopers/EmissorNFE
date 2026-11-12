@@ -35,7 +35,8 @@ trait PertenceAConta
 
     public static function semIsolamento(): Builder
     {
-        return static::withoutGlobalScope('conta');
+        // tira também o filtro por empresa ativa (quando o modelo tem): código de sistema enxerga tudo da conta
+        return static::withoutGlobalScope('conta')->withoutGlobalScope('emitente');
     }
 
     public function conta(): BelongsTo

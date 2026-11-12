@@ -4,12 +4,13 @@ namespace App\Models;
 
 use App\Enums\StatusNota;
 use App\Models\Concerns\PertenceAConta;
+use App\Models\Concerns\PertenceAoEmitente;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NotaFiscal extends Model
 {
-    use PertenceAConta;
+    use PertenceAConta, PertenceAoEmitente;
 
     protected $table = 'notas_fiscais';
 

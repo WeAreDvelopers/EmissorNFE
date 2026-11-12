@@ -50,12 +50,15 @@ class NotaManualCamposFiscaisTest extends TestCase
 
     private function empresa(array $extra = []): Emitente
     {
-        return app(ContaAtual::class)->como($this->conta->id, fn () => Emitente::create($extra + [
+        $e = app(ContaAtual::class)->como($this->conta->id, fn () => Emitente::create($extra + [
             'cnpj' => '19534920000118'.'', 'razao_social' => 'BR Controle Ltda', 'codigo_municipio' => '3550308',
             'op_simples_nacional' => 1, 'regime_apuracao_sn' => 1, 'regime_especial' => 0, 'serie_dps' => '00001', 'informar_serie_dps' => '1', 'ambiente' => 2,
             'codigo_servico_padrao' => '010701', 'descricao_servico_padrao' => 'Manutenção de programas de computação.', 'codigo_nbs_padrao' => '115080000',
             'codigo_tributacao_municipal' => '001', 'tributos_aprox' => ['federal' => 13.45, 'estadual' => 0, 'municipal' => 2.70],
         ]));
+        $this->user->forceFill(['emitente_atual_id' => $e->id])->save();   // como escolher a empresa no menu lateral
+
+        return $e;
     }
 
     private function dados(array $extra = []): array
@@ -475,6 +478,23 @@ class NotaManualCamposFiscaisTest extends TestCase
             'pis_cofins_cst' => '00', 'tp_ret_pis_cofins' => '0',
             'trib_issqn' => '1', 'retencao_issqn' => '1', 'deducao_tipo' => 'none',
         ], $extra);
+    }
+
+    public function test_lista_de_codigos_municipais_salva_edicao_e_remocao(): void
+    {
+        $url = route('emitentes.update', $this->emitente);
+        $lista = fn () => \App\Models\CodigoMunicipal::where('emitente_id', $this->emitente->id)->orderBy('codigo')->get(['codigo', 'descricao'])->map(fn ($c) => [$c->codigo, $c->descricao])->all();
+
+        $this->put($url, $this->dadosEmpresa(['codigos' => [['codigo' => '001', 'descricao' => 'Suporte', 'servico' => ''], ['codigo' => '002', 'descricao' => 'Outro', 'servico' => ''], ['codigo' => '003', 'descricao' => 'Terceiro', 'servico' => '']]]))->assertSessionHasNoErrors();
+        $this->assertSame([['001', 'Suporte'], ['002', 'Outro'], ['003', 'Terceiro']], $lista());
+
+        // edita a descrição de um e remove outro (o formulário reenvia só as linhas que sobraram)
+        $this->put($url, $this->dadosEmpresa(['codigos' => [['codigo' => '001', 'descricao' => 'Suporte técnico', 'servico' => ''], ['codigo' => '003', 'descricao' => 'Terceiro', 'servico' => '']]]))->assertSessionHasNoErrors();
+        $this->assertSame([['001', 'Suporte técnico'], ['003', 'Terceiro']], $lista());
+
+        // remove todos os da lista: sobra só o código padrão da empresa (001), que sempre consta
+        $this->put($url, $this->dadosEmpresa())->assertSessionHasNoErrors();
+        $this->assertSame([['001', null]], $lista());
     }
 
     public function test_empresa_configura_a_tributacao_municipal_padrao_com_as_travas_da_sefin(): void

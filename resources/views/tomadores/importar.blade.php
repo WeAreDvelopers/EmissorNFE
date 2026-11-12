@@ -10,7 +10,7 @@
             <form method="POST" action="{{ route('tomadores.importar') }}" enctype="multipart/form-data"
                   class="flex-[999_1_560px] min-w-0 space-y-5"
                   data-carregando="Lendo a planilha…"
-                  x-data="{ nome: null, tamanho: null, soltando: false, emitente: '{{ $emitentes->first()?->id }}',
+                  x-data="{ nome: null, tamanho: null, soltando: false,
                             escolher(f) { if (!f) return; this.nome = f.name; this.tamanho = (f.size / 1024).toFixed(0) + ' KB'; } }">
                 @csrf
 
@@ -28,15 +28,9 @@
                     </div>
                 @enderror
 
-                @if ($emitentes->isNotEmpty())
-                    <x-campo nome="emitente_modelo" tipo="select" rotulo="Emitente do modelo" x-model="emitente" ajuda="A linha 1 do modelo vem com o CNPJ e a razão social do emitente escolhido. Os tomadores são da conta, não de um emitente só.">
-                        @foreach ($emitentes as $e)
-                            <option value="{{ $e->id }}">{{ $e->razao_social }} · {{ \App\Support\Documento::formatar($e->cnpj) }}</option>
-                        @endforeach
-                    </x-campo>
-                    <p class="text-sm text-ink-700 -mb-2">Use a planilha no modelo: <a :href="'{{ route('tomadores.modelo') }}?emitente=' + emitente" class="link">baixar modelo deste emitente</a> (a linha 1 vem com o CNPJ e a razão social dele).</p>
-                @else
-                    <p class="text-sm text-ink-700">Use a planilha no modelo: <a href="{{ route('tomadores.modelo') }}" class="link">baixar modelo</a>.</p>
+                @if ($empresa)
+                    <p class="text-[15px]"><span class="campo-rotulo block">Tomadores da empresa</span><b>{{ $empresa->razao_social }}</b> <span class="font-mono text-ink-600">· {{ \App\Support\Documento::formatar($empresa->cnpj) }}</span></p>
+                    <p class="text-sm text-ink-700 -mb-2">Use a planilha no modelo: <a href="{{ route('tomadores.modelo') }}" class="link">baixar modelo desta empresa</a> (a linha 1 vem com o CNPJ e a razão social dela). Os tomadores importados ficam só nesta empresa.</p>
                 @endif
 
                 <label for="planilha"

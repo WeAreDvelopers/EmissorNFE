@@ -24,10 +24,6 @@
                 </div>
             </div>
             <div class="flex flex-wrap items-end gap-4">
-                <div class="w-full sm:w-[260px]">
-                    <label for="emitente" class="campo-rotulo">Empresa</label>
-                    <select id="emitente" name="emitente" class="campo-entrada"><option value="">Todas</option>@foreach ($emitentes as $e)<option value="{{ $e->id }}" @selected(($filtros['emitente'] ?? '') == $e->id)>{{ \Illuminate\Support\Str::limit($e->razao_social, 32) }}</option>@endforeach</select>
-                </div>
                 <div class="w-[calc(50%-8px)] sm:w-[178px]">
                     <label for="de" class="campo-rotulo">Competência de</label>
                     <input id="de" name="de" type="date" value="{{ $filtros['de'] ?? '' }}" class="campo-entrada">
