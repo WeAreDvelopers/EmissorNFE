@@ -129,8 +129,14 @@ class ImportadorClientes
                 continue;
             }
 
+            try {
+                $resultado = $this->gravar($tomador, $documento, $dados, $userId);
+            } catch (\Throwable $e) {
+                report($e);   // o detalhe técnico fica no log; para o usuário, só o que dá para agir
+                $r['erros'][] = ['linha' => $numero, 'mensagem' => 'Não foi possível gravar esta linha. Confira os dados dela; as demais linhas foram importadas.'];
+                continue;
+            }
             $vistos[$documento] = $numero;   // só conta como "visto" a linha que de fato entrou
-            $resultado = $this->gravar($tomador, $documento, $dados, $userId);
             $r[$resultado]++;
         }
 
@@ -176,12 +182,21 @@ class ImportadorClientes
         return $novo ? 'criados' : 'atualizados';
     }
 
+    /** Tamanho máximo de cada campo de texto (o mesmo das colunas do banco) e o nome que aparece no aviso. */
+    private const LIMITES = [
+        'nome' => [300, 'Razão Social/Nome'], 'nome_fantasia' => [300, 'Nome Fantasia'], 'logradouro' => [255, 'Logradouro'], 'numero' => [60, 'Número'],
+        'complemento' => [156, 'Complemento'], 'bairro' => [156, 'Bairro'], 'municipio' => [120, 'Município'], 'observacoes' => [2000, 'Observações'],
+    ];
+
     /** Só devolve o que a linha trouxe preenchido (vazio preserva o cadastro). */
     private function normalizar(array $l): array
     {
         $d = [];
-        foreach (['nome', 'nome_fantasia', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'observacoes'] as $c) {
+        foreach (self::LIMITES as $c => [$max, $rotulo]) {
             if (filled($v = trim((string) ($l[$c] ?? '')))) {
+                if (mb_strlen($v) > $max) {
+                    throw new \InvalidArgumentException("{$rotulo} passou de {$max} caracteres (tem ".mb_strlen($v).'). Encurte o texto; esta linha foi ignorada.');
+                }
                 $d[$c] = $v;
             }
         }

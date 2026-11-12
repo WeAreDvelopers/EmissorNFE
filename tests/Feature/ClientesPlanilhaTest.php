@@ -123,6 +123,23 @@ class ClientesPlanilhaTest extends TestCase
         $this->get(route('tomadores.index'))->assertSee(route('tomadores.importar.tela'), false);
     }
 
+    public function test_campo_grande_demais_vira_erro_da_linha_e_as_outras_entram_sem_mostrar_erro_de_banco(): void
+    {
+        $longo = str_repeat('Serviços ', 60);   // passa de 300 caracteres
+        $r = $this->importar($this->planilha([
+            ['19566539000130', 'Malix Automóveis Ltda', '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', 'a@b.com', ''],
+            ['51613696000162', $longo, '', 'Av. Independência', '3575', '', 'Batel', 'Campinas', 'SP', '13038341', 'c@d.com', ''],
+        ]));
+
+        $r->assertRedirect(route('tomadores.index'))->assertSessionHasNoErrors();
+        $resultado = session('importacao_clientes');
+        $this->assertSame(1, $resultado['criados']);
+        $this->assertSame(1, count($resultado['erros']));
+        $this->assertStringContainsString('Razão Social/Nome passou de 300 caracteres', $resultado['erros'][0]['mensagem']);
+        $this->assertStringNotContainsString('SQLSTATE', json_encode($resultado['erros']));
+        $this->assertSame(1, $this->clientes()->count());
+    }
+
     public function test_tela_de_clientes_mostra_baixar_modelo_e_importar(): void
     {
         $this->actingAs($this->user)->get(route('tomadores.index'))->assertOk()

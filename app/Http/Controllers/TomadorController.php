@@ -93,6 +93,10 @@ class TomadorController extends Controller
         $arquivo = $request->file('planilha');
         try {
             $r = $importador->importar($arquivo->getRealPath(), $request->user()?->id);
+        } catch (\Illuminate\Database\QueryException $e) {
+            report($e);   // erro de banco nunca vai para a tela
+
+            return back()->withErrors(['planilha' => 'Não foi possível importar esta planilha agora. Confira os dados e tente de novo; se continuar, avise o suporte.']);
         } catch (\RuntimeException $e) {
             return back()->withErrors(['planilha' => $e->getMessage()]);
         }
