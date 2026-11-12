@@ -21,6 +21,7 @@ class Emitente extends Model
         'certificado_validade', 'logo_arquivo', 'ativo', 'enviar_email_automatico', 'email_copia', 'codigo_tributacao_municipal',
         'modo_tributos_aprox', 'pis_cofins_cst', 'tp_ret_pis_cofins', 'aliquota_pis', 'aliquota_cofins',
         'trib_issqn', 'tp_imunidade', 'retencao_issqn', 'deducao_tipo', 'deducao_valor', 'codigo_municipio_prestacao',
+        'local_prestacao', 'informar_serie_dps',
     ];
 
     protected $casts = [
@@ -28,11 +29,17 @@ class Emitente extends Model
         'certificado_senha'    => 'encrypted',
         'certificado_validade' => 'datetime',
         'ativo'                => 'boolean',
+        'informar_serie_dps'   => 'boolean',
         'enviar_email_automatico' => 'boolean',
         'cobranca_desligada'   => 'boolean',
     ];
 
     protected $hidden = ['certificado_senha', 'certificado_arquivo'];
+
+    public function alteracoes(): HasMany
+    {
+        return $this->hasMany(EmitenteAlteracao::class)->latest('created_at')->latest('id');
+    }
 
     public function notas(): HasMany
     {
@@ -71,7 +78,8 @@ class Emitente extends Model
             'retencao_issqn'      => (int) ($this->retencao_issqn ?: 1),
             'deducao_tipo'        => $this->deducao_tipo ?: null,
             'deducao_valor'       => $this->deducao_valor !== null ? (float) $this->deducao_valor : null,
-            'codigo_municipio_prestacao' => $this->codigo_municipio_prestacao ?: null,
+            'codigo_municipio_prestacao' => $this->local_prestacao === 'outro' ? ($this->codigo_municipio_prestacao ?: null) : null,
+            'local_prestacao'     => $this->local_prestacao ?: 'emitente',
             'pis_cofins_cst'      => $this->pis_cofins_cst ?: '00',
             'tp_ret_pis_cofins'   => (int) $this->tp_ret_pis_cofins,
             'aliquota_pis'        => $this->aliquota_pis,
@@ -82,7 +90,7 @@ class Emitente extends Model
     /** Município da prestação do serviço: o da empresa, ou outro quando a empresa presta sempre em outro lugar. */
     public function codigoMunicipioPrestacao(): string
     {
-        return (string) ($this->codigo_municipio_prestacao ?: $this->codigo_municipio);
+        return (string) ($this->local_prestacao === 'outro' && $this->codigo_municipio_prestacao ? $this->codigo_municipio_prestacao : $this->codigo_municipio);
     }
 
     /** Dedução/redução da base de cálculo: não optante, ou ME/EPP com o ISSQN apurado pela NFS-e (E0436, E0441, E0442). */

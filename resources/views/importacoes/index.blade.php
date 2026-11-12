@@ -12,7 +12,7 @@
                 <h1 class="text-3xl font-semibold">Importações</h1>
                 <p class="mt-1 text-[15px] text-ink-700">Cada planilha vira um lote de notas para emitir.</p>
             </div>
-            @can('emitir')<a href="{{ route('importacoes.criar') }}" class="btn btn-primary btn-lg">+ Nova importação</a>@endcan
+            @can('emitir')<a href="{{ route('importacoes.criar') }}" class="btn btn-primary">+ Nova importação</a>@endcan
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

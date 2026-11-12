@@ -113,7 +113,7 @@ class NotaManualController extends Controller
         $digitos = preg_replace('/\D/', '', $busca);
 
         return response()->json(
-            Tomador::where(function ($q) use ($busca, $digitos) {
+            Tomador::where('ativo', true)->where(function ($q) use ($busca, $digitos) {
                 $q->where('nome', 'like', "%{$busca}%")->orWhere('nome_fantasia', 'like', "%{$busca}%");
                 if ($digitos !== '') {
                     $q->orWhere('documento', 'like', "%{$digitos}%");

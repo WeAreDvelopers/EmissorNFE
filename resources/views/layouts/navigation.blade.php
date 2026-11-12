@@ -4,7 +4,10 @@
     $saldo      = $contaAtiva ? \App\Models\Carteira::where('conta_id', $contaAtiva->id)->value('disponivel') : null;
 
     // Selo de ambiente sempre visível: o medo de emitir "de verdade" sem querer é real.
-    $ambientes  = $contaAtiva ? \App\Models\Emitente::where('ativo', true)->pluck('ambiente') : collect();
+    $emitentesAtivos = $contaAtiva ? \App\Models\Emitente::where('ativo', true)->get(['ambiente', 'cobranca_desligada']) : collect();
+    $ambientes  = $emitentesAtivos->pluck('ambiente');
+    // Conta isenta: todas as empresas ativas estão com a cobrança desligada (pelo master) → não mostra "Créditos"
+    $semCreditos = $emitentesAtivos->isNotEmpty() && $emitentesAtivos->every(fn ($e) => (bool) $e->cobranca_desligada);
     $modoTeste  = $ambientes->isNotEmpty() && $ambientes->contains(2);
     $emProducao = $ambientes->isNotEmpty() && ! $modoTeste;
 
@@ -37,16 +40,19 @@
                 ['notas.manual', 'Emitir nota', 'emitir', 'notas.manual*', 'nova'],
                 ['importacoes.index', 'Importações', 'consultar', 'importacoes.*', 'lotes'],
                 ['notas.index', 'Notas', 'consultar', 'notas.index', 'notas'],
-                ['tomadores.index', 'Clientes', 'consultar', 'tomadores.*', 'clientes'],
+                ['tomadores.index', 'Tomadores (Clientes)', 'consultar', 'tomadores.*', 'clientes'],
                 ['relatorios.index', 'Relatório do mês', 'consultar', 'relatorios.*', 'visao'],
             ],
             'Conta' => [
                 ['creditos.index', 'Créditos', 'consultar', 'creditos.*', 'creditos'],
-                ['emitentes.index', 'Empresas que emitem', 'consultar', 'emitentes.*', 'empresas'],
+                ['emitentes.index', 'Emitentes', 'consultar', 'emitentes.*', 'empresas'],
                 ['usuarios.index', 'Usuários', 'gerenciar-usuarios', 'usuarios.*', 'usuarios'],
                 ['auditoria.index', 'Auditoria', 'gerenciar-conta', 'auditoria.*', 'notas'],
             ],
         ];
+        if ($semCreditos) {
+            $grupos['Conta'] = array_values(array_filter($grupos['Conta'], fn ($l) => $l[0] !== 'creditos.index'));
+        }
     } else {
         $grupos = [];
     }
@@ -58,7 +64,7 @@
         <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
     </button>
     <a href="{{ route($noMaster ? 'master.visao' : 'dashboard') }}" class="font-semibold text-white no-underline">{{ config('saas.nome_produto', 'Emissor NFS-e') }}</a>
-    @if ($contaAtiva && ! $noMaster)
+    @if ($contaAtiva && ! $noMaster && ! $semCreditos)
         <a href="{{ route('creditos.index') }}" class="text-sm text-white no-underline rounded-lg bg-white/10 px-3 py-1.5"><b class="font-mono">{{ number_format($saldo ?? 0, 0, ',', '.') }}</b> créd.</a>
     @else
         <span class="w-11"></span>
@@ -123,7 +129,7 @@
     </nav>
 
     <div class="shrink-0 p-3 space-y-3 border-t border-white/10">
-        @if ($contaAtiva && ! $noMaster)
+        @if ($contaAtiva && ! $noMaster && ! $semCreditos)
             <a href="{{ route('creditos.index') }}" class="flex items-center justify-between gap-3 rounded-xl bg-white/[.07] hover:bg-white/10 px-3.5 py-3 no-underline text-white" title="Créditos disponíveis">
                 <span>
                     <span class="block text-[13px] text-casca-texto/80">Créditos</span>

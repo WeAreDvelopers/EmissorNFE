@@ -39,38 +39,49 @@ class ImportadorClientes
         'observacoes'   => 'Observações',
     ];
 
-    public function modelo(): Spreadsheet
+    /**
+     * Modelo para baixar. Linha 1: CNPJ e razão social do emitente (só para identificar de quem é a planilha; o app não os lê);
+     * linha 2: cabeçalhos; a partir da linha 3: um tomador por linha. As regras detalhadas ficam numa aba protegida.
+     */
+    public function modelo(?\App\Models\Emitente $emitente = null): Spreadsheet
     {
         $livro = new Spreadsheet();
         $aba = $livro->getActiveSheet()->setTitle('Clientes');
 
+        $aba->setCellValueExplicit('A1', $emitente ? Documento::formatar($emitente->cnpj) : '00.000.000/0000-00', DataType::TYPE_STRING);
+        $aba->setCellValue('B1', $emitente ? $emitente->razao_social : 'Razão social do emitente');
+        $aba->getStyle('A1:B1')->getFont()->setBold(true)->setSize(13);
+        $aba->getStyle('A1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('DDEFE3');
+
         $col = 1;
         foreach (self::COLUNAS as $titulo) {
-            $aba->setCellValue([$col, 1], $titulo);
+            $aba->setCellValue([$col, 2], $titulo);
             $aba->getColumnDimensionByColumn($col)->setWidth(max(14, mb_strlen($titulo) + 6));
             $col++;
         }
         $ultima = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count(self::COLUNAS));
-        $aba->getStyle("A1:{$ultima}1")->getFont()->setBold(true);
-        $aba->getStyle("A1:{$ultima}1")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('DDEFE3');
-        $aba->freezePane('A2');
+        $aba->getStyle("A2:{$ultima}2")->getFont()->setBold(true);
+        $aba->getStyle("A2:{$ultima}2")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('DDEFE3');
+        $aba->freezePane('A3');
+        $aba->getColumnDimension('A')->setWidth(22);
         $aba->getColumnDimension('B')->setWidth(36);
         $aba->getColumnDimension('K')->setWidth(36);
         // CNPJ/CPF, número e CEP como texto: o Excel não pode comer os zeros da frente
         foreach (['A', 'E', 'J'] as $c) {
-            $aba->getStyle("{$c}2:{$c}2000")->getNumberFormat()->setFormatCode('@');
+            $aba->getStyle("{$c}3:{$c}2000")->getNumberFormat()->setFormatCode('@');
         }
 
         $ajuda = $livro->createSheet()->setTitle('Como preencher');
         $linhas = [
-            ['Como preencher a planilha de clientes'],
+            ['Como preencher a planilha de tomadores (clientes)'],
             [''],
-            ['• Preencha a aba "Clientes", uma linha por cliente, a partir da linha 2. Não mude os cabeçalhos da linha 1.'],
-            ['• CNPJ/CPF é obrigatório (com ou sem pontuação). Razão Social/Nome é obrigatório para cliente novo.'],
-            ['• Cliente que já existe (mesmo CNPJ/CPF): só os campos preenchidos são atualizados. Célula vazia mantém o que já está cadastrado.'],
-            ['• Para emitir nota o cliente precisa de endereço completo (logradouro, número, bairro, município, UF e CEP) e ao menos 1 e-mail.'],
+            ['• Linha 1: CNPJ e razão social do emitente. Serve só para identificar de quem é a planilha; não precisa mexer.'],
+            ['• Linha 2: cabeçalhos. Não mude os nomes nem a ordem. Preencha a aba "Clientes" a partir da linha 3, um tomador por linha.'],
+            ['• CNPJ/CPF é obrigatório (com ou sem pontuação). Razão Social/Nome é obrigatório para tomador novo.'],
+            ['• Tomador que já existe (mesmo CNPJ/CPF): só os campos preenchidos são atualizados. Célula vazia mantém o que já está cadastrado.'],
+            ['• Para emitir nota o tomador precisa de endereço completo (logradouro, número, bairro, município, UF e CEP) e ao menos 1 e-mail.'],
             ['• E-mails: separe por vírgula ou ponto e vírgula. O primeiro é o principal e vai no XML da nota; o aviso de nota emitida vai para todos.'],
-            ['• UF com 2 letras (ex.: SP). O código IBGE do município é descoberto sozinho pelo nome e pela UF.'],
+            ['• UF com 2 letras (ex.: SP). O código IBGE do município é descoberto sozinho pelo nome e pela UF (ou pelo CEP).'],
             ['• Linhas com problema são listadas depois da importação; as demais são importadas normalmente.'],
             ['• Até '.self::LIMITE_LINHAS.' linhas por arquivo.'],
         ];
@@ -78,7 +89,9 @@ class ImportadorClientes
             $ajuda->setCellValue([1, $i + 1], $l[0]);
         }
         $ajuda->getStyle('A1')->getFont()->setBold(true)->setSize(13);
-        $ajuda->getColumnDimension('A')->setWidth(120);
+        $ajuda->getColumnDimension('A')->setWidth(130);
+        // Aba de regras protegida: o usuário lê, mas não edita
+        $ajuda->getProtection()->setSheet(true)->setPassword('regras-modelo');
         $livro->setActiveSheetIndex(0);
 
         return $livro;
@@ -228,16 +241,18 @@ class ImportadorClientes
         }
 
         foreach ($planilha->getAllSheets() as $aba) {
-            if (($cab = $this->cabecalho($aba)) && isset($cab['documento'])) {
-                return $this->linhas($aba, $cab);
+            foreach ([2, 1] as $linhaCab) {   // modelo atual: cabeçalho na linha 2 (a 1 identifica o emitente); modelo antigo: na linha 1
+                if (($cab = $this->cabecalho($aba, $linhaCab)) && isset($cab['documento'])) {
+                    return $this->linhas($aba, $cab, $linhaCab);
+                }
             }
         }
 
-        throw new \RuntimeException('Arquivo fora do padrão: não encontramos a coluna "CNPJ/CPF" na linha 1. Baixe a planilha modelo de clientes e copie os dados para ela.');
+        throw new \RuntimeException('Arquivo fora do padrão: não encontramos a coluna "CNPJ/CPF" nos cabeçalhos (linha 2). Baixe a planilha modelo de tomadores e copie os dados para ela.');
     }
 
     /** @return array<string,int> campo => índice da coluna */
-    private function cabecalho(Worksheet $aba): array
+    private function cabecalho(Worksheet $aba, int $linhaCab = 1): array
     {
         $apelidos = [
             'documento' => ['cnpjcpf', 'cpfcnpj', 'cnpj', 'cpf', 'documento'],
@@ -257,7 +272,7 @@ class ImportadorClientes
         $mapa = [];
         $max = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($aba->getHighestColumn());
         for ($c = 1; $c <= $max; $c++) {
-            $chave = preg_replace('/[^a-z0-9]/', '', Str::of((string) $aba->getCell([$c, 1])->getValue())->ascii()->lower()->toString());
+            $chave = preg_replace('/[^a-z0-9]/', '', Str::of((string) $aba->getCell([$c, $linhaCab])->getValue())->ascii()->lower()->toString());
             foreach ($apelidos as $campo => $lista) {
                 if (! isset($mapa[$campo]) && in_array($chave, $lista, true)) {
                     $mapa[$campo] = $c;
@@ -268,7 +283,7 @@ class ImportadorClientes
         return $mapa;
     }
 
-    private function linhas(Worksheet $aba, array $cab): array
+    private function linhas(Worksheet $aba, array $cab, int $linhaCab = 1): array
     {
         $ultima = min($aba->getHighestRow(), self::LIMITE_LINHAS + 1);
         if ($aba->getHighestRow() > self::LIMITE_LINHAS + 1) {
@@ -276,7 +291,7 @@ class ImportadorClientes
         }
 
         $saida = [];
-        for ($r = 2; $r <= $ultima; $r++) {
+        for ($r = $linhaCab + 1; $r <= $ultima; $r++) {
             $linha = [];
             foreach ($cab as $campo => $c) {
                 $v = $aba->getCell([$c, $r])->getValue();

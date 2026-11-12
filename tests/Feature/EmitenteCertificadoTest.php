@@ -103,6 +103,78 @@ class EmitenteCertificadoTest extends TestCase
         new \App\Services\Nfse\Certificado($legado, 'senha-errada');
     }
 
+    public function test_certificado_de_outro_cnpj_volta_com_erro_e_a_tela_renderiza_mantendo_o_codigo_de_servico(): void
+    {
+        $r = $this->actingAs($this->usuarioDono())->followingRedirects()
+            ->from(route('emitentes.criar'))
+            ->post(route('emitentes.store'), [
+                'cnpj' => '43.559.579/0001-30', 'razao_social' => 'PROFITCAR LTDA', 'codigo_municipio' => '3549904',
+                'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
+                'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
+                'serie_dps' => '1', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001', 'codigo_servico_padrao' => '010701',
+                'certificado' => UploadedFile::fake()->createWithContent('c.pfx', $this->pfx('segredo')), 'certificado_senha' => 'segredo',
+            ]);
+        $r->assertOk()->assertSee('não do emitente')->assertSee('010701');
+        $this->assertDatabaseMissing('emitentes', ['cnpj' => '43559579000130']);
+    }
+
+    public function test_cnpj_repetido_na_conta_avisa_em_vez_de_dar_erro_500(): void
+    {
+        $dados = fn () => [
+            'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
+            'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
+            'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
+            'serie_dps' => '1', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
+        ];
+        $u = $this->usuarioDono();
+        $this->actingAs($u)->post(route('emitentes.store'), $dados())->assertSessionHasNoErrors();
+        $this->actingAs($u)->post(route('emitentes.store'), $dados())->assertSessionHasErrors('cnpj');
+    }
+
+    public function test_serie_70000_de_producao_e_aceita_e_salva_sem_certificado(): void
+    {
+        $dados = [
+            'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
+            'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
+            'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
+            'serie_dps' => '70000', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
+        ];
+        $this->actingAs($this->usuarioDono())->post(route('emitentes.store'), $dados)->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'serie_dps' => '70000']);
+        $this->get(route('inicio'))->assertSee('falta o certificado digital A1');
+    }
+
+    public function test_producao_exige_certificado_cadastrado(): void
+    {
+        $dados = [
+            'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
+            'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
+            'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
+            'serie_dps' => '70000', 'ambiente' => 1, 'codigo_tributacao_municipal' => '001',
+        ];
+        $this->actingAs($this->usuarioDono())->post(route('emitentes.store'), $dados)->assertSessionHasErrors('ambiente');
+    }
+
+    public function test_historico_registra_o_primeiro_cadastro_e_as_alteracoes_com_antes_e_depois(): void
+    {
+        $dados = [
+            'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
+            'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => '6', 'regime_especial' => 0,
+            'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
+            'serie_dps' => '1', 'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
+        ];
+        $u = $this->usuarioDono();
+        $this->actingAs($u)->post(route('emitentes.store'), $dados)->assertSessionHasNoErrors();
+        $e = \App\Models\Emitente::firstOrFail();
+        $this->assertSame('cadastro', $e->alteracoes()->first()->origem);
+
+        $this->actingAs($u)->put(route('emitentes.update', $e), ['razao_social' => 'PADARIA NOVA LTDA'] + $dados)->assertSessionHasNoErrors();
+        $this->assertSame(2, $e->alteracoes()->count());
+        $ultima = $e->alteracoes()->first();
+        $this->assertSame(['de' => 'PADARIA TESTE LTDA', 'para' => 'PADARIA NOVA LTDA'], $ultima->campos['razao_social']);
+        $this->actingAs($u)->get(route('emitentes.editar', $e))->assertOk()->assertSee('Primeiro cadastro')->assertSee('PADARIA NOVA LTDA');
+    }
+
     public function test_cadastra_empresa_me_epp_mesmo_com_campos_de_tributos_escondidos_vazios(): void
     {
         $this->actingAs($this->usuarioDono())

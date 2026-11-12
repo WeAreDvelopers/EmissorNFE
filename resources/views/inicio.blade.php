@@ -47,12 +47,15 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        @php $semCreditos = \App\Models\Emitente::where('ativo', true)->get(['cobranca_desligada'])->pipe(fn ($c) => $c->isNotEmpty() && $c->every(fn ($e) => (bool) $e->cobranca_desligada)); @endphp
+        <div class="grid grid-cols-1 {{ $semCreditos ? 'sm:grid-cols-2' : 'sm:grid-cols-3' }} gap-4">
+            @unless ($semCreditos)
             <div class="card p-5">
                 <div class="text-sm text-ink-600">Créditos disponíveis</div>
                 <div class="text-4xl font-semibold font-mono mt-1 {{ $carteira->disponivel <= 0 ? 'text-warn-800' : '' }}">{{ number_format($carteira->disponivel, 0, ',', '.') }}</div>
                 <div class="text-[13px] text-ink-600 mt-1">{{ number_format($carteira->reservado, 0, ',', '.') }} reservados para notas na fila · 1 crédito por nota emitida</div>
             </div>
+            @endunless
             <div class="card p-5">
                 <div class="text-sm text-ink-600">Emitidas neste mês</div>
                 <div class="text-4xl font-semibold font-mono mt-1 text-ok-800">{{ number_format($emitidasMes, 0, ',', '.') }}</div>

@@ -24,7 +24,7 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <section class="card p-5 sm:p-6">
-                <h2 class="text-lg font-semibold">Empresas que emitem</h2>
+                <h2 class="text-lg font-semibold">Emitentes</h2>
                 @forelse ($emitentes as $e)
                     @php $venc = $e->certificado_validade; @endphp
                     <div class="tabela-linha py-3">

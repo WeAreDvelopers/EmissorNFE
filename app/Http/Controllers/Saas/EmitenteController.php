@@ -74,6 +74,7 @@ class EmitenteController extends Controller
             'numeracao'    => $numeracao->situacao($emitente),
             'historicoDps' => $numeracao->historico($emitente),
             'ajustesDps'   => $numeracao->ajustes($emitente),
+            'alteracoes'   => $emitente->alteracoes()->with('user')->get(),
         ]);
     }
 
@@ -146,6 +147,8 @@ class EmitenteController extends Controller
             'retencao_issqn'      => ['nullable', 'in:1,2'],
             'deducao_tipo'        => ['nullable', 'in:none,percentual,valor'],
             'deducao_valor'       => ['nullable', in_array($request->input('deducao_tipo'), ['percentual', 'valor'], true) ? 'required' : 'nullable', 'numeric', 'gt:0', $request->input('deducao_tipo') === 'percentual' ? 'lte:100' : 'lt:999999999999'],
+            'local_prestacao'     => ['nullable', 'in:emitente,tomador,outro'],
+            'informar_serie_dps'  => ['nullable', 'boolean'],
             'municipio_prestacao' => ['nullable', 'string', 'max:120'],
             'uf_prestacao'        => ['nullable', 'string', 'size:2'],
             'aliquota_simples'    => ['nullable', $modo === 'simples' ? 'required' : 'nullable', 'numeric', 'between:0,100'],
@@ -158,15 +161,20 @@ class EmitenteController extends Controller
             'tp_ret_pis_cofins'   => [$federal ? 'required' : 'nullable', 'in:0,2'],
             'aliquota_pis'        => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
             'aliquota_cofins'     => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
-            'serie_dps'           => ['required', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
+            'serie_dps'           => [$request->boolean('informar_serie_dps') ? 'required' : 'nullable', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => (((int) $v >= 1 && (int) $v <= 49999) || ((int) $v >= 70000 && (int) $v <= 79999)) ?: $f('Série deve estar entre 00001 e 49999 (teste) ou entre 70000 e 79999 (produção) (E0010).')],
             'ambiente'            => ['required', 'in:1,2'],
             'logo'                => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'remover_logo'        => ['nullable', 'boolean'],
-            'certificado'         => [$novo ? 'required' : 'nullable', 'file', 'max:100'],
+            'certificado'         => ['nullable', 'file', 'max:100'],   // por ora a empresa pode ser salva sem certificado
             'certificado_senha'   => ['required_with:certificado', 'nullable', 'string'],
         ]);
 
         $dados['cnpj'] = preg_replace('/\D/', '', $dados['cnpj']);
+
+        // Cada CNPJ só pode ser cadastrado uma vez por conta (índice único no banco): avisa em vez de dar erro 500
+        if (Emitente::where('cnpj', $dados['cnpj'])->when($emitente->exists, fn ($q) => $q->whereKeyNot($emitente->id))->exists()) {
+            throw ValidationException::withMessages(['cnpj' => 'Já existe uma empresa com este CNPJ nesta conta. Abra-a em Emitentes para editar.']);
+        }
 
         $dados['trib_issqn'] ??= 1;
         $dados['retencao_issqn'] ??= 1;
@@ -198,7 +206,11 @@ class EmitenteController extends Controller
             $erros['deducao_tipo'] = $op === 2 ? 'MEI não pode ter dedução/redução da base de cálculo.' : 'Dedução/redução só vale para operação tributável, sem regime especial, de empresa não optante ou ME/EPP com o ISSQN apurado pela NFS-e.';
         }
         $codigoPrestacao = null;
-        if (filled($dados['municipio_prestacao'] ?? null) || filled($dados['uf_prestacao'] ?? null)) {
+        $dados['local_prestacao'] = $dados['local_prestacao'] ?? 'emitente';
+        if ($dados['local_prestacao'] === 'outro' && ! filled($dados['municipio_prestacao'] ?? null)) {
+            $erros['municipio_prestacao'] = 'Informe a UF e o município da prestação, ou escolha "do emitente" ou "do destinatário".';
+        }
+        if ($dados['local_prestacao'] === 'outro' && (filled($dados['municipio_prestacao'] ?? null) || filled($dados['uf_prestacao'] ?? null))) {
             $codigoPrestacao = MunicipiosIbge::codigo($dados['municipio_prestacao'] ?? null, $dados['uf_prestacao'] ?? null);
             if (! $codigoPrestacao) {
                 $erros['municipio_prestacao'] = 'Município da prestação não reconhecido: confira o nome e a UF.';
@@ -229,7 +241,14 @@ class EmitenteController extends Controller
         if (! $pisComAliquota) {
             $dados['aliquota_pis'] = $dados['aliquota_cofins'] = null;
         }
-        $dados['serie_dps'] = str_pad($dados['serie_dps'], 5, '0', STR_PAD_LEFT);
+        // Sem "informar série e número", vale a série do Emissor Nacional (70000) e a numeração é toda automática
+        $dados['informar_serie_dps'] = $request->boolean('informar_serie_dps');
+        $dados['serie_dps'] = str_pad($dados['informar_serie_dps'] ? $dados['serie_dps'] : '70000', 5, '0', STR_PAD_LEFT);
+
+        // Sem certificado não há como assinar nem emitir: produção só com certificado cadastrado
+        if ((int) $dados['ambiente'] === 1 && ! $request->hasFile('certificado') && ! $emitente->certificado_arquivo) {
+            throw ValidationException::withMessages(['ambiente' => 'Cadastre o certificado digital da empresa antes de ativar produção.']);
+        }
 
         // Produção só depois de ter emitido em homologação (evita nota fiscal real por engano)
         if ((int) $dados['ambiente'] === 1 && ! $emitente->notas()->where('status', 'emitida')->exists()) {
@@ -267,7 +286,7 @@ class EmitenteController extends Controller
         $campos = ['razao_social', 'cnpj', 'inscricao_municipal', 'codigo_municipio', 'codigo_servico_padrao', 'descricao_servico_padrao', 'codigo_nbs_padrao',
             'op_simples_nacional', 'regime_apuracao_sn', 'regime_especial', 'aliquota_simples', 'tributos_aprox', 'serie_dps', 'ambiente', 'enviar_email_automatico', 'email_copia', 'codigo_tributacao_municipal',
             'modo_tributos_aprox', 'pis_cofins_cst', 'tp_ret_pis_cofins', 'aliquota_pis', 'aliquota_cofins',
-            'trib_issqn', 'tp_imunidade', 'retencao_issqn', 'deducao_tipo', 'deducao_valor', 'codigo_municipio_prestacao'];
+            'trib_issqn', 'tp_imunidade', 'retencao_issqn', 'deducao_tipo', 'deducao_valor', 'codigo_municipio_prestacao', 'local_prestacao', 'informar_serie_dps'];
         $antes = $novo ? [] : $emitente->only($campos);
         if (! $novo) {   // empresa antiga, sem escolha gravada: o padrão do regime conta como valor anterior (não é mudança)
             $antes['modo_tributos_aprox'] = $emitente->modoTributosAprox();
@@ -306,6 +325,12 @@ class EmitenteController extends Controller
         if ($pfx) {
             $mudancas['certificado'] = ['de' => $novo ? null : 'anterior', 'para' => 'novo (válido até '.$cert->validoAte()?->format('d/m/Y').')'];
         }
+        if ($mudancas) {
+            \App\Models\EmitenteAlteracao::create([
+                'conta_id' => $emitente->conta_id, 'emitente_id' => $emitente->id, 'user_id' => $request->user()?->id,
+                'origem' => $novo ? 'cadastro' : 'edicao', 'campos' => $mudancas,
+            ]);
+        }
         if ($novo || $mudancas) {
             \App\Models\Auditoria::registrar($novo ? 'empresa_criada' : 'empresa_alterada', ($novo ? 'Empresa cadastrada: ' : 'Empresa alterada: ').$emitente->razao_social.'.', $novo ? ['cnpj' => $emitente->cnpj, 'ambiente' => (int) $emitente->ambiente] : $mudancas);
         }
@@ -314,8 +339,15 @@ class EmitenteController extends Controller
             Storage::disk('public')->delete($logoAntiga);
         }
 
-        return $novo
+        $resposta = $novo
             ? redirect()->route('inicio')->with('ok', 'Empresa cadastrada. Agora é só importar a sua primeira planilha.')
-            : redirect()->route('emitentes.index')->with('ok', 'Empresa atualizada.');
+            : redirect()->route('emitentes.editar', $emitente)->with('confirmacao', 'Empresa atualizada com sucesso.')->with('confirmacao_destino', route('emitentes.index'));
+
+        // Salvou sem certificado: tudo bem por ora, mas avisa em destaque que ainda falta
+        if (! $emitente->fresh()->certificado_arquivo) {
+            $resposta->with('aviso', 'Os dados da empresa foram salvos, mas falta o certificado digital A1. Sem ele não é possível emitir notas nem ativar produção. Envie o certificado em Emitentes > Editar.');
+        }
+
+        return $resposta;
     }
 }

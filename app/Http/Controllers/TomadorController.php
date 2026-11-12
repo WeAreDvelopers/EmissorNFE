@@ -21,6 +21,7 @@ class TomadorController extends Controller
 
         $busca = trim((string) $request->query('q', ''));
         $soPendentes = $request->boolean('pendentes');
+        $tipo = in_array($request->query('tipo'), ['pf', 'pj'], true) ? $request->query('tipo') : '';
 
         $consulta = Tomador::query()->orderBy('nome')
             ->withCount(['notas as notas_emitidas' => fn ($q) => $q->whereIn('status', [StatusNota::Emitida->value, StatusNota::Cancelada->value])]);
@@ -36,6 +37,9 @@ class TomadorController extends Controller
         if ($soPendentes) {
             $consulta->where('pendente', true);
         }
+        if ($tipo !== '') {
+            $consulta->whereRaw('length(documento) = ?', [$tipo === 'pf' ? 11 : 14]);   // CPF = 11 números, CNPJ = 14
+        }
 
         [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, ['cliente' => 'nome', 'cidade' => 'municipio', 'emails' => 'emails', 'situacao' => 'pendente']);
 
@@ -44,20 +48,35 @@ class TomadorController extends Controller
             'tomadores'  => $consulta->paginate(25)->withQueryString(),
             'busca'      => $busca,
             'soPendentes' => $soPendentes,
+            'tipo'       => $tipo,
             'totalPendentes' => Tomador::where('pendente', true)->count(),
         ]);
     }
 
     /** Planilha modelo para cadastrar clientes em lote. */
-    public function modelo()
+    public function modelo(Request $request)
     {
         $this->authorize('consultar');
 
-        $livro = (new ImportadorClientes())->modelo();
+        // A linha 1 do modelo traz o CNPJ e a razão social do emitente escolhido (ou o primeiro ativo)
+        $emitente = \App\Models\Emitente::where('ativo', true)->find($request->integer('emitente')) ?? \App\Models\Emitente::where('ativo', true)->orderBy('razao_social')->first();
+        $livro = (new ImportadorClientes())->modelo($emitente);
         $arquivo = tempnam(sys_get_temp_dir(), 'cli').'.xlsx';
         (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($livro))->save($arquivo);
 
         return response()->download($arquivo, 'modelo-clientes.xlsx')->deleteFileAfterSend(true);
+    }
+
+    /** Tela de importação da planilha de tomadores (mesmo padrão da importação de notas). */
+    public function telaImportar()
+    {
+        $this->authorize('emitir');
+
+        return view('tomadores.importar', [
+            'emitentes' => \App\Models\Emitente::where('ativo', true)->orderBy('razao_social')->get(),
+            'limite'    => ImportadorClientes::LIMITE_LINHAS,
+            'temVideo'  => is_file(public_path('videos/tutorial-planilha-tomadores.mp4')),
+        ]);
     }
 
     /** Importa a planilha de clientes: cria os novos e atualiza só o que veio preenchido nos já cadastrados. */
@@ -114,7 +133,7 @@ class TomadorController extends Controller
         }
 
         $dados = $this->camposDoFormulario($request);
-        $dados['codigo_municipio'] = MunicipiosIbge::codigo($dados['municipio'] ?? null, $dados['uf'] ?? null);
+        $dados['codigo_municipio'] = $dados['codigo_municipio'] ?? Tomador::descobrirCodigoMunicipio($dados['municipio'] ?? null, $dados['uf'] ?? null, $dados['cep'] ?? null);
 
         $tomador = new Tomador($dados + ['documento' => $documento]);
         $tomador->pendente = ! $tomador->enderecoCompleto();
@@ -124,7 +143,8 @@ class TomadorController extends Controller
 
         $aviso = $tomador->pendente ? ' O endereço está incompleto: as notas saem sem o endereço dele até você completar.' : '';
 
-        return redirect()->route('tomadores.index')->with('ok', "Cliente “{$tomador->nome}” cadastrado.".$aviso);
+        return redirect()->route('tomadores.index')->with('ok', "Cliente “{$tomador->nome}” cadastrado.".$aviso)
+            ->with('confirmacao', "Cadastro de “{$tomador->nome}” criado com sucesso.".$aviso);
     }
 
     /** Valida e limpa os campos do formulário de cliente (cadastro e edição): texto aparado, CEP só números, UF maiúscula, e-mails em lista. */
@@ -133,18 +153,26 @@ class TomadorController extends Controller
         $dados = $request->validate([
             'nome'          => ['required', 'string', 'max:300'],
             'nome_fantasia' => ['nullable', 'string', 'max:300'],
-            'logradouro'    => ['nullable', 'string', 'max:255'],
-            'numero'        => ['nullable', 'string', 'max:60'],
+            'logradouro'    => ['required', 'string', 'max:255'],
+            'numero'        => ['required', 'string', 'max:60'],
             'complemento'   => ['nullable', 'string', 'max:156'],
-            'bairro'        => ['nullable', 'string', 'max:156'],
-            'municipio'     => ['nullable', 'string', 'max:120'],
-            'uf'            => ['nullable', 'string', 'size:2'],
-            'cep'           => ['nullable', 'string', 'max:12'],
+            'bairro'        => ['required', 'string', 'max:156'],
+            'municipio'     => ['required', 'string', 'max:120'],
+            'uf'            => ['required', 'string', 'size:2'],
+            'cep'           => ['required', 'string', 'max:12', fn ($a, $v, $f) => strlen(preg_replace('/\D/', '', (string) $v)) === 8 ?: $f('O CEP tem 8 números (ex.: 01310-100).')],
+            'ativo'         => ['nullable', 'boolean'],
+            'codigo_municipio' => ['nullable', 'digits:7'],
             'emails'        => ['nullable', 'string', 'max:600'],
             'observacoes'   => ['nullable', 'string', 'max:2000'],
         ], [
             'nome.required' => 'Falta o nome ou razão social do cliente.',
             'uf.size'       => 'A UF tem 2 letras (ex.: SP).',
+            'cep.required'        => 'Informe o CEP do cliente.',
+            'logradouro.required' => 'Informe o logradouro (rua, avenida…).',
+            'numero.required'     => 'Informe o número do endereço (use S/N se não tiver).',
+            'bairro.required'     => 'Informe o bairro.',
+            'municipio.required'  => 'Informe o município.',
+            'uf.required'         => 'Informe a UF.',
         ]);
 
         $emails = collect(preg_split('/[;,\s]+/', (string) ($dados['emails'] ?? ''), -1, PREG_SPLIT_NO_EMPTY))
@@ -159,6 +187,7 @@ class TomadorController extends Controller
         $novos['uf'] = isset($novos['uf']) ? strtoupper($novos['uf']) : null;
         $novos['cep'] = isset($novos['cep']) ? (preg_replace('/\D/', '', $novos['cep']) ?: null) : null;
         $novos['emails'] = $emails->all() ?: null;
+        $novos['ativo'] = $request->boolean('ativo', true);
 
         return $novos;
     }
@@ -180,16 +209,21 @@ class TomadorController extends Controller
 
         $novos = $this->camposDoFormulario($request);
 
-        // Mudou município ou UF: procura o código IBGE de novo
-        if (($novos['municipio'] ?? null) !== $tomador->municipio || ($novos['uf'] ?? null) !== $tomador->uf) {
-            $novos['codigo_municipio'] = MunicipiosIbge::codigo($novos['municipio'] ?? null, $novos['uf'] ?? null);
+        // Mudou município, UF ou CEP, ou o cadastro ainda está sem código IBGE: procura de novo (nome + UF; se não casar, pelo CEP)
+        if (blank($novos['codigo_municipio'] ?? null)) {
+            unset($novos['codigo_municipio']);   // sem código vindo da tela: mantém o do cadastro
+        }
+        if (isset($novos['codigo_municipio'])) {
+            // código escolhido na tela (tabela do IBGE): vale como está
+        } elseif (($novos['municipio'] ?? null) !== $tomador->municipio || ($novos['uf'] ?? null) !== $tomador->uf || ($novos['cep'] ?? null) !== $tomador->cep || blank($tomador->codigo_municipio)) {
+            $novos['codigo_municipio'] = Tomador::descobrirCodigoMunicipio($novos['municipio'] ?? null, $novos['uf'] ?? null, $novos['cep'] ?? null);
         }
 
         $historico = [];
         foreach ($novos as $campo => $valor) {
             $antes = $tomador->{$campo};
             if ($antes !== $valor && ! (blank($antes) && blank($valor))) {
-                $historico[$campo] = [$antes, $valor];
+                $historico[$campo] = $campo === 'ativo' ? [$antes ? 'Ativo' : 'Inativo', $valor ? 'Ativo' : 'Inativo'] : [$antes, $valor];
             }
         }
 
@@ -204,26 +238,26 @@ class TomadorController extends Controller
             ]);
         }
 
-        return redirect()->route('tomadores.index')->with('ok', "Cliente “{$tomador->nome}” atualizado.");
+        // Fica na tela do tomador com o pop-up de confirmação; o OK leva de volta para a lista
+        return redirect()->route('tomadores.editar', $tomador)
+            ->with('confirmacao', "Cadastro de “{$tomador->nome}” atualizado com sucesso.")
+            ->with('confirmacao_destino', route('tomadores.index'));
     }
 
-    /** Exclui o cadastro. Só quando não há nota emitida (nem cancelada depois) para o cliente; notas em andamento ou com erro ficam com o nome e o documento que já guardam. */
-    public function excluir(Request $request, Tomador $tomador)
+    /** Liga/desliga o cadastro. Tomador não se exclui: inativo some das buscas na emissão, mas o histórico e as notas ficam. */
+    public function situacao(Request $request, Tomador $tomador)
     {
         $this->authorize('emitir');
 
-        $emitidas = $tomador->notasEmitidas();
-        if ($emitidas > 0) {
-            $msg = 'Não dá para excluir “'.$tomador->nome.'”: há '.$emitidas.($emitidas === 1 ? ' nota emitida' : ' notas emitidas').' para este cliente.';
+        $ativar = ! $tomador->ativo;
+        $tomador->forceFill(['ativo' => $ativar])->save();
 
-            return $request->expectsJson() ? response()->json(['message' => $msg], 422) : back()->withErrors(['cliente' => $msg]);
-        }
+        TomadorAlteracao::create([
+            'conta_id' => $tomador->conta_id, 'tomador_id' => $tomador->id, 'user_id' => $request->user()?->id,
+            'origem' => 'manual', 'campos' => ['ativo' => [$ativar ? 'Inativo' : 'Ativo', $ativar ? 'Ativo' : 'Inativo']],
+        ]);
+        \App\Models\Auditoria::registrar($ativar ? 'cliente_ativado' : 'cliente_inativado', "Cadastro de {$tomador->nome} ".($ativar ? 'ativado' : 'inativado').'.', ['tomador' => $tomador->id]);
 
-        \App\Models\Auditoria::registrar('cliente_excluido', "Cliente {$tomador->nome} excluído.", ['documento' => $tomador->documento]);
-        $tomador->delete();
-
-        $msg = "Cliente “{$tomador->nome}” excluído.";
-
-        return $request->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : redirect()->route('tomadores.index')->with('ok', $msg);
+        return back()->with('ok', "Cadastro de “{$tomador->nome}” ".($ativar ? 'ativado.' : 'inativado.'));
     }
 }

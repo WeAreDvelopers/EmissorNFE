@@ -52,7 +52,7 @@ class NotaManualCamposFiscaisTest extends TestCase
     {
         return app(ContaAtual::class)->como($this->conta->id, fn () => Emitente::create($extra + [
             'cnpj' => '19534920000118'.'', 'razao_social' => 'BR Controle Ltda', 'codigo_municipio' => '3550308',
-            'op_simples_nacional' => 1, 'regime_apuracao_sn' => 1, 'regime_especial' => 0, 'serie_dps' => '00001', 'ambiente' => 2,
+            'op_simples_nacional' => 1, 'regime_apuracao_sn' => 1, 'regime_especial' => 0, 'serie_dps' => '00001', 'informar_serie_dps' => '1', 'ambiente' => 2,
             'codigo_servico_padrao' => '010701', 'descricao_servico_padrao' => 'Manutenção de programas de computação.', 'codigo_nbs_padrao' => '115080000',
             'codigo_tributacao_municipal' => '001', 'tributos_aprox' => ['federal' => 13.45, 'estadual' => 0, 'municipal' => 2.70],
         ]));
@@ -470,7 +470,7 @@ class NotaManualCamposFiscaisTest extends TestCase
     {
         return array_replace_recursive([
             'cnpj' => '19534920000118', 'razao_social' => 'BR Controle Ltda', 'codigo_municipio' => '3550308', 'codigo_tributacao_municipal' => '001',
-            'op_simples_nacional' => '1', 'regime_especial' => '0', 'serie_dps' => '00001', 'ambiente' => '2',
+            'op_simples_nacional' => '1', 'regime_especial' => '0', 'serie_dps' => '00001', 'informar_serie_dps' => '1', 'ambiente' => '2',
             'modo_tributos_aprox' => 'percentual', 'tributos_aprox' => ['federal' => '13.45', 'estadual' => '0', 'municipio' => '2.7', 'municipal' => '2.7'],
             'pis_cofins_cst' => '00', 'tp_ret_pis_cofins' => '0',
             'trib_issqn' => '1', 'retencao_issqn' => '1', 'deducao_tipo' => 'none',
@@ -492,7 +492,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $this->put($url, $this->dadosEmpresa(['retencao_issqn' => '2', 'regime_especial' => '3']))->assertSessionHasErrors('retencao_issqn');   // E0588
         $this->put($url, $this->dadosEmpresa(['deducao_tipo' => 'percentual', 'deducao_valor' => '150']))->assertSessionHasErrors('deducao_valor');
         $this->put($url, $this->dadosEmpresa(['deducao_tipo' => 'valor', 'deducao_valor' => '']))->assertSessionHasErrors('deducao_valor');
-        $this->put($url, $this->dadosEmpresa(['municipio_prestacao' => 'Cidadelandia', 'uf_prestacao' => 'RJ']))->assertSessionHasErrors('municipio_prestacao');
+        $this->put($url, $this->dadosEmpresa(['local_prestacao' => 'outro', 'municipio_prestacao' => 'Cidadelandia', 'uf_prestacao' => 'RJ']))->assertSessionHasErrors('municipio_prestacao');
         $this->put($url, $this->dadosEmpresa(['op_simples_nacional' => '3', 'regime_apuracao_sn' => '1', 'aliquota_simples' => '6', 'modo_tributos_aprox' => 'simples', 'tributos_aprox' => null,
             'deducao_tipo' => 'valor', 'deducao_valor' => '10']))->assertSessionHasErrors('deducao_tipo');                         // E0441
         $this->put($url, $this->dadosEmpresa(['op_simples_nacional' => '2', 'codigo_tributacao_municipal' => '', 'modo_tributos_aprox' => 'nenhum', 'tributos_aprox' => null,
@@ -504,7 +504,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $this->assertSame(2, (int) $e->trib_issqn);
         $this->assertSame(2, (int) $e->tp_imunidade);
 
-        $this->put($url, $this->dadosEmpresa(['retencao_issqn' => '2', 'deducao_tipo' => 'percentual', 'deducao_valor' => '10.5', 'municipio_prestacao' => 'Rio de Janeiro', 'uf_prestacao' => 'rj']))->assertSessionHasNoErrors();
+        $this->put($url, $this->dadosEmpresa(['retencao_issqn' => '2', 'deducao_tipo' => 'percentual', 'deducao_valor' => '10.5', 'local_prestacao' => 'outro', 'municipio_prestacao' => 'Rio de Janeiro', 'uf_prestacao' => 'rj']))->assertSessionHasNoErrors();
         $e = $this->emitente->fresh();
         $this->assertSame(1, (int) $e->trib_issqn);
         $this->assertNull($e->tp_imunidade);                      // volta a tributável: o tipo de imunidade é limpo
@@ -514,7 +514,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $this->assertSame('3304557', $e->codigo_municipio_prestacao);
 
         // município da prestação igual ao da empresa não precisa ficar gravado
-        $this->put($url, $this->dadosEmpresa(['municipio_prestacao' => 'São Paulo', 'uf_prestacao' => 'SP']))->assertSessionHasNoErrors();
+        $this->put($url, $this->dadosEmpresa(['local_prestacao' => 'outro', 'municipio_prestacao' => 'São Paulo', 'uf_prestacao' => 'SP']))->assertSessionHasNoErrors();
         $this->assertNull($this->emitente->fresh()->codigo_municipio_prestacao);
     }
 
@@ -530,7 +530,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $xml = (new DpsBuilder)->montar($this->nota(['trib_issqn' => 1]));
         $this->assertStringContainsString('<tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN>', $xml);
 
-        $this->emitente = $this->empresa(['cnpj' => '11222333000181', 'retencao_issqn' => 2, 'deducao_tipo' => 'percentual', 'deducao_valor' => 10, 'codigo_municipio_prestacao' => '3304557']);
+        $this->emitente = $this->empresa(['cnpj' => '11222333000181', 'retencao_issqn' => 2, 'deducao_tipo' => 'percentual', 'deducao_valor' => 10, 'codigo_municipio_prestacao' => '3304557', 'local_prestacao' => 'outro']);
         $xml = (new DpsBuilder)->montar($this->nota([]));
         $this->assertStringContainsString('<tpRetISSQN>2</tpRetISSQN>', $xml);
         $this->assertStringContainsString('</vServPrest><vAjusteBC><pAjusteBCISSQN>10.00</pAjusteBCISSQN></vAjusteBC><trib>', $xml);
@@ -571,6 +571,15 @@ class NotaManualCamposFiscaisTest extends TestCase
         NotaFiscal::query()->delete();
         $this->emitirCom($this->aj(['trib_issqn' => '1']));
         $this->assertSame(['trib_issqn' => 1], NotaFiscal::firstOrFail()->parametros_dps);
+    }
+
+    public function test_local_da_prestacao_do_destinatario_usa_o_municipio_do_cliente_da_nota(): void
+    {
+        $this->emitente = $this->empresa(['cnpj' => '11222333000181', 'local_prestacao' => 'tomador']);
+        $nota = $this->nota([]);
+        $nota->setRelation('tomador', new \App\Models\Tomador(['codigo_municipio' => '3304557']));
+        $this->assertStringContainsString('<cLocPrestacao>3304557</cLocPrestacao>', (new DpsBuilder)->montar($nota));
+        $this->assertStringContainsString('<cLocEmi>3550308</cLocEmi>', (new DpsBuilder)->montar($nota));
     }
 
     public function test_campos_obrigatorios_ficam_marcados_e_o_erro_aparece_em_vermelho_no_campo(): void

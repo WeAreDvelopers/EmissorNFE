@@ -27,14 +27,15 @@ class Tomador extends Model
         'cep'           => 'CEP',
         'emails'        => 'E-mails',
         'observacoes'   => 'Observações',
+        'ativo'         => 'Cadastro',
     ];
 
     protected $fillable = [
         'conta_id', 'documento', 'nome', 'nome_fantasia', 'logradouro', 'numero', 'complemento', 'bairro',
-        'municipio', 'codigo_municipio', 'uf', 'cep', 'emails', 'observacoes', 'pendente',
+        'municipio', 'codigo_municipio', 'uf', 'cep', 'emails', 'observacoes', 'pendente', 'ativo',
     ];
 
-    protected $casts = ['emails' => 'array', 'pendente' => 'boolean'];
+    protected $casts = ['emails' => 'array', 'pendente' => 'boolean', 'ativo' => 'boolean'];
 
     public function notas(): HasMany
     {
@@ -52,10 +53,34 @@ class Tomador extends Model
         return $this->hasMany(TomadorAlteracao::class)->latest('id');
     }
 
+    /** PF (CPF, 11 números) ou PJ (CNPJ, 14). Vem só do documento, nunca do nome: uma empresa pode ter nome de pessoa. */
+    public function tipoPessoa(): string
+    {
+        return strlen(preg_replace('/\D/', '', (string) $this->documento)) === 11 ? 'PF' : 'PJ';
+    }
+
     /** E-mail que vai no XML da DPS (o leiaute aceita só um). */
     public function emailPrincipal(): ?string
     {
         return ($this->emails ?? [])[0] ?? null;
+    }
+
+    /**
+     * Código IBGE do município: primeiro pelo nome + UF (tabela do IBGE); se não casar (grafia diferente, IBGE fora do ar),
+     * usa o código que o CEP já traz (ViaCEP/BrasilAPI), desde que seja da mesma UF.
+     */
+    public static function descobrirCodigoMunicipio(?string $municipio, ?string $uf, ?string $cep): ?string
+    {
+        if ($codigo = \App\Support\MunicipiosIbge::codigo($municipio, $uf)) {
+            return $codigo;
+        }
+
+        $dados = strlen((string) preg_replace('/\D/', '', (string) $cep)) === 8 ? app(\App\Services\ConsultaCep::class)->buscar((string) $cep) : null;
+        if ($dados && ! empty($dados['codigo_municipio']) && strtoupper((string) ($dados['uf'] ?? '')) === strtoupper(trim((string) $uf))) {
+            return (string) $dados['codigo_municipio'];
+        }
+
+        return null;
     }
 
     /** Município e UF preenchidos mas sem código IBGE (a busca falhou na importação): tenta de novo e grava se achar. */
@@ -65,7 +90,7 @@ class Tomador extends Model
             return;
         }
 
-        if ($codigo = \App\Support\MunicipiosIbge::codigo($this->municipio, $this->uf)) {
+        if ($codigo = self::descobrirCodigoMunicipio($this->municipio, $this->uf, $this->cep)) {
             // Grava o código primeiro e só então reavalia se o cadastro ainda tem pendência
             $this->forceFill(['codigo_municipio' => $codigo]);
             $this->pendente = ! $this->enderecoCompleto();   // mesma regra do cadastro e da edição

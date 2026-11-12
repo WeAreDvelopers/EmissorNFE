@@ -145,6 +145,25 @@ Alpine.directive('mascara', (el, { expression }) => {
 });
 
 // Endereço do cliente: ao digitar o CEP completo, busca e preenche logradouro, bairro, município e UF
+// Valida CPF/CNPJ (dígitos verificadores) assim que o campo perde o foco, antes de enviar o formulário.
+Alpine.data('validaDocumento', () => ({
+    erro: '',
+    checa(d) {
+        const calc = (base, pesos) => { const s = base.split('').reduce((a, n, i) => a + Number(n) * pesos[i], 0) % 11; return s < 2 ? 0 : 11 - s; };
+        if (/^(\d)\1+$/.test(d)) return false;   // 111.111.111-11 e afins
+        if (d.length === 11) {
+            return calc(d.slice(0, 9), [10, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(d[9]) && calc(d.slice(0, 10), [11, 10, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(d[10]);
+        }
+        return calc(d.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(d[12]) && calc(d.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(d[13]);
+    },
+    validar(valor) {
+        const d = String(valor || '').replace(/\D/g, '');
+        if (d === '') { this.erro = ''; return; }
+        if (d.length !== 11 && d.length !== 14) { this.erro = 'O CPF tem 11 números e o CNPJ tem 14. Confira o documento.'; return; }
+        this.erro = this.checa(d) ? '' : (d.length === 11 ? 'CPF inválido: o dígito verificador não confere. Confira os números.' : 'CNPJ inválido: o dígito verificador não confere. Confira os números.');
+    },
+}));
+
 Alpine.data('enderecoCep', (url) => ({
     estado: '',   // '' | buscando | ok | erro
     ctl: null,
@@ -162,6 +181,8 @@ Alpine.data('enderecoCep', (url) => ({
                 const el = this.campo(n);
                 if (el && d[n]) { el.value = d[n]; el.dispatchEvent(new Event('input', { bubbles: true })); }
             }
+            // CEP geral da cidade (sem rua nem bairro): não trouxe endereço, então avisa em vez de dizer que preencheu
+            if (!d.logradouro && !d.bairro) { this.estado = 'erro'; this.campo('logradouro')?.focus(); return; }
             this.estado = 'ok';
             this.campo(d.logradouro ? 'numero' : 'logradouro')?.focus();
         } catch (e) { if (e.name !== 'AbortError') this.estado = 'erro'; }

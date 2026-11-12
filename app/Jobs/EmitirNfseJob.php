@@ -73,6 +73,14 @@ class EmitirNfseJob implements ShouldQueue
                 return;
             }
 
+            // Sem certificado não há como assinar: não adianta tentar de novo. Falha já, com aviso claro, e devolve o crédito.
+            if (! $nota->emitente->certificado_arquivo) {
+                $nota->update(['status' => StatusNota::Falhou, 'erros' => ['A empresa ainda não tem certificado digital cadastrado. Cadastre o certificado em Emitentes e reenvie a nota.']]);
+                $creditos->estornar($nota);
+
+                return;
+            }
+
             $nota->update(['status' => StatusNota::Enviando, 'tentativas' => $nota->tentativas + 1]);
             $nota->reservarNumeroDps(); // reservado uma vez; em reenvio usa o mesmo
 

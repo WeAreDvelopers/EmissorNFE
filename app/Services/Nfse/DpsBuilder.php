@@ -96,7 +96,11 @@ class DpsBuilder
         // Serviço
         $serv = $this->el($doc, $inf, 'serv');
         $loc = $this->el($doc, $serv, 'locPrest');
-        $this->el($doc, $loc, 'cLocPrestacao', $ajustes['cod_municipio_prestacao'] ?? $p['codigo_municipio']);
+        // Município da prestação: ajuste da própria nota > padrão da empresa (destinatário de cada nota, ou outro município fixo) > município da empresa
+        $locPrestacao = $ajustes['cod_municipio_prestacao']
+            ?? (($p['local_prestacao'] ?? 'emitente') === 'tomador' && filled($nota->tomador?->codigo_municipio) ? $nota->tomador->codigo_municipio : null)
+            ?? $p['codigo_municipio'];
+        $this->el($doc, $loc, 'cLocPrestacao', (string) $locPrestacao);
         $cServ = $this->el($doc, $serv, 'cServ');
         $this->el($doc, $cServ, 'cTribNac', $nota->codigo_servico);
         // cTribMun (3 dígitos): complementar do município, proibido para MEI (E0313)

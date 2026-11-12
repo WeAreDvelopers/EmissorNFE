@@ -1,12 +1,12 @@
-<x-app-layout :titulo="'Cliente · '.$tomador->nome">
+<x-app-layout :titulo="'Tomador · '.$tomador->nome">
     @php $podeEditar = Gate::allows('emitir'); $rotulos = \App\Models\Tomador::CAMPOS; $fmt = fn ($v) => is_array($v) ? implode(', ', $v) : ($v === null || $v === '' ? '—' : $v); @endphp
 
     <div class="max-w-[1160px] mx-auto px-4 sm:px-8 py-8 space-y-6" x-data="{ historico: false }" @keydown.escape.window="historico = false">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="space-y-2">
-                <a href="{{ route('tomadores.index') }}" class="link text-sm">← Clientes</a>
+                <a href="{{ route('tomadores.index') }}" class="link text-sm">← Tomadores (Clientes)</a>
                 <h1 class="text-3xl font-semibold">{{ $tomador->nome }}</h1>
-                <p class="text-[15px] text-ink-700"><span class="font-mono">{{ \App\Support\Documento::formatar($tomador->documento) }}</span></p>
+                <p class="text-base text-ink-900"><span class="font-mono font-bold">{{ \App\Support\Documento::formatar($tomador->documento) }}</span> <span class="pill align-middle ms-1 {{ $tomador->tipoPessoa() === 'PF' ? 'bg-info-100 text-info-800' : 'bg-gray-100 text-ink-700' }}">{{ $tomador->tipoPessoa() === 'PF' ? 'Pessoa física (PF)' : 'Pessoa jurídica (PJ)' }}</span></p>
             </div>
             <button type="button" class="btn" @click="historico = ! historico" :aria-expanded="historico" aria-controls="historico-alteracoes" title="Ver o histórico de alterações deste cliente">
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
@@ -17,7 +17,7 @@
 
         @if ($tomador->pendente)
             <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
-                <b>Cadastro incompleto.</b> Faltam: {{ implode(', ', $tomador->faltando()) }}. As notas ainda saem, mas sem o endereço do cliente.
+                <b>Cadastro incompleto.</b> Faltam: {{ implode(', ', $tomador->faltando()) }}.
             </div>
         @endif
 
@@ -26,7 +26,10 @@
                 @csrf @method('PUT')
                 @include('tomadores._campos', ['tomador' => $tomador, 'podeEditar' => $podeEditar, 'criando' => false])
                 @if ($errors->any())<div class="rounded-lg bg-warn-50 border border-warn-200 px-4 py-3 text-sm text-warn-900" role="alert">{{ $errors->first() }}</div>@endif
-                @if ($podeEditar)<button class="btn btn-primary btn-lg">Salvar</button>@endif
+                <div class="flex flex-wrap items-center gap-3">
+                    @if ($podeEditar)<button class="btn btn-primary btn-lg">Salvar</button>@endif
+                    <a href="{{ route('tomadores.index') }}" class="btn btn-lg">{{ $podeEditar ? 'Cancelar' : 'Voltar' }}</a>
+                </div>
             </form>
 
             <aside id="historico-alteracoes" x-show="historico" x-cloak class="flex-[1_1_320px] min-w-0 card p-5 sm:p-6">

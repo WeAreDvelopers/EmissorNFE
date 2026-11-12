@@ -56,7 +56,7 @@ class ClienteCadastroTelaTest extends TestCase
         $ordem = array_map(fn ($c) => strpos($html, 'name="'.$c.'"'), ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'uf']);
         $this->assertSame($ordem, collect($ordem)->sort()->values()->all(), 'campos fora da ordem lógica');
         $this->assertNotContains(false, $ordem);
-        $this->get(route('tomadores.index'))->assertSee('Novo cliente');
+        $this->get(route('tomadores.index'))->assertSee('Novo tomador');
     }
 
     public function test_cadastra_cliente_completo_normalizando_os_campos(): void
@@ -72,13 +72,15 @@ class ClienteCadastroTelaTest extends TestCase
         $this->assertFalse($t->pendente);
     }
 
-    public function test_cadastro_sem_endereco_fica_pendente_e_avisa(): void
+    public function test_endereco_e_obrigatorio_no_cadastro_pela_tela(): void
     {
         $this->post(route('tomadores.store'), ['documento' => '19566539000130', 'nome' => 'Malix'])
-            ->assertRedirect(route('tomadores.index'))
-            ->assertSessionHas('ok', fn ($m) => str_contains($m, 'endereço está incompleto'));
+            ->assertSessionHasErrors(['cep', 'logradouro', 'numero', 'bairro', 'municipio', 'uf']);
+        $this->assertSame(0, Tomador::count());
 
-        $this->assertTrue(Tomador::firstOrFail()->pendente);
+        // complemento continua opcional
+        $this->post(route('tomadores.store'), $this->dados())->assertSessionHasNoErrors();
+        $this->assertSame(1, Tomador::count());
     }
 
     public function test_recusa_documento_invalido_duplicado_e_email_ruim(): void
@@ -153,57 +155,112 @@ class ClienteCadastroTelaTest extends TestCase
         ]);
     }
 
-    public function test_lista_tem_coluna_de_acoes_com_editar_e_excluir(): void
+    public function test_notas_com_erro_mostram_o_erro_e_o_caminho_para_corrigir_mesmo_sem_lote_de_importacao(): void
+    {
+        $this->post(route('tomadores.store'), $this->dados());
+        $t = Tomador::firstOrFail();
+        $invalida = $this->notaDoCliente($t, StatusNota::Invalida);       // nota emitida à mão: sem importação
+        $rejeitada = $this->notaDoCliente($t, StatusNota::Rejeitada);
+        $rejeitada->update(['erros' => ['E0310 - Teste']]);
+
+        $r = $this->get(route('notas.index'))->assertOk();
+        $r->assertSee(route('pendencias', ['nota' => $invalida->id]), false)
+            ->assertSee(route('pendencias', ['nota' => $rejeitada->id]), false)
+            ->assertSee('Ver erro e corrigir');
+
+        // o painel de correção abre para a nota selecionada
+        $this->get(route('pendencias', ['nota' => $rejeitada->id]))->assertOk();
+    }
+
+    public function test_lista_tem_editar_e_liga_desliga_no_lugar_da_lixeira(): void
     {
         $this->post(route('tomadores.store'), $this->dados());
         $t = Tomador::firstOrFail();
 
         $this->get(route('tomadores.index'))->assertOk()->assertSee('Ações')
             ->assertSee(route('tomadores.editar', $t), false)
-            ->assertSee('data-acao-url="'.route('tomadores.excluir', $t).'"', false);
+            ->assertSee(route('tomadores.situacao', $t), false)
+            ->assertDontSee('data-acao-url', false);
     }
 
-    public function test_exclui_cliente_sem_nota_emitida_e_registra_na_auditoria(): void
+    public function test_inativa_e_reativa_o_cadastro_sem_excluir_e_registra_historico(): void
     {
         $this->post(route('tomadores.store'), $this->dados());
         $t = Tomador::firstOrFail();
-        $this->notaDoCliente($t, StatusNota::Rejeitada);   // nota que não saiu não impede
+        $this->assertTrue($t->ativo);
 
-        $this->deleteJson(route('tomadores.excluir', $t))->assertOk()->assertJson(['ok' => true]);
+        $this->post(route('tomadores.situacao', $t))->assertRedirect()->assertSessionHas('ok');
+        $this->assertFalse($t->fresh()->ativo);
+        $this->assertDatabaseHas('auditoria', ['acao' => 'cliente_inativado']);
+        $this->get(route('tomadores.index'))->assertSee('inativo');
+        $this->getJson(route('tomadores.buscar', ['q' => 'Malix']))->assertOk()->assertJsonCount(0);   // inativo não aparece ao emitir
 
-        $this->assertSame(0, Tomador::count());
-        $this->assertNull(NotaFiscal::firstOrFail()->tomador_id);          // a nota guarda nome e documento
-        $this->assertSame('Malix Automóveis Ltda', NotaFiscal::first()->tomador_nome);
-        $this->assertDatabaseHas('auditoria', ['acao' => 'cliente_excluido']);
+        $this->post(route('tomadores.situacao', $t))->assertRedirect();
+        $this->assertTrue($t->fresh()->ativo);
+        $this->getJson(route('tomadores.buscar', ['q' => 'Malix']))->assertJsonCount(1);
+        $this->assertSame(2, $t->alteracoes()->count());
     }
 
-    public function test_nao_exclui_cliente_com_nota_emitida_ou_cancelada(): void
+    public function test_ativo_inativo_pelo_formulario_e_so_quem_pode_emitir_altera(): void
     {
-        foreach (['19566539000130' => StatusNota::Emitida, '07445371000126' => StatusNota::Cancelada] as $doc => $status) {
-            $this->post(route('tomadores.store'), $this->dados(['documento' => $doc]));
-            $t = Tomador::where('documento', $doc)->firstOrFail();
-            $this->notaDoCliente($t, $status);
-
-            $this->deleteJson(route('tomadores.excluir', $t))->assertStatus(422)
-                ->assertJsonFragment(['message' => 'Não dá para excluir “'.$t->nome.'”: há 1 nota emitida para este cliente.']);
-            $this->assertNotNull(Tomador::find($t->id), $status->value);
-        }
-
-        $this->get(route('tomadores.index'))->assertSee('Não dá para excluir: este cliente tem 1 nota emitida.', false);
-    }
-
-    public function test_so_quem_pode_emitir_exclui(): void
-    {
-        $this->post(route('tomadores.store'), $this->dados());
+        $this->post(route('tomadores.store'), $this->dados(['ativo' => '0']));
         $t = Tomador::firstOrFail();
+        $this->assertFalse($t->ativo);
 
         $leitor = User::factory()->create();
         $this->conta->usuarios()->attach($leitor->id, ['papel' => Papel::Leitura->value]);
         $leitor->forceFill(['conta_atual_id' => $this->conta->id])->save();
+        $this->actingAs($leitor)->post(route('tomadores.situacao', $t))->assertForbidden();
+        $this->assertFalse($t->fresh()->ativo);
+    }
 
-        $this->actingAs($leitor)->deleteJson(route('tomadores.excluir', $t))->assertForbidden();
-        $this->assertNotNull(Tomador::find($t->id));
-        $this->get(route('tomadores.index'))->assertDontSee('data-acao-url', false);
+    public function test_atualizar_cadastro_sem_codigo_ibge_resolve_pelo_cep_e_sai_de_pendente(): void
+    {
+        Http::fake([
+            'servicodados.ibge.gov.br/*' => Http::response([['id' => 3550308, 'nome' => 'São Paulo']]),
+            'viacep.com.br/*' => Http::response(['cep' => '12220-000', 'logradouro' => 'Rua X', 'bairro' => 'Centro', 'localidade' => 'São José dos Campos', 'uf' => 'SP', 'ibge' => '3549904']),
+        ]);
+        $t = Tomador::create([
+            'conta_id' => $this->conta->id, 'documento' => '26824883000148', 'nome' => 'Gola Veiculos Ltda.', 'municipio' => 'S J dos Campos', 'uf' => 'SP',
+            'cep' => '12220000', 'logradouro' => 'Rua X', 'numero' => '10', 'bairro' => 'Centro', 'pendente' => true,
+        ]);
+
+        $this->put(route('tomadores.update', $t), $this->dados(['nome' => 'Gola Veiculos Ltda.', 'municipio' => 'S J dos Campos', 'cep' => '12220-000', 'logradouro' => 'Rua X', 'numero' => '10', 'bairro' => 'Centro']))
+            ->assertRedirect(route('tomadores.editar', $t))->assertSessionHas('confirmacao')->assertSessionHas('confirmacao_destino', route('tomadores.index'));
+
+        $t->refresh();
+        $this->assertSame('3549904', $t->codigo_municipio);
+        $this->assertFalse($t->pendente);
+        $this->get(route('tomadores.editar', $t))->assertOk()->assertSee('atualizado com sucesso')->assertDontSee('Cadastro incompleto')->assertSee('3549904');
+    }
+
+    public function test_codigo_ibge_escolhido_na_tela_vale_e_aparece_abaixo_do_municipio(): void
+    {
+        Http::fake(['servicodados.ibge.gov.br/*' => Http::response([]), 'viacep.com.br/*' => Http::response('', 503), 'brasilapi.com.br/*' => Http::response('', 503)]);   // servidor sem acesso ao IBGE
+
+        $this->post(route('tomadores.store'), $this->dados(['codigo_municipio' => '3550308']))->assertSessionHasNoErrors();
+        $t = Tomador::firstOrFail();
+        $this->assertSame('3550308', $t->codigo_municipio);
+        $this->assertFalse($t->pendente);
+
+        $this->get(route('tomadores.editar', $t))->assertOk()->assertSee('Código IBGE', false)->assertSee('3550308');
+        // salvar sem o código na requisição não apaga o que já está no cadastro
+        $this->put(route('tomadores.update', $t), $this->dados())->assertSessionHasNoErrors();
+        $this->assertSame('3550308', $t->fresh()->codigo_municipio);
+    }
+
+    public function test_lista_identifica_pf_e_pj_pelo_documento_e_filtra_por_tipo(): void
+    {
+        $this->post(route('tomadores.store'), $this->dados(['documento' => '829.202.149-34', 'nome' => 'Vaner Bertoluzzi']));
+        // empresa (CNPJ) com nome de pessoa física: continua PJ, porque o tipo vem só do documento
+        $this->post(route('tomadores.store'), $this->dados(['documento' => '26.824.883/0001-48', 'nome' => 'Marcelo Dias Cordeiro']));
+
+        $this->assertSame('PF', Tomador::where('documento', '82920214934')->first()->tipoPessoa());
+        $this->assertSame('PJ', Tomador::where('documento', '26824883000148')->first()->tipoPessoa());
+
+        $this->get(route('tomadores.index'))->assertOk()->assertSee('Pessoa física (PF)')->assertSee('Vaner Bertoluzzi')->assertSee('Marcelo Dias Cordeiro');
+        $this->get(route('tomadores.index', ['tipo' => 'pf']))->assertSee('Vaner Bertoluzzi')->assertDontSee('Marcelo Dias Cordeiro')->assertSee('Limpar filtros');
+        $this->get(route('tomadores.index', ['tipo' => 'pj']))->assertSee('Marcelo Dias Cordeiro')->assertDontSee('Vaner Bertoluzzi');
     }
 
     public function test_tela_de_edicao_segue_funcionando_com_o_formulario_compartilhado(): void
@@ -212,7 +269,7 @@ class ClienteCadastroTelaTest extends TestCase
         $t = Tomador::firstOrFail();
 
         $this->get(route('tomadores.editar', $t))->assertOk()->assertSee('Malix Automóveis Ltda')->assertSee('01310100')->assertDontSee('CPF ou CNPJ');
-        $this->put(route('tomadores.update', $t), ['nome' => 'Malix Novo', 'emails' => 'x@x.com'])->assertRedirect(route('tomadores.index'));
+        $this->put(route('tomadores.update', $t), $this->dados(['nome' => 'Malix Novo', 'emails' => 'x@x.com']))->assertRedirect(route('tomadores.editar', $t));
         $this->assertSame('Malix Novo', $t->fresh()->nome);
     }
 }

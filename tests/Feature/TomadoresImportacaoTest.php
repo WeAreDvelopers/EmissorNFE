@@ -275,7 +275,7 @@ class TomadoresImportacaoTest extends TestCase
         $this->put(route('tomadores.update', $c), [
             'nome' => 'Malix Automóveis', 'logradouro' => 'Rua A', 'numero' => '10', 'bairro' => 'Centro', 'municipio' => 'São Paulo', 'uf' => 'sp',
             'cep' => '01001-000', 'emails' => 'x@x.com',
-        ])->assertRedirect(route('tomadores.index'));
+        ])->assertRedirect(route('tomadores.editar', $c));
 
         $c->refresh();
         $this->assertSame('SP', $c->uf);

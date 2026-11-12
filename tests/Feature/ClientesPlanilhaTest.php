@@ -71,10 +71,62 @@ class ClientesPlanilhaTest extends TestCase
         $this->assertStringContainsString('modelo-clientes.xlsx', $r->headers->get('content-disposition'));
     }
 
+    private function emitenteDaConta(): \App\Models\Emitente
+    {
+        return app(ContaAtual::class)->como($this->conta->id, fn () => \App\Models\Emitente::create([
+            'cnpj' => '19534920000118', 'razao_social' => 'BR Controle Servicos de Gestao de Dados Ltda', 'codigo_municipio' => '3550308',
+            'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'regime_especial' => 0, 'aliquota_simples' => 6, 'serie_dps' => '00001', 'ambiente' => 2,
+        ]));
+    }
+
+    public function test_modelo_traz_cnpj_e_razao_social_do_emitente_na_primeira_linha_e_aba_de_regras_protegida(): void
+    {
+        $e = $this->emitenteDaConta();
+        $r = $this->actingAs($this->user)->get(route('tomadores.modelo', ['emitente' => $e->id]))->assertOk();
+
+        $arquivo = tempnam(sys_get_temp_dir(), 'mod').'.xlsx';
+        file_put_contents($arquivo, $r->baseResponse->getFile()->getContent());
+        $livro = \PhpOffice\PhpSpreadsheet\IOFactory::load($arquivo);
+        $aba = $livro->getSheetByName('Clientes');
+        $this->assertSame('19.534.920/0001-18', $aba->getCell('A1')->getValue());
+        $this->assertSame('BR Controle Servicos de Gestao de Dados Ltda', $aba->getCell('B1')->getValue());
+        $this->assertSame('CNPJ/CPF', $aba->getCell('A2')->getValue());
+        $this->assertTrue($livro->getSheetByName('Como preencher')->getProtection()->getSheet());   // regras: só leitura
+    }
+
+    public function test_importa_planilha_no_modelo_novo_com_cabecalho_na_linha_2(): void
+    {
+        $livro = new Spreadsheet();
+        $aba = $livro->getActiveSheet();
+        $aba->setCellValue('A1', '19.534.920/0001-18')->setCellValue('B1', 'BR Controle');
+        foreach (['CNPJ/CPF', 'Razão Social/Nome', 'Nome Fantasia', 'Logradouro', 'Número', 'Complemento', 'Bairro', 'Município', 'UF', 'CEP', 'E-mails', 'Observações'] as $i => $t) {
+            $aba->setCellValue([$i + 1, 2], $t);
+        }
+        foreach (['19566539000130', 'Malix Automóveis Ltda', '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', 'a@b.com', ''] as $i => $v) {
+            $aba->setCellValueExplicit([$i + 1, 3], $v, 's');
+        }
+        $arquivo = tempnam(sys_get_temp_dir(), 'cl').'.xlsx';
+        (new Xlsx($livro))->save($arquivo);
+
+        $this->importar(new UploadedFile($arquivo, 'clientes.xlsx', null, null, true))->assertRedirect(route('tomadores.index'));
+        $t = $this->clientes()->firstOrFail();
+        $this->assertSame('19566539000130', $t->documento);
+        $this->assertSame('Malix Automóveis Ltda', $t->nome);
+    }
+
+    public function test_tela_de_importacao_segue_o_padrao_com_painel_lateral_de_regras(): void
+    {
+        $this->emitenteDaConta();
+        $this->actingAs($this->user)->get(route('tomadores.importar.tela'))->assertOk()
+            ->assertSee('Importar tomadores')->assertSee('Modelo da planilha')->assertSee('Linha 1')->assertSee('Como preencher')
+            ->assertSee('BR Controle Servicos de Gestao de Dados Ltda')->assertSee(route('tomadores.importar'), false);
+        $this->get(route('tomadores.index'))->assertSee(route('tomadores.importar.tela'), false);
+    }
+
     public function test_tela_de_clientes_mostra_baixar_modelo_e_importar(): void
     {
         $this->actingAs($this->user)->get(route('tomadores.index'))->assertOk()
-            ->assertSee('Baixar planilha modelo')->assertSee('Importar clientes')->assertSee(route('tomadores.modelo'), false);
+            ->assertSee('Baixar planilha modelo')->assertSee('Importar tomadores')->assertSee(route('tomadores.modelo'), false);
     }
 
     public function test_cria_clientes_novos_completos_com_codigo_ibge_e_historico(): void

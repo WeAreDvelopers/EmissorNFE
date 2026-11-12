@@ -7,7 +7,7 @@
             <p class="mt-1 text-[15px] text-ink-700">Quem fez o quê na conta: mudanças fiscais, envios, correções, exclusões e usuários. O registro não pode ser alterado nem apagado.</p>
         </div>
 
-        <form method="GET" class="flex flex-wrap gap-3 items-end">
+        <form method="GET" class="card p-4 sm:p-5 flex flex-wrap gap-4 items-end">
             <div class="min-w-[220px]">
                 <label for="acao" class="campo-rotulo">Ação</label>
                 <select id="acao" name="acao" class="campo-entrada"><option value="">Todas</option>@foreach ($acoes as $v => $r)<option value="{{ $v }}" @selected($acao === $v)>{{ $r }}</option>@endforeach</select>
@@ -16,7 +16,10 @@
                 <label for="q" class="campo-rotulo">Buscar no texto</label>
                 <input id="q" name="q" value="{{ $busca }}" class="campo-entrada" autocomplete="off">
             </div>
-            <button class="btn btn-primary">Filtrar</button>
+            <div class="flex items-center gap-3 sm:ms-auto">
+                @if (filled($acao) || filled($busca))<a href="{{ route('auditoria.index') }}" class="text-sm text-ink-700 hover:underline">Limpar filtros</a>@endif
+                <button class="btn btn-primary">Filtrar</button>
+            </div>
         </form>
 
         <div class="card pt-1 overflow-hidden">

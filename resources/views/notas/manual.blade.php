@@ -107,7 +107,7 @@
                         <label for="tomador_email" class="campo-rotulo">E-mail do cliente (opcional)</label>
                         <input id="tomador_email" name="tomador_email" type="email" x-model="email" autocomplete="off" @class(['campo-entrada', 'campo-invalido' => $erro('tomador_email')])>
                         @if ($erro('tomador_email'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('tomador_email') }}</p>@endif
-                        <p class="campo-ajuda">Cliente novo é cadastrado com estes dados. O endereço pode ser completado depois em Clientes.</p>
+                        <p class="campo-ajuda">Cliente novo é cadastrado com estes dados. O endereço pode ser completado depois em Tomadores (Clientes).</p>
                     </div>
                 </div>
             </section>
@@ -122,7 +122,7 @@
                     </label>
                 </div>
                 <p class="text-[13px] text-ink-600" x-show="usarPadrao" x-cloak>Preenchido com os padrões cadastrados na empresa. Desmarque a opção acima para alterar só nesta nota.</p>
-                <p class="text-[13px] text-ink-600" x-show="!temPadrao" x-cloak>Esta empresa ainda não tem padrões de serviço. Preencha abaixo ou cadastre os padrões em Empresas que emitem.</p>
+                <p class="text-[13px] text-ink-600" x-show="!temPadrao" x-cloak>Esta empresa ainda não tem padrões de serviço. Preencha abaixo ou cadastre os padrões em Emitentes.</p>
 
                 <x-busca-servico nome="codigo_servico" rotulo="Código de serviço" obrigatorio :valor="old('codigo_servico', $usarPadrao ? $p['codigo'] : '')" somenteLeitura="usarPadrao" />
                 @if ($erro('codigo_servico'))<p class="-mt-2 text-[13px] text-warn-800" role="alert">{{ $erro('codigo_servico') }}</p>@endif

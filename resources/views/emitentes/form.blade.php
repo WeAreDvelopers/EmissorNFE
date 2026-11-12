@@ -1,4 +1,4 @@
-<x-app-layout :titulo="$emitente->exists ? 'Editar empresa' : 'Cadastrar empresa'">
+<x-app-layout :titulo="$emitente->exists ? 'Editar emitente' : 'Novo emitente'">
     @php
         $op = old('op_simples_nacional', $emitente->op_simples_nacional ?? 3);
         $trib = $emitente->tributos_aprox ?? [];
@@ -8,6 +8,7 @@
 
     <div class="max-w-[1120px] mx-auto px-4 sm:px-8 py-8 space-y-6"
          x-data="{
+            historico: false,
             op: '{{ $op }}',
             modo: @js(old('modo_tributos_aprox', $emitente->exists ? $emitente->modoTributosAprox() : '')),
             cst: @js(old('pis_cofins_cst', $emitente->pis_cofins_cst ?: '00')),
@@ -17,11 +18,20 @@
             removerCodigo(i) { this.codigos.splice(i, 1); },
             ded: @js(old('deducao_tipo', $emitente->deducao_tipo ?: 'none')),
             get modos() { return ({ 1: ['percentual', 'monetario'], 3: ['simples', 'percentual', 'monetario'], 2: ['nenhum', 'percentual', 'monetario'] })[this.op] || []; },
-            get modoAtual() { return this.modos.includes(this.modo) ? this.modo : this.modos[0]; },
+            get modoAtual() { return this.modos.includes(this.modo) ? this.modo : 'percentual'; },
             cnpj: @js(old('cnpj', \App\Support\Documento::formatar($emitente->cnpj))),
             razao: @js(old('razao_social', $emitente->razao_social)),
             lendo: false, lido: false, erro: null, validade: null, vencido: false,
             municipio: @js(old('codigo_municipio', $emitente->codigo_municipio)), cidade: null, cidadeNome: '', uf: '', cidades: [],
+            ufPrest: @js(old('uf_prestacao', $emitente->codigo_municipio_prestacao ? substr((string) strrchr((string) \App\Support\MunicipiosIbge::rotulo($emitente->codigo_municipio_prestacao), '/'), 1) : '')),
+            munPrest: @js(old('municipio_prestacao', $emitente->codigo_municipio_prestacao ? strtok((string) \App\Support\MunicipiosIbge::rotulo($emitente->codigo_municipio_prestacao), '/') : '')),
+            cidadesPrest: [],
+            localPrest: @js(old('local_prestacao', $emitente->local_prestacao ?: 'emitente')),
+            informarSerie: @js((bool) old('informar_serie_dps', $emitente->exists ? $emitente->informar_serie_dps : false)),
+            async carregarCidadesPrest() {
+                if (!this.ufPrest) { this.cidadesPrest = []; return; }
+                try { const r = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/' + this.ufPrest + '/municipios?orderBy=nome'); this.cidadesPrest = (await r.json()).map(c => c.nome); } catch (e) { this.cidadesPrest = []; }
+            },
             logoNova: null, removerLogo: false,
             escolherLogo(f) { this.logoNova = f ? URL.createObjectURL(f) : null; if (f) this.removerLogo = false; },
             async ler() {
@@ -33,7 +43,14 @@
                     const r = await fetch('{{ route('emitentes.certificado.ler') }}', { method: 'POST', body: dados, headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content } });
                     const j = await r.json();
                     if (!r.ok) { this.erro = j.message || 'Não foi possível ler o certificado.'; }
-                    else { this.lido = true; if (j.cnpj) this.cnpj = j.cnpj; if (j.razao_social) this.razao = j.razao_social; this.validade = j.valido_ate; this.vencido = j.vencido; }
+                    else {
+                        const soDigitos = v => String(v || '').replace(/\D/g, '');
+                        if (soDigitos(this.cnpj) && j.cnpj && soDigitos(this.cnpj) !== soDigitos(j.cnpj)) {
+                            this.erro = 'Este certificado é do CNPJ ' + j.cnpj + (j.razao_social ? ' (' + j.razao_social + ')' : '') + ', diferente do CNPJ da empresa (' + this.cnpj + '). Envie o certificado da própria empresa. Os dados da empresa não foram alterados.';
+                        } else {
+                            this.lido = true; if (!soDigitos(this.cnpj) && j.cnpj) this.cnpj = j.cnpj; if (!this.razao && j.razao_social) this.razao = j.razao_social; this.validade = j.valido_ate; this.vencido = j.vencido;
+                        }
+                    }
                 } catch (e) { this.erro = 'Não foi possível ler o certificado agora. Tente de novo.'; }
                 this.lendo = false;
             },
@@ -43,15 +60,48 @@
             },
             escolherCidade(nome) { const c = this.cidades.find(x => x.nome.toLowerCase() === nome.toLowerCase()); if (c) { this.municipio = c.id; this.cidade = c.nome + ' · ' + this.uf; this.cidadeNome = c.nome; } },
             async init() {
+                this.carregarCidadesPrest();
                 if (this.municipio) { try { const r = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios/' + this.municipio); const j = await r.json(); if (j && j.nome) { const sigla = j.microrregiao.mesorregiao.UF.sigla; this.cidade = j.nome + ' · ' + sigla; this.uf = sigla; this.cidadeNome = j.nome; await this.carregarCidades(); } } catch (e) {} }
             }
          }">
 
-        <div class="space-y-2">
-            <a href="{{ route('emitentes.index') }}" class="link text-sm">← Empresas que emitem</a>
-            <h1 class="text-3xl font-semibold">{{ $semEmpresaAinda ? 'Vamos cadastrar a sua empresa' : ($novo ? 'Cadastrar empresa' : 'Editar empresa') }}</h1>
-            <p class="text-[15px] text-ink-700">O certificado digital A1 assina as suas notas. A gente lê os dados dele para você não digitar nada.</p>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="space-y-2">
+                <a href="{{ route('emitentes.index') }}" class="link text-sm">← Emitentes</a>
+                <h1 class="text-3xl font-semibold">{{ $semEmpresaAinda ? 'Vamos cadastrar a sua empresa' : ($novo ? 'Novo emitente' : 'Editar emitente') }}</h1>
+                <p class="text-[15px] text-ink-700">O certificado digital A1 assina as suas notas. A gente lê os dados dele para você não digitar nada.</p>
+            </div>
+            @if ($emitente->exists)
+                <button type="button" class="btn" @click="historico = ! historico" :aria-expanded="historico" aria-controls="historico-alteracoes" title="Ver o cadastro inicial e as alterações desta empresa">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+                    <span x-text="historico ? 'Ocultar histórico' : 'Histórico de alterações'">Histórico de alterações</span>
+                    @if (($alteracoes ?? collect())->count())<span class="text-xs rounded-full bg-gray-100 px-2 py-0.5">{{ $alteracoes->count() }}</span>@endif
+                </button>
+            @endif
         </div>
+
+        @if ($emitente->exists)
+            @php
+                $rotulosHist = \App\Models\EmitenteAlteracao::CAMPOS;
+                $fmtHist = fn ($v) => is_array($v) ? collect($v)->map(fn ($x, $k) => (is_string($k) ? $k.': ' : '').$x)->implode(' · ') : ($v === null || $v === '' ? '—' : (is_bool($v) ? ($v ? 'Sim' : 'Não') : $v));
+            @endphp
+            <section id="historico-alteracoes" x-show="historico" x-cloak class="card p-5 sm:p-6">
+                <h2 class="text-base font-semibold">Histórico de alterações</h2>
+                <p class="text-[13px] text-ink-600 mt-0.5">O primeiro cadastro e cada alteração, com data, usuário, o que havia antes e o que passou a valer. Senhas e o arquivo do certificado nunca são guardados.</p>
+                @forelse (($alteracoes ?? collect()) as $a)
+                    <div class="tabela-linha py-3 text-sm">
+                        <div class="text-xs text-ink-600"><b>{{ $a->origem === 'cadastro' ? 'Primeiro cadastro' : 'Alteração' }}</b> · {{ $a->created_at->format('d/m/Y H:i') }}@if ($a->user) · {{ $a->user->name }}@endif</div>
+                        @foreach ($a->campos as $campo => $mud)
+                            @if (isset($rotulosHist[$campo]))
+                                <div class="leading-snug"><b>{{ $rotulosHist[$campo] }}:</b> <span class="text-ink-600">{{ $fmtHist($mud['de'] ?? null) }}</span> → {{ $fmtHist($mud['para'] ?? null) }}</div>
+                            @endif
+                        @endforeach
+                    </div>
+                @empty
+                    <p class="text-sm text-ink-600 mt-3">Sem alterações registradas ainda. A partir de agora, cada alteração desta empresa fica guardada aqui.</p>
+                @endforelse
+            </section>
+        @endif
 
         <div class="flex flex-wrap gap-6 items-start">
             <form method="POST" enctype="multipart/form-data"
@@ -82,13 +132,16 @@
                             </div>
                         </div>
                     @endif
+                    @unless ($emitente->certificado_arquivo)
+                        <div class="rounded-lg bg-amber-50 border border-amber-200 px-3.5 py-3 text-sm text-amber-900" role="note">Sem certificado, você já pode salvar os dados da empresa. Só não é possível emitir notas nem ativar produção até enviar o certificado.</div>
+                    @endunless
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label for="certificado" class="campo-rotulo {{ $emitente->exists ? '' : 'obrigatorio' }}">Arquivo do certificado</label>
-                            <input id="certificado" name="certificado" type="file" accept=".pfx,.p12" x-ref="certificado" @change="lido = false; erro = null" class="campo-entrada py-2" @required($novo)>
+                            <label for="certificado" class="campo-rotulo">Arquivo do certificado</label>
+                            <input id="certificado" name="certificado" type="file" accept=".pfx,.p12" x-ref="certificado" @change="lido = false; erro = null" class="campo-entrada py-2">
                         </div>
                         <div>
-                            <label for="certificado_senha" class="campo-rotulo {{ $emitente->exists ? '' : 'obrigatorio' }}">Senha do certificado</label>
+                            <label for="certificado_senha" class="campo-rotulo">Senha do certificado</label>
                             <input id="certificado_senha" name="certificado_senha" type="password" autocomplete="off" x-ref="senha" @change="lido = false; erro = null" class="campo-entrada">
                             <p class="campo-ajuda">Fica guardada criptografada. Nunca aparece em tela nem em registro.</p>
                         </div>
@@ -202,8 +255,27 @@
                                 </div>
                             </div>
                             <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-4 gap-4">
-                                <x-campo nome="municipio_prestacao" class="sm:col-span-3" rotulo="Município da prestação, se for sempre outro" :valor="$emitente->codigo_municipio_prestacao ? strtok((string) \App\Support\MunicipiosIbge::rotulo($emitente->codigo_municipio_prestacao), '/') : null" ajuda="Em branco, a prestação é no município da empresa." />
-                                <x-campo nome="uf_prestacao" rotulo="UF" maxlength="2" mono :valor="$emitente->codigo_municipio_prestacao ? substr((string) strrchr((string) \App\Support\MunicipiosIbge::rotulo($emitente->codigo_municipio_prestacao), '/'), 1) : null" />
+                                <div class="sm:col-span-4 space-y-2">
+                                    <span class="campo-rotulo">Município da prestação do serviço</span>
+                                    <div class="space-y-1.5">
+                                        @foreach (['emitente' => 'Do emitente (a cidade da empresa)', 'tomador' => 'Do destinatário (a cidade do cliente de cada nota)', 'outro' => 'Outro (sempre em uma cidade específica)'] as $valor => $texto)
+                                            <label class="flex items-start gap-2.5 text-sm cursor-pointer">
+                                                <input type="radio" name="local_prestacao" value="{{ $valor }}" x-model="localPrest" class="mt-0.5 text-brand-600 focus:ring-brand-600">
+                                                <span>{{ $texto }}</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                    <div x-show="localPrest === 'outro'" x-cloak class="mt-1 grid grid-cols-[84px_minmax(0,1fr)] gap-2">
+                                        <select name="uf_prestacao" x-model="ufPrest" @change="munPrest = ''; carregarCidadesPrest()" class="campo-entrada !mt-0" aria-label="Estado da prestação">
+                                            <option value="">UF</option>
+                                            @foreach (['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] as $sigla)<option>{{ $sigla }}</option>@endforeach
+                                        </select>
+                                        <input name="municipio_prestacao" list="lista-cidades-prest" x-model="munPrest" placeholder="Digite o nome da cidade" class="campo-entrada !mt-0" :disabled="!cidadesPrest.length" autocomplete="off" aria-label="Município da prestação">
+                                        <datalist id="lista-cidades-prest"><template x-for="c in cidadesPrest" :key="c"><option :value="c"></option></template></datalist>
+                                    </div>
+                                    @error('municipio_prestacao')<p class="erro-campo" role="alert">{{ $message }}</p>@enderror
+                                    <p class="campo-ajuda">Na maioria dos casos o serviço é prestado na cidade da empresa. Em "do destinatário", se o cliente não tiver município no cadastro, a nota usa a cidade da empresa.</p>
+                                </div>
                             </div>
                         </div>
                         <div class="rounded-lg bg-chao px-3.5 py-3 text-[13px] leading-relaxed text-ink-700">
@@ -262,12 +334,12 @@
                 <section class="card p-5 sm:p-6 space-y-4">
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
- <x-busca-servico class="sm:col-span-2" nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="$emitente->codigo_servico_padrao" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
-                        <x-campo nome="codigo_tributacao_municipal" obrigatorio list="lista-codigos-municipais" autocomplete="off" rotulo="Código Complementar Municipal (obrigatório no portal, exceto MEI)" :valor="$emitente->codigo_tributacao_municipal" maxlength="3" mono x-bind:required="op != 2" x-bind:disabled="op == 2" ajuda="3 dígitos (cTribMun), o final do código que o portal nacional mostra em “Código Complementar Municipal” (ex.: 01.07.01.001 → 001). Confirme com a contabilidade. MEI não usa." />
+ <x-busca-servico class="sm:col-span-2" nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="old('codigo_servico_padrao', $emitente->codigo_servico_padrao)" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
+                        <x-campo nome="codigo_tributacao_municipal" obrigatorio list="lista-codigos-municipais" autocomplete="off" rotulo="Código complementar municipal (3 dígitos)" :valor="$emitente->codigo_tributacao_municipal" maxlength="3" mono x-bind:required="op != 2" x-bind:disabled="op == 2" ajuda="Obrigatório, exceto para MEI. É o número que a prefeitura acrescenta ao código do serviço: no código 01.07.01.001, é o 001. Na dúvida, veja como aparece no Emissor Nacional ou pergunte à contabilidade." />
                         <div class="sm:col-span-2 space-y-3 rounded-xl border border-gray-200 p-4">
                             <div>
-                                <h3 class="text-sm font-semibold">Códigos complementares municipais da prefeitura</h3>
-                                <p class="campo-ajuda">Cada prefeitura tem a sua lista. Cadastre aqui os códigos que esta empresa usa (copie do Emissor Nacional, no campo "Código Complementar Municipal"). Eles aparecem como opções no código padrão acima e na nota completa personalizada.</p>
+                                <h3 class="text-sm font-semibold">Lista de códigos complementares da prefeitura</h3>
+                                <p class="campo-ajuda">Opcional. Se a empresa usa mais de um código complementar, cadastre-os aqui (código de 3 dígitos e descrição, como no Emissor Nacional). Eles passam a aparecer como opções no campo acima e ao emitir uma nota completa.</p>
                             </div>
                             <datalist id="lista-codigos-municipais">
                                 <template x-for="c in codigos" :key="c.codigo"><option :value="c.codigo" x-text="c.descricao"></option></template>
@@ -282,7 +354,7 @@
                                     </button>
                                 </div>
                             </template>
-                            <p class="text-[13px] text-ink-600" x-show="!codigos.length">Nenhum código cadastrado ainda.</p>
+                            <p class="text-[13px] text-ink-600" x-show="!codigos.length">Nenhum código na lista.</p>
                             @php $erroCodigos = collect($errors->get('codigos*'))->flatten()->first(); @endphp
                             @if ($erroCodigos)<p class="erro-campo" role="alert">{{ $erroCodigos }}</p>@endif
                             <button type="button" class="btn btn-sm" @click="addCodigo()">Adicionar código</button>
@@ -303,8 +375,16 @@
                                 <span><b>Enviar a NFS-e ao cliente por e-mail assim que for emitida</b><span class="block text-[13px] text-ink-600">PDF e XML vão para os e-mails do cadastro do cliente. Só funciona em produção: em modo teste o envio é sempre manual.</span></span>
                             </label>
                         </div>
-                        <x-campo nome="serie_dps" obrigatorio rotulo="Série" :valor="$emitente->serie_dps" maxlength="5" mono ajuda="Já vem pronta (00001). Só mude se o seu contador pedir." required />
-                        <x-campo nome="ambiente" obrigatorio tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera depois de emitir uma nota em teste.">
+                        <div class="space-y-3">
+                            <label class="flex items-start gap-2.5 text-sm cursor-pointer">
+                                <input type="checkbox" name="informar_serie_dps" value="1" x-model="informarSerie" class="mt-0.5 rounded text-brand-600 focus:ring-brand-600">
+                                <span><b>Informar série e número da DPS</b><span class="block text-[13px] text-ink-600">Como no Emissor Nacional. Desmarcado, a série é a 70000 (a do portal) e a numeração é toda automática.</span></span>
+                            </label>
+                            <div x-show="informarSerie" x-cloak>
+                                <x-campo nome="serie_dps" obrigatorio rotulo="Série" :valor="$emitente->informar_serie_dps ? $emitente->serie_dps : '70000'" maxlength="5" mono ajuda="Teste: 00001. Produção: 70000, a série do Emissor Nacional. Só mude se o seu contador pedir." x-bind:required="informarSerie" />
+                            </div>
+                        </div>
+                        <x-campo nome="ambiente" obrigatorio tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera com o certificado cadastrado e depois de emitir uma nota em teste.">
                             <option value="2" @selected(old('ambiente', $emitente->ambiente ?? 2) == 2)>Teste (as notas não têm valor fiscal)</option>
                             <option value="1" @selected(old('ambiente', $emitente->ambiente ?? 2) == 1)>Produção (notas com valor fiscal)</option>
                         </x-campo>
@@ -319,7 +399,7 @@
 
                 <div class="flex items-center gap-4">
                     <button class="btn btn-primary btn-lg">Salvar{{ $semEmpresaAinda ? ' e continuar' : '' }}</button>
-                    <a href="{{ route('emitentes.index') }}" class="text-sm text-ink-700">Cancelar</a>
+                    <a href="{{ route('emitentes.index') }}" class="btn btn-lg">Cancelar</a>
                 </div>
             </form>
 

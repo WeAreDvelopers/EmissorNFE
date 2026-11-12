@@ -101,12 +101,13 @@ Route::middleware(['auth', 'conta'])->group(function () {
     // Clientes (tomadores): cadastro por conta, com histórico de alterações
     Route::get('/clientes', [TomadorController::class, 'index'])->name('tomadores.index');
     Route::get('/clientes/modelo', [TomadorController::class, 'modelo'])->name('tomadores.modelo');
+    Route::get('/clientes/importar', [TomadorController::class, 'telaImportar'])->name('tomadores.importar.tela');
     Route::post('/clientes/importar', [TomadorController::class, 'importar'])->name('tomadores.importar');
     Route::get('/clientes/novo', [TomadorController::class, 'criar'])->name('tomadores.criar');
     Route::post('/clientes', [TomadorController::class, 'store'])->name('tomadores.store');
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');
     Route::put('/clientes/{tomador}', [TomadorController::class, 'update'])->name('tomadores.update');
-    Route::delete('/clientes/{tomador}', [TomadorController::class, 'excluir'])->name('tomadores.excluir');
+    Route::post('/clientes/{tomador}/situacao', [TomadorController::class, 'situacao'])->name('tomadores.situacao');
 
     // Cancelamento de NFS-e emitida (somente o dono)
     Route::get('/notas/{nota}/cancelar', [\App\Http\Controllers\NotaCancelamentoController::class, 'form'])->name('notas.cancelar.form');

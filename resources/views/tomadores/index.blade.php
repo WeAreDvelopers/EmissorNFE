@@ -1,21 +1,17 @@
-<x-app-layout titulo="Clientes">
+<x-app-layout titulo="Tomadores (Clientes)">
     @php $f = fn ($n) => number_format($n, 0, ',', '.'); @endphp
 
     <div class="max-w-[1160px] mx-auto px-4 sm:px-8 py-8 space-y-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div>
-                <h1 class="text-3xl font-semibold">Clientes</h1>
+                <h1 class="text-3xl font-semibold">Tomadores (Clientes)</h1>
                 <p class="mt-1 text-[15px] text-ink-700">Quem recebe as suas notas. Cadastre vários de uma vez por planilha, ou deixe o cadastro ser atualizado quando você importa notas com a coluna “Atualizar” marcada.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2" x-data>
-                <a href="{{ route('tomadores.modelo') }}" class="btn" title="Baixar a planilha modelo (.xlsx) para cadastrar clientes">Baixar planilha modelo</a>
+                <a href="{{ route('tomadores.modelo') }}" class="btn" title="Baixar a planilha modelo (.xlsx) para cadastrar tomadores">Baixar planilha modelo</a>
                 @can('emitir')
-                    <a href="{{ route('tomadores.criar') }}" class="btn btn-primary" title="Cadastrar um cliente preenchendo a tela">Novo cliente</a>
-                    <form method="POST" action="{{ route('tomadores.importar') }}" enctype="multipart/form-data" x-ref="form">
-                        @csrf
-                        <input type="file" name="planilha" accept=".xlsx,.xls,.csv" class="sr-only" x-ref="arquivo" @change="if ($refs.arquivo.files.length) $refs.form.submit()">
-                        <button type="button" class="btn" @click="$refs.arquivo.click()" title="Escolha a planilha preenchida; a importação começa na hora">Importar clientes</button>
-                    </form>
+                    <a href="{{ route('tomadores.importar.tela') }}" class="btn" title="Enviar a planilha preenchida para cadastrar ou atualizar tomadores">Importar tomadores</a>
+                    <a href="{{ route('tomadores.criar') }}" class="btn btn-primary" title="Cadastrar um tomador preenchendo a tela">+ Novo tomador</a>
                 @endcan
             </div>
         </div>
@@ -38,13 +34,24 @@
             </div>
         @endif
 
-        <form method="GET" class="flex flex-wrap gap-3 items-end">
-            <div class="flex-1 min-w-[220px]">
+        <form method="GET" class="card p-4 sm:p-5 flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-[200px]">
                 <label for="q" class="campo-rotulo">Buscar</label>
                 <input id="q" name="q" value="{{ $busca }}" placeholder="Nome, CNPJ/CPF ou e-mail" class="campo-entrada" autocomplete="off">
             </div>
-            <label class="flex items-center gap-2 min-h-[44px] text-sm"><input type="checkbox" name="pendentes" value="1" @checked($soPendentes) class="rounded text-brand-600 focus:ring-brand-600"> Só com cadastro incompleto ({{ $f($totalPendentes) }})</label>
-            <button class="btn btn-primary">Filtrar</button>
+            <div class="w-[190px] shrink-0">
+                <label for="tipo" class="campo-rotulo">Tipo</label>
+                <select id="tipo" name="tipo" class="campo-entrada">
+                    <option value="">Todos (PF e PJ)</option>
+                    <option value="pf" @selected($tipo === 'pf')>Pessoa física (PF)</option>
+                    <option value="pj" @selected($tipo === 'pj')>Pessoa jurídica (PJ)</option>
+                </select>
+            </div>
+            <label class="flex items-center gap-2 min-h-[44px] text-sm whitespace-nowrap"><input type="checkbox" name="pendentes" value="1" @checked($soPendentes) class="rounded text-brand-600 focus:ring-brand-600"> Só com cadastro incompleto ({{ $f($totalPendentes) }})</label>
+            <div class="flex items-center gap-3 ms-auto">
+                @if (filled($busca) || $soPendentes || $tipo !== '')<a href="{{ route('tomadores.index') }}" class="text-sm text-ink-700 hover:underline">Limpar filtros</a>@endif
+                <button class="btn btn-primary">Filtrar</button>
+            </div>
         </form>
 
         <div class="card overflow-x-auto">
@@ -56,7 +63,10 @@
                 @forelse ($tomadores as $t)
                     <tr class="tabela-linha hover:bg-gray-50" data-item="{{ $t->id }}">
                         <td class="px-5 py-3">
-                            <a href="{{ route('tomadores.editar', $t) }}" class="font-medium text-ink-900 no-underline hover:underline">{{ $t->nome }}</a>
+                            <div class="flex items-start gap-2">
+                                <span class="pill shrink-0 {{ $t->tipoPessoa() === 'PF' ? 'bg-info-100 text-info-800' : 'bg-gray-100 text-ink-700' }}" title="{{ $t->tipoPessoa() === 'PF' ? 'Pessoa física (CPF)' : 'Pessoa jurídica (CNPJ)' }}">{{ $t->tipoPessoa() }}</span>
+                                <a href="{{ route('tomadores.editar', $t) }}" class="font-medium text-ink-900 no-underline hover:underline">{{ $t->nome }}</a>
+                            </div>
                             <div class="text-xs text-ink-600"><span class="font-mono">{{ \App\Support\Documento::formatar($t->documento) }}</span>@if ($t->nome_fantasia) · {{ $t->nome_fantasia }}@endif</div>
                         </td>
                         <td class="px-3 py-3 whitespace-nowrap">{{ $t->municipio ? $t->municipio.' / '.$t->uf : '—' }}</td>
@@ -64,6 +74,7 @@
                         <td class="px-5 py-3">
                             @if ($t->pendente)<span class="pill bg-amber-100 text-amber-900" title="Faltam: {{ implode(', ', $t->faltando()) }}">pendente de correção</span>
                             @else<span class="pill bg-ok-100 text-ok-800">completo</span>@endif
+                            @unless ($t->ativo)<span class="pill bg-gray-200 text-ink-700">inativo</span>@endunless
                         </td>
                         <td class="px-5 py-3">
                             <div class="flex items-center justify-end gap-1">
@@ -71,22 +82,18 @@
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
                                 </a>
                                 @can('emitir')
-                                    @if ($t->notas_emitidas > 0)
-                                        <span class="inline-flex items-center justify-center w-[34px] h-[34px] rounded-lg text-ink-600 opacity-40 cursor-not-allowed" tabindex="0" role="img"
-                                              title="Não dá para excluir: este cliente tem {{ $t->notas_emitidas }} {{ $t->notas_emitidas === 1 ? 'nota emitida' : 'notas emitidas' }}." aria-label="Exclusão indisponível: cliente com notas emitidas">
-                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
-                                        </span>
-                                    @else
-                                        <button type="button" class="btn-excluir !px-2" data-acao-url="{{ route('tomadores.excluir', $t) }}" data-confirmar="Excluir mesmo?" data-saindo="self" title="Excluir este cliente" aria-label="Excluir {{ $t->nome }}">
-                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
+                                    <form method="POST" action="{{ route('tomadores.situacao', $t) }}" class="inline-flex">@csrf
+                                        <button type="submit" role="switch" aria-checked="{{ $t->ativo ? 'true' : 'false' }}" title="{{ $t->ativo ? 'Cadastro ativo: clique para inativar' : 'Cadastro inativo: clique para ativar' }}" aria-label="{{ $t->ativo ? 'Inativar' : 'Ativar' }} {{ $t->nome }}"
+                                                class="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 {{ $t->ativo ? 'bg-brand-600' : 'bg-gray-400' }}">
+                                            <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform {{ $t->ativo ? 'translate-x-6' : 'translate-x-1' }}"></span>
                                         </button>
-                                    @endif
+                                    </form>
                                 @endcan
                             </div>
                         </td>
                     </tr>
                 @empty
-                    <tr class="tabela-linha"><td colspan="5" class="px-5 py-10 text-center text-ink-700">Nenhum cliente ainda. Cadastre em “Novo cliente” ou deixe que apareçam depois da primeira importação confirmada.</td></tr>
+                    <tr class="tabela-linha"><td colspan="5" class="px-5 py-10 text-center text-ink-700">Nenhum tomador ainda. Cadastre em “+ Novo tomador” ou deixe que apareçam depois da primeira importação confirmada.</td></tr>
                 @endforelse
                 </tbody>
             </table>

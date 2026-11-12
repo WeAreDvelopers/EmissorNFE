@@ -72,17 +72,21 @@
                         @php $dica = $n->status->grupo() === 'atencao' ? \App\Support\ExplicacaoErro::para($n) : null; @endphp
                         <span class="pill {{ $n->status->selo() }}" @if ($dica) title="{{ $dica['titulo'] }}: {{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 220) }}" @endif>{{ $n->status->label() }}</span>
                         @if (in_array($n->status, [\App\Enums\StatusNota::Emitida, \App\Enums\StatusNota::Cancelada], true) && $n->numero_nfse)<div class="text-[13px] mt-1">NFS-e nº <b class="font-mono">{{ $n->numero_nfse }}</b></div>@endif
+                        @if ($dica)<div class="text-xs text-warn-900 mt-1 leading-snug">{{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 90) }}</div>@endif
                         @if ($n->status === \App\Enums\StatusNota::Cancelada)<div class="text-xs text-ink-600 mt-0.5">Cancelada em {{ $n->cancelada_em?->timezone('America/Sao_Paulo')->format('d/m/Y') }}</div>@endif
                     </div>
                     <div class="sm:text-right">
                         @if ($n->status === \App\Enums\StatusNota::Emitida && $n->xml_nfse)
                             <x-nota-documentos :nota="$n" />
-                        @elseif (in_array($n->status, [\App\Enums\StatusNota::Falhou, \App\Enums\StatusNota::Enviando, \App\Enums\StatusNota::Pendente], true) && $n->numero_dps)
+                        @endif
+                        @if (in_array($n->status, [\App\Enums\StatusNota::Falhou, \App\Enums\StatusNota::Enviando, \App\Enums\StatusNota::Pendente], true) && $n->numero_dps)
                             @can('emitir')
-                                <form method="POST" action="{{ route('notas.conciliar', $n) }}">@csrf<button class="btn-acao" title="Pergunta à SEFIN se esta nota já foi autorizada">Conferir</button></form>
+                                <form method="POST" action="{{ route('notas.conciliar', $n) }}" class="inline-block">@csrf<button class="btn-acao" title="Pergunta à SEFIN se esta nota já foi autorizada">Conferir</button></form>
                             @endcan
-                        @elseif ($n->status->grupo() === 'atencao' && $n->importacao)
-                            <a href="{{ route('importacoes.show', [$n->importacao, 'filtro' => 'atencao', 'nota' => $n->id]) }}" class="font-semibold text-brand-600 no-underline hover:underline" title="Ver o erro e corrigir">Ver erro →</a>
+                        @endif
+                        @if ($n->status->grupo() === 'atencao')
+                            {{-- Nota de importação abre no lote; nota emitida à mão (sem lote) abre no painel "Precisa de você" --}}
+                            <a href="{{ $n->importacao ? route('importacoes.show', [$n->importacao, 'filtro' => 'atencao', 'nota' => $n->id]) : route('pendencias', ['nota' => $n->id]) }}" class="block font-semibold text-brand-600 no-underline hover:underline" title="Ver o erro e corrigir a nota">{{ $n->status === \App\Enums\StatusNota::Falhou ? 'Ver erro e reenviar →' : 'Ver erro e corrigir →' }}</a>
                         @endif
                     </div>
                 </div>

@@ -1,11 +1,11 @@
-<x-app-layout titulo="Empresas que emitem">
+<x-app-layout titulo="Emitentes">
     <div class="max-w-[1160px] mx-auto px-4 sm:px-8 py-8 space-y-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div>
-                <h1 class="text-3xl font-semibold">Empresas que emitem</h1>
+                <h1 class="text-3xl font-semibold">Emitentes</h1>
                 <p class="mt-1 text-[15px] text-ink-700">Cada empresa tem o seu certificado, série e ambiente.</p>
             </div>
-            @can('gerenciar-emitentes')<a href="{{ route('emitentes.criar') }}" class="btn btn-primary btn-lg">+ Cadastrar empresa</a>@endcan
+            @can('gerenciar-emitentes')<a href="{{ route('emitentes.criar') }}" class="btn btn-primary">+ Novo emitente</a>@endcan
         </div>
 
         <div class="card overflow-x-auto">
