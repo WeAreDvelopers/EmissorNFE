@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# deploy-nfe: atualiza o sistema NFe no servidor.
+#   git pull -> composer (se o lock mudou) -> migrate (se houver) -> npm build -> caches -> permissões -> reinicia fila e PHP
+#
+# Instalação (uma vez, como root no servidor):
+#   install -m 0755 /var/www/fiply/NFE/deploy/deploy-nfe /usr/local/bin/deploy-nfe
+# Uso:
+#   deploy-nfe
+#
+set -euo pipefail
+
+APP="${NFE_DIR:-/var/www/fiply/NFE}"
+PHP="${NFE_PHP:-/usr/bin/php8.4}"          # o PHP do app é o 8.4 (o `php` padrão do servidor é o 8.2)
+WEB_USER="${NFE_WEB_USER:-www-data}"
+FILA="${NFE_FILA:-nfe-queue}"              # serviço do worker da fila
+FPM="${NFE_FPM:-php8.4-fpm}"
+
+passo() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
+erro()  { printf '\n\033[1;31mERRO: %s\033[0m\n' "$*" >&2; }
+trap 'erro "o deploy parou na linha $LINENO. Nada foi revertido: confira a mensagem acima."' ERR
+
+# só um deploy por vez
+exec 9>/tmp/deploy-nfe.lock
+flock -n 9 || { erro "já existe um deploy em andamento."; exit 1; }
+
+cd "$APP"
+INICIO=$(date +%s)
+
+passo "Código (git pull)"
+ANTES=$(git rev-parse HEAD)
+git pull --ff-only
+DEPOIS=$(git rev-parse HEAD)
+if [ "$ANTES" = "$DEPOIS" ]; then
+    echo "Nada novo no repositório (continua em $(git rev-parse --short HEAD))."
+else
+    git --no-pager log --oneline "$ANTES..$DEPOIS"
+fi
+
+# Dependências PHP: só se o composer.lock mudou
+if [ "$ANTES" != "$DEPOIS" ] && ! git diff --quiet "$ANTES" "$DEPOIS" -- composer.lock; then
+    passo "Dependências PHP (composer.lock mudou)"
+    "$PHP" "$(command -v composer)" install --no-dev --optimize-autoloader --no-interaction
+fi
+
+passo "Migrations"
+PENDENTES=$("$PHP" artisan migrate:status --pending 2>/dev/null | grep -c "Pending" || true)
+echo "Pendentes: $PENDENTES"
+"$PHP" artisan migrate --force
+
+passo "Front (npm build)"
+if [ "$ANTES" != "$DEPOIS" ] && ! git diff --quiet "$ANTES" "$DEPOIS" -- package-lock.json; then
+    echo "package-lock.json mudou: npm ci"
+    npm ci --no-audit --no-fund
+fi
+npm run build
+
+passo "Caches do Laravel"
+"$PHP" artisan optimize:clear
+"$PHP" artisan optimize
+
+passo "Permissões"
+chown -R "$WEB_USER:$WEB_USER" storage bootstrap/cache public/build
+
+passo "Reiniciando fila e PHP-FPM"
+systemctl restart "$FILA"
+systemctl reload "$FPM"
+sleep 2
+for s in "$FILA" "$FPM"; do
+    printf '%s: %s\n' "$s" "$(systemctl is-active "$s")"
+done
+
+passo "Pronto em $(( $(date +%s) - INICIO ))s — versão $(git rev-parse --short HEAD): $(git log -1 --pretty=%s)"

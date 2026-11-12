@@ -9,3 +9,6 @@
 /.github export-ignore
 CHANGELOG.md export-ignore
 .styleci.yml export-ignore
+
+# scripts de shell precisam de fim de linha LF
+deploy/* text eol=lf
