@@ -90,40 +90,8 @@
         </button>
     </div>
 
-    {{-- Empresa que está sendo administrada: logo, nome e troca. Notas, importações e tomadores são só dela. --}}
-    @if ($empresaAtiva && ! $noMaster)
-        <div class="mx-4 mb-3 rounded-xl bg-white/[.09] ring-1 ring-white/15 p-3 space-y-2.5" aria-label="Empresa que você está administrando">
-            <div class="text-[11px] font-semibold uppercase tracking-wide text-[#5FD1A0]">Empresa que você administra</div>
-            <div class="flex items-center gap-3">
-                <span class="w-12 h-12 shrink-0 rounded-lg bg-white flex items-center justify-center overflow-hidden text-casca font-semibold text-lg" aria-hidden="true">
-                    @if ($empresaAtiva->logo_url)<img src="{{ $empresaAtiva->logo_url }}" alt="" class="max-w-full max-h-full object-contain">@else{{ \Illuminate\Support\Str::of($empresaAtiva->razao_social)->substr(0, 1)->upper() }}@endif
-                </span>
-                <span class="min-w-0 leading-tight">
-                    <span class="block text-[15px] font-semibold text-white break-words" title="{{ $empresaAtiva->razao_social }}">{{ \Illuminate\Support\Str::limit($empresaAtiva->razao_social, 42) }}</span>
-                    <span class="block text-xs font-mono text-casca-texto/80 mt-0.5">{{ \App\Support\Documento::formatar($empresaAtiva->cnpj) }}</span>
-                </span>
-            </div>
-            @if ($empresasMenu->count() > 1)
-                <form method="POST" action="{{ route('emitentes.administrar', ['emitente' => $empresaAtiva->id]) }}" data-base="{{ route('emitentes.administrar', ['emitente' => '__ID__']) }}">
-                    @csrf
-                    <label for="trocar-empresa" class="sr-only">Trocar de empresa</label>
-                    <select id="trocar-empresa" class="w-full rounded-lg border-0 bg-white text-ink-900 text-sm font-medium py-2.5 ps-3 pe-8 focus:ring-2 focus:ring-[#5FD1A0]"
-                            onchange="this.form.action = this.form.dataset.base.replace('__ID__', this.value); this.form.submit();">
-                        @foreach ($empresasMenu as $e)
-                            <option value="{{ $e->id }}" @selected($e->id === $empresaAtiva->id)>{{ $e->razao_social }}</option>
-                        @endforeach
-                    </select>
-                </form>
-            @endif
-        </div>
-    @endif
-
     @if ($noMaster)
         <div class="mx-4 mb-2 rounded-lg bg-white/10 px-3 py-2 text-[13px] text-white">Área master · somente leitura</div>
-    @elseif ($modoTeste)
-        <div class="mx-4 mb-2 rounded-lg bg-amber-300/95 px-3 py-2 text-[13px] leading-snug text-amber-950" title="As notas emitidas em modo teste não têm valor fiscal"><b>Modo teste</b><br>notas sem valor fiscal</div>
-    @elseif ($emProducao)
-        <div class="mx-4 mb-2 rounded-lg bg-brand-500/25 px-3 py-2 text-[13px] text-white"><b>Produção</b> · notas com valor fiscal</div>
     @endif
 
     <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-5">

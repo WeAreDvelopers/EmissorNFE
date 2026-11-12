@@ -18,6 +18,7 @@
             @include('layouts.navigation')
 
             <main class="conteudo flex-1 min-w-0">
+                @include('layouts.cabecalho')
                 @php $mostrarErros = $errors->any() && ! request()->routeIs('profile.*') && ! request()->routeIs('importacoes.criar'); @endphp
                 @if (session('ok') || $mostrarErros)
                     <div class="max-w-[1160px] mx-auto px-4 sm:px-8 mt-4 space-y-2" aria-live="polite">

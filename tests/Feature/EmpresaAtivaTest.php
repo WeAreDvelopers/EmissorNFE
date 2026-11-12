@@ -70,11 +70,11 @@ class EmpresaAtivaTest extends TestCase
         ];
     }
 
-    public function test_menu_mostra_a_empresa_ativa_com_select_para_trocar(): void
+    public function test_cabecalho_mostra_a_empresa_ativa_com_ambiente_e_select_para_trocar(): void
     {
         $this->actingAs($this->user)->get(route('inicio'))->assertOk()
             ->assertSee('Empresa que você administra')->assertSee('Alfa Ltda')->assertSee('Beta Ltda')
-            ->assertSee('19.534.920/0001-18')->assertSee('id="trocar-empresa"', false);
+            ->assertSee('19.534.920/0001-18')->assertSee('Modo teste')->assertSee('id="trocar-empresa"', false);
     }
 
     public function test_notas_e_tomadores_mudam_junto_com_a_empresa_escolhida(): void
