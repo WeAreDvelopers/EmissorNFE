@@ -101,47 +101,105 @@ class ImportadorClientes
         return $livro;
     }
 
+    /** Campos mostrados na prévia, na ordem da planilha. */
+    public const CAMPOS_PREVIA = ['documento', 'nome', 'nome_fantasia', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'uf', 'cep', 'emails', 'observacoes'];
+
     /**
-     * @return array{criados:int, atualizados:int, sem_mudanca:int, erros:array<int,array{linha:int,mensagem:string}>}
+     * Etapa 1 (nada é gravado): lê a planilha e diz, linha a linha, o que seria feito e o que está errado em cada campo.
+     * - bloqueada: a linha não pode ser importada de jeito nenhum (CNPJ/CPF inutilizável, repetido, ou cliente novo sem nome);
+     * - erros: campo => motivo. Na importação "com erros", o campo com erro fica de fora e o cadastro fica pendente.
+     *
+     * @return array<int,array{linha:int,bruto:array<string,string>,documento:?string,dados:array,erros:array<string,string>,bloqueada:bool,acao:?string}>
      */
-    public function importar(string $caminho, ?int $userId): array
+    public function analisar(string $caminho): array
     {
-        $linhas = $this->ler($caminho);
-        $r = ['criados' => 0, 'atualizados' => 0, 'sem_mudanca' => 0, 'erros' => []];
+        $saida = [];
         $vistos = [];
 
-        foreach ($linhas as $numero => $l) {
+        foreach ($this->ler($caminho) as $numero => $l) {
+            $item = [
+                'linha' => $numero, 'documento' => null, 'dados' => [], 'erros' => [], 'bloqueada' => false, 'acao' => null,
+                'bruto' => collect(self::CAMPOS_PREVIA)->mapWithKeys(fn ($c) => [$c => trim((string) ($l[$c] ?? ''))])->all(),
+            ];
+
             $documento = $this->documento((string) ($l['documento'] ?? ''));
             if ($documento === null) {
-                $r['erros'][] = ['linha' => $numero, 'mensagem' => 'CNPJ/CPF vazio ou inválido.'];
+                $item['erros']['documento'] = 'CNPJ/CPF vazio ou inválido (o dígito verificador não confere). Esta linha não pode ser importada.';
+                $item['bloqueada'] = true;
+            } elseif (isset($vistos[$documento])) {
+                $item['erros']['documento'] = 'CNPJ/CPF repetido na planilha (já usado na linha '.$vistos[$documento].'). Esta linha não pode ser importada.';
+                $item['bloqueada'] = true;
+            } else {
+                [$dados, $erros] = $this->normalizar($l);
+                $item['documento'] = $documento;
+                $item['dados'] = $dados;
+                $item['erros'] = $erros;
+
+                $tomador = Tomador::where('documento', $documento)->first();
+                if (! $tomador && blank($dados['nome'] ?? null)) {
+                    $item['erros']['nome'] = ($erros['nome'] ?? 'Cliente novo precisa de Razão Social/Nome.').' Cliente novo precisa de nome: esta linha não pode ser importada.';
+                    $item['bloqueada'] = true;
+                } else {
+                    $item['acao'] = $tomador === null ? 'novo' : ($this->mudaria($tomador, $dados) ? 'atualizar' : 'sem_mudanca');
+                    $vistos[$documento] = $numero;   // só conta como "visto" a linha que de fato entra
+                }
+            }
+
+            $saida[] = $item;
+        }
+
+        return $saida;
+    }
+
+    /** O cadastro existente mudaria com estes dados? (mesma regra do gravar: vazio preserva, igual não muda) */
+    private function mudaria(Tomador $tomador, array $dados): bool
+    {
+        foreach ($dados as $campo => $valor) {
+            $antes = $tomador->{$campo};
+            if (! ($antes === $valor || (blank($antes) && blank($valor)))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Etapa 2: grava. $modo 'validos' = só as linhas sem nenhum erro; 'todos' = também as que têm erro em algum campo
+     * (o campo com erro fica de fora e o cadastro fica "pendente de correção"). Linha bloqueada nunca entra.
+     *
+     * @return array{criados:int, atualizados:int, sem_mudanca:int, ressalvas:int, erros:array<int,array{linha:int,mensagem:string}>}
+     */
+    public function importar(string $caminho, ?int $userId, string $modo = 'validos'): array
+    {
+        $r = ['criados' => 0, 'atualizados' => 0, 'sem_mudanca' => 0, 'ressalvas' => 0, 'erros' => []];
+
+        foreach ($this->analisar($caminho) as $item) {
+            $motivo = implode(' ', $item['erros']);
+
+            if ($item['bloqueada']) {
+                $r['erros'][] = ['linha' => $item['linha'], 'mensagem' => $motivo];
                 continue;
             }
-            if (isset($vistos[$documento])) {
-                $r['erros'][] = ['linha' => $numero, 'mensagem' => 'CNPJ/CPF repetido na planilha (já usado na linha '.$vistos[$documento].'). Esta linha foi ignorada.'];
-                continue;
-            }
-            try {
-                $dados = $this->normalizar($l);
-            } catch (\InvalidArgumentException $e) {
-                $r['erros'][] = ['linha' => $numero, 'mensagem' => $e->getMessage()];
+            if ($item['erros'] && $modo !== 'todos') {
+                $r['erros'][] = ['linha' => $item['linha'], 'mensagem' => $motivo.' Linha não importada.'];
                 continue;
             }
 
-            $tomador = Tomador::where('documento', $documento)->first();
-            if (! $tomador && blank($dados['nome'] ?? null)) {
-                $r['erros'][] = ['linha' => $numero, 'mensagem' => 'Cliente novo precisa de Razão Social/Nome.'];
-                continue;
-            }
-
             try {
-                $resultado = $this->gravar($tomador, $documento, $dados, $userId);
+                $tomador = Tomador::where('documento', $item['documento'])->first();
+                $resultado = $this->gravar($tomador, $item['documento'], $item['dados'], $userId);
             } catch (\Throwable $e) {
                 report($e);   // o detalhe técnico fica no log; para o usuário, só o que dá para agir
-                $r['erros'][] = ['linha' => $numero, 'mensagem' => 'Não foi possível gravar esta linha. Confira os dados dela; as demais linhas foram importadas.'];
+                $r['erros'][] = ['linha' => $item['linha'], 'mensagem' => 'Não foi possível gravar esta linha. Confira os dados dela; as demais linhas foram importadas.'];
                 continue;
             }
-            $vistos[$documento] = $numero;   // só conta como "visto" a linha que de fato entrou
+
             $r[$resultado]++;
+            if ($item['erros']) {
+                $r['ressalvas']++;
+                $r['erros'][] = ['linha' => $item['linha'], 'mensagem' => 'Importada sem o(s) campo(s) com erro, cadastro pendente de correção: '.$motivo];
+            }
         }
 
         return $r;
@@ -192,47 +250,56 @@ class ImportadorClientes
         'complemento' => [156, 'Complemento'], 'bairro' => [156, 'Bairro'], 'municipio' => [120, 'Município'], 'observacoes' => [2000, 'Observações'],
     ];
 
-    /** Só devolve o que a linha trouxe preenchido (vazio preserva o cadastro). */
+    /**
+     * Só devolve o que a linha trouxe preenchido (vazio preserva o cadastro).
+     *
+     * @return array{0:array<string,mixed>,1:array<string,string>} [dados válidos, erro por campo]
+     */
     private function normalizar(array $l): array
     {
         $d = [];
+        $erros = [];
+
         foreach (self::LIMITES as $c => [$max, $rotulo]) {
             if (filled($v = trim((string) ($l[$c] ?? '')))) {
                 if (mb_strlen($v) > $max) {
-                    throw new \InvalidArgumentException("{$rotulo} passou de {$max} caracteres (tem ".mb_strlen($v).'). Encurte o texto; esta linha foi ignorada.');
+                    $erros[$c] = "{$rotulo} passou de {$max} caracteres (tem ".mb_strlen($v).'). Encurte o texto.';
+                } else {
+                    $d[$c] = $v;
                 }
-                $d[$c] = $v;
             }
         }
 
         if (filled($uf = strtoupper(trim((string) ($l['uf'] ?? ''))))) {
             if (! preg_match('/^[A-Z]{2}$/', $uf)) {
-                throw new \InvalidArgumentException("UF \"{$uf}\" inválida: use 2 letras (ex.: SP).");
+                $erros['uf'] = "UF \"{$uf}\" inválida: use 2 letras (ex.: SP).";
+            } else {
+                $d['uf'] = $uf;
             }
-            $d['uf'] = $uf;
         }
 
         if (filled($cep = preg_replace('/\D/', '', (string) ($l['cep'] ?? '')))) {
             $cep = str_pad($cep, 8, '0', STR_PAD_LEFT);
             if (strlen($cep) !== 8) {
-                throw new \InvalidArgumentException('CEP inválido: precisa ter 8 dígitos.');
+                $erros['cep'] = 'CEP inválido: precisa ter 8 dígitos.';
+            } else {
+                $d['cep'] = $cep;
             }
-            $d['cep'] = $cep;
         }
 
         $emails = collect(preg_split('/[;,\s]+/', (string) ($l['emails'] ?? ''), -1, PREG_SPLIT_NO_EMPTY))
             ->map(fn ($e) => strtolower(trim($e)))->unique()->values();
         if ($emails->isNotEmpty()) {
             if ($invalido = $emails->first(fn ($e) => ! filter_var($e, FILTER_VALIDATE_EMAIL))) {
-                throw new \InvalidArgumentException("E-mail inválido: {$invalido}.");
+                $erros['emails'] = "E-mail inválido: {$invalido}.";
+            } else {
+                $d['emails'] = $emails->all();
             }
-            $d['emails'] = $emails->all();
         }
 
-        return $d;
+        return [$d, $erros];
     }
 
-    /** CPF/CNPJ só com dígitos. O Excel come zeros da frente de número: completa antes de validar. */
     private function documento(string $valor): ?string
     {
         $d = preg_replace('/\D/', '', $valor);

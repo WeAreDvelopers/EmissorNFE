@@ -3,7 +3,8 @@
         <div class="space-y-3">
             <a href="{{ route('tomadores.index') }}" class="link text-sm">← Tomadores (Clientes)</a>
             <h1 class="text-3xl font-semibold">Importar tomadores</h1>
-            <p class="text-[15px] text-ink-700">Envie a planilha para cadastrar vários tomadores de uma vez, ou atualizar os que já existem. Nada é emitido nem cobrado.</p>
+            <x-passos :atual="1" :rotulos="['Escolher arquivo', 'Conferir', 'Importar']" />
+            <p class="text-[15px] text-ink-700">Envie a planilha. Primeiro você confere a prévia; só depois os dados são gravados, e você decide se importa só os válidos ou também os que têm erro.</p>
         </div>
 
         <div class="flex flex-wrap gap-6 items-start">
@@ -46,7 +47,7 @@
                 </label>
 
                 <div class="flex flex-wrap items-center gap-3">
-                    <button class="btn btn-primary btn-lg">Importar</button>
+                    <button class="btn btn-primary btn-lg">Ler e conferir →</button>
                     <a href="{{ route('tomadores.index') }}" class="btn btn-lg">Cancelar</a>
                 </div>
             </form>

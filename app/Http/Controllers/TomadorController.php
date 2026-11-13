@@ -80,7 +80,7 @@ class TomadorController extends Controller
         ]);
     }
 
-    /** Importa a planilha de clientes: cria os novos e atualiza só o que veio preenchido nos já cadastrados. */
+    /** Etapa 1: recebe a planilha e vai para a prévia. Nada é gravado aqui. */
     public function importar(Request $request, ImportadorClientes $importador)
     {
         $this->authorize('emitir');
@@ -91,8 +91,70 @@ class TomadorController extends Controller
         ]);
 
         $arquivo = $request->file('planilha');
+        $token = \Illuminate\Support\Str::random(40);
+        $caminho = \Illuminate\Support\Facades\Storage::disk('local')->putFileAs('importacoes-clientes', $arquivo, $token.'.'.strtolower($arquivo->getClientOriginalExtension() ?: 'xlsx'));
+
         try {
-            $r = $importador->importar($arquivo->getRealPath(), $request->user()?->id);
+            $importador->analisar(\Illuminate\Support\Facades\Storage::disk('local')->path($caminho));   // só para barrar arquivo ilegível ou grande demais
+        } catch (\RuntimeException $e) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($caminho);
+
+            return back()->withErrors(['planilha' => $e->getMessage()]);
+        }
+
+        \Illuminate\Support\Facades\Cache::put("importacao-clientes:{$token}", [
+            'caminho' => $caminho, 'arquivo' => $arquivo->getClientOriginalName(),
+            'conta' => app(\App\Support\Tenancy\ContaAtual::class)->id(), 'emitente' => app(\App\Support\Tenancy\EmitenteAtual::class)->id(), 'user' => $request->user()?->id,
+        ], now()->addHours(2));
+
+        return redirect()->route('tomadores.importar.conferir', $token);
+    }
+
+    /** Dados da importação em andamento, só para quem a iniciou (mesma conta, empresa e usuário). */
+    private function importacaoEmAndamento(Request $request, string $token): array
+    {
+        $dados = \Illuminate\Support\Facades\Cache::get("importacao-clientes:{$token}");
+        abort_unless(
+            $dados && $dados['conta'] === app(\App\Support\Tenancy\ContaAtual::class)->id()
+                && $dados['emitente'] === app(\App\Support\Tenancy\EmitenteAtual::class)->id() && $dados['user'] === $request->user()?->id
+                && \Illuminate\Support\Facades\Storage::disk('local')->exists($dados['caminho']),
+            404
+        );
+
+        return $dados;
+    }
+
+    /** Etapa 2: prévia completa. Mostra tudo o que a planilha trouxe, o que vai acontecer em cada linha e o que está errado. */
+    public function conferirImportacao(Request $request, string $token, ImportadorClientes $importador)
+    {
+        $this->authorize('emitir');
+        $dados = $this->importacaoEmAndamento($request, $token);
+        $linhas = collect($importador->analisar(\Illuminate\Support\Facades\Storage::disk('local')->path($dados['caminho'])));
+
+        return view('tomadores.importar-conferir', [
+            'token'   => $token,
+            'arquivo' => $dados['arquivo'],
+            'empresa' => app(\App\Support\Tenancy\EmitenteAtual::class)->emitente(),
+            'linhas'  => $linhas,
+            'total'   => $linhas->count(),
+            'validas' => $linhas->filter(fn ($l) => ! $l['erros'])->count(),
+            'comErro' => $linhas->filter(fn ($l) => $l['erros'] && ! $l['bloqueada'])->count(),     // dá para importar com o campo errado de fora
+            'bloqueadas' => $linhas->filter(fn ($l) => $l['bloqueada'])->count(),                 // não entram de jeito nenhum
+            'novos'      => $linhas->where('acao', 'novo')->count(),
+            'atualizar'  => $linhas->where('acao', 'atualizar')->count(),
+            'colunas'    => ImportadorClientes::COLUNAS,
+        ]);
+    }
+
+    /** Etapa 3: grava, só as válidas ou também as com erro, conforme a escolha. */
+    public function confirmarImportacao(Request $request, string $token, ImportadorClientes $importador)
+    {
+        $this->authorize('emitir');
+        $dados = $this->importacaoEmAndamento($request, $token);
+        $modo = $request->validate(['modo' => ['required', 'in:validos,todos']], ['modo.required' => 'Escolha o que importar.'])['modo'];
+
+        try {
+            $r = $importador->importar(\Illuminate\Support\Facades\Storage::disk('local')->path($dados['caminho']), $request->user()?->id, $modo);
         } catch (\Illuminate\Database\QueryException $e) {
             report($e);   // erro de banco nunca vai para a tela
 
@@ -101,11 +163,26 @@ class TomadorController extends Controller
             return back()->withErrors(['planilha' => $e->getMessage()]);
         }
 
-        \App\Models\Auditoria::registrar('clientes_importados', "Planilha de clientes {$arquivo->getClientOriginalName()} importada.", [
-            'criados' => $r['criados'], 'atualizados' => $r['atualizados'], 'sem_mudanca' => $r['sem_mudanca'], 'com_erro' => count($r['erros']),
+        \Illuminate\Support\Facades\Storage::disk('local')->delete($dados['caminho']);
+        \Illuminate\Support\Facades\Cache::forget("importacao-clientes:{$token}");
+
+        \App\Models\Auditoria::registrar('clientes_importados', "Planilha de clientes {$dados['arquivo']} importada ({$modo}).", [
+            'modo' => $modo, 'criados' => $r['criados'], 'atualizados' => $r['atualizados'], 'sem_mudanca' => $r['sem_mudanca'], 'com_erro' => count($r['erros']),
         ]);
 
-        return redirect()->route('tomadores.index')->with('importacao_clientes', $r + ['arquivo' => $arquivo->getClientOriginalName()]);
+        return redirect()->route('tomadores.index')->with('importacao_clientes', $r + ['arquivo' => $dados['arquivo']]);
+    }
+
+    /** Desiste da importação: apaga o arquivo guardado. */
+    public function cancelarImportacao(Request $request, string $token)
+    {
+        $this->authorize('emitir');
+        $dados = \Illuminate\Support\Facades\Cache::pull("importacao-clientes:{$token}");
+        if ($dados && ($dados['user'] ?? null) === $request->user()?->id) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($dados['caminho']);
+        }
+
+        return redirect()->route('tomadores.index');
     }
 
     /** Tela de cadastro de um cliente novo. */

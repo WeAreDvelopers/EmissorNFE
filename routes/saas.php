@@ -104,6 +104,9 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/clientes/modelo', [TomadorController::class, 'modelo'])->name('tomadores.modelo');
     Route::get('/clientes/importar', [TomadorController::class, 'telaImportar'])->name('tomadores.importar.tela');
     Route::post('/clientes/importar', [TomadorController::class, 'importar'])->name('tomadores.importar');
+    Route::get('/clientes/importar/{token}', [TomadorController::class, 'conferirImportacao'])->name('tomadores.importar.conferir');
+    Route::post('/clientes/importar/{token}', [TomadorController::class, 'confirmarImportacao'])->name('tomadores.importar.confirmar');
+    Route::delete('/clientes/importar/{token}', [TomadorController::class, 'cancelarImportacao'])->name('tomadores.importar.cancelar');
     Route::get('/clientes/novo', [TomadorController::class, 'criar'])->name('tomadores.criar');
     Route::post('/clientes', [TomadorController::class, 'store'])->name('tomadores.store');
     Route::get('/clientes/{tomador}', [TomadorController::class, 'editar'])->name('tomadores.editar');

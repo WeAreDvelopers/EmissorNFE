@@ -55,9 +55,25 @@ class ClientesPlanilhaTest extends TestCase
         return new UploadedFile($arquivo, 'clientes.xlsx', null, null, true);
     }
 
-    private function importar(UploadedFile $f)
+    /** Importação em etapas: envia (prévia) e confirma. Devolve a resposta da confirmação, ou a do envio se ele já barrou o arquivo. */
+    private function importar(UploadedFile $f, string $modo = 'validos')
     {
-        return $this->actingAs($this->user)->post(route('tomadores.importar'), ['planilha' => $f]);
+        $envio = $this->actingAs($this->user)->post(route('tomadores.importar'), ['planilha' => $f]);
+        $destino = (string) $envio->headers->get('Location');
+        if (! preg_match('#/clientes/importar/([A-Za-z0-9]{40})$#', $destino, $m)) {
+            return $envio;
+        }
+
+        return $this->post(route('tomadores.importar.confirmar', $m[1]), ['modo' => $modo]);
+    }
+
+    /** Só a etapa 1 (prévia): devolve o token. */
+    private function enviarParaPrevia(UploadedFile $f): string
+    {
+        $envio = $this->actingAs($this->user)->post(route('tomadores.importar'), ['planilha' => $f]);
+        preg_match('#/clientes/importar/([A-Za-z0-9]{40})$#', (string) $envio->headers->get('Location'), $m);
+
+        return $m[1] ?? '';
     }
 
     private function clientes()
@@ -147,6 +163,68 @@ class ClientesPlanilhaTest extends TestCase
         $this->assertStringContainsString('Razão Social/Nome passou de 300 caracteres', $resultado['erros'][0]['mensagem']);
         $this->assertStringNotContainsString('SQLSTATE', json_encode($resultado['erros']));
         $this->assertSame(1, $this->clientes()->count());
+    }
+
+    public function test_enviar_a_planilha_so_mostra_a_previa_e_nada_e_gravado_ate_confirmar(): void
+    {
+        $token = $this->enviarParaPrevia($this->planilha([
+            ['19566539000130', 'Malix Automóveis Ltda', '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', 'a@b.com', ''],
+            ['19566539000131', 'Cliente Errado', '', 'Rua B', '20', '', 'Centro', 'São Paulo', 'SP', '01001000', 'c@d.com', ''],   // CNPJ com dígito errado
+        ]));
+        $this->assertNotSame('', $token);
+        $this->assertSame(0, $this->clientes()->count(), 'a etapa 1 não grava nada');
+
+        $this->get(route('tomadores.importar.conferir', $token))->assertOk()
+            ->assertSee('Nada foi gravado ainda')->assertSee('linha correta')->assertSee('não podem ser importadas')
+            ->assertSee('Malix Automóveis Ltda')->assertSee('Cliente Errado')->assertSee('Rua A')
+            ->assertSee('O que importar?')->assertSee('CNPJ/CPF vazio ou inválido')->assertSee('border-perigo-200', false);
+    }
+
+    public function test_modo_so_validos_deixa_de_fora_as_linhas_com_erro(): void
+    {
+        $r = $this->importar($this->planilha([
+            ['19566539000130', 'Malix Automóveis Ltda', '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', 'a@b.com', ''],
+            ['07445371000126', 'Cemar Multimarcas', '', 'Rua B', '20', '', 'Centro', 'São Paulo', 'SP', '12345678901', 'c@d.com', ''],   // CEP com dígitos demais
+        ]), 'validos');
+
+        $r->assertRedirect(route('tomadores.index'));
+        $resultado = session('importacao_clientes');
+        $this->assertSame(1, $resultado['criados']);
+        $this->assertSame(['19566539000130'], $this->clientes()->pluck('documento')->all());
+    }
+
+    public function test_modo_todos_importa_tambem_as_com_erro_sem_o_campo_errado_e_pendente(): void
+    {
+        $r = $this->importar($this->planilha([
+            ['19566539000130', 'Malix Automóveis Ltda', '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', 'a@b.com', ''],
+            ['07445371000126', 'Cemar Multimarcas', '', 'Rua B', '20', '', 'Centro', 'São Paulo', 'SP', '12345678901', 'c@d.com', ''],   // CEP com dígitos demais
+            ['11111111111', 'Sem Documento Válido', '', 'Rua C', '30', '', 'Centro', 'São Paulo', 'SP', '01001000', 'e@f.com', ''],        // bloqueada: CPF inválido
+        ]), 'todos');
+
+        $r->assertRedirect(route('tomadores.index'));
+        $resultado = session('importacao_clientes');
+        $this->assertSame(2, $resultado['criados']);
+        $this->assertSame(1, $resultado['ressalvas']);
+
+        $cemar = $this->clientes()->firstWhere('documento', '07445371000126');
+        $this->assertNotNull($cemar);
+        $this->assertNull($cemar->cep, 'o campo com erro ficou de fora');
+        $this->assertTrue($cemar->pendente, 'sem CEP o cadastro fica pendente de correção');
+        $this->assertNull($this->clientes()->firstWhere('documento', '11111111111'), 'CPF inválido nunca entra');
+    }
+
+    public function test_importacao_em_andamento_e_so_de_quem_enviou_e_pode_ser_cancelada(): void
+    {
+        $token = $this->enviarParaPrevia($this->planilha([['19566539000130', 'Malix', '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', 'a@b.com', '']]));
+
+        $outro = User::factory()->create();
+        $this->conta->usuarios()->attach($outro->id, ['papel' => Papel::Dono->value]);
+        $outro->forceFill(['conta_atual_id' => $this->conta->id])->save();
+        $this->actingAs($outro)->get(route('tomadores.importar.conferir', $token))->assertNotFound();
+
+        $this->actingAs($this->user)->delete(route('tomadores.importar.cancelar', $token))->assertRedirect(route('tomadores.index'));
+        $this->get(route('tomadores.importar.conferir', $token))->assertNotFound();
+        $this->assertSame(0, $this->clientes()->count());
     }
 
     public function test_tela_de_clientes_mostra_baixar_modelo_e_importar(): void
