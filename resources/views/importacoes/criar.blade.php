@@ -66,7 +66,7 @@
                     <span class="mx-auto w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center" aria-hidden="true"><svg class="w-6 h-6 text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg></span>
                     <span class="block mt-3 text-base font-medium" x-show="!nome">Arraste a planilha aqui ou clique para escolher</span>
                     <span class="block mt-3 text-base font-medium" x-show="nome" x-cloak><span x-text="nome"></span> <span class="text-sm font-normal text-ink-600">· <span x-text="tamanho"></span></span></span>
-                    <span class="block mt-1 text-[13px] text-ink-600">.xlsx, .xls ou .csv · até 10 MB</span>
+                    <span class="block mt-1 text-[13px] text-ink-600">.xlsx, .xls ou .csv · até {{ config('nfse.limite_linhas_importacao', 50) }} linhas · até 10 MB</span>
                     <input id="planilha" name="planilha" type="file" accept=".xlsx,.xls,.csv" required class="sr-only" x-ref="arquivo" @change="escolher($event.target.files[0])">
                 </label>
 

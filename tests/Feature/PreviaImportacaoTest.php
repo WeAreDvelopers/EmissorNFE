@@ -41,6 +41,22 @@ class PreviaImportacaoTest extends TestCase
         ]));
     }
 
+    public function test_planilha_de_notas_aceita_ate_50_linhas_e_recusa_mais_que_isso(): void
+    {
+        $linha = fn ($i) => ['doc' => '52998224725', 'nome_ref' => "Cliente $i", 'valor' => 10 + $i, 'data' => '2026-11-03'];
+        $enviar = fn (int $n) => $this->actingAs($this->user)->post(route('importacoes.store'), [
+            'emitente_id' => $this->emitente->id,
+            'planilha'    => GeraPlanilha::xlsx($this->emitente->cnpj, array_map($linha, range(1, $n))),
+        ]);
+
+        $enviar(51)->assertSessionHasErrors('planilha');
+        $this->assertStringContainsString('limite é de 50', session('errors')->first('planilha'));
+        $this->assertSame(0, Importacao::count());
+
+        $enviar(50)->assertSessionHasNoErrors();
+        $this->assertSame(50, Importacao::firstOrFail()->notas()->count());
+    }
+
     public function test_previa_mostra_todas_as_colunas_conta_as_corretas_e_destaca_o_que_esta_errado(): void
     {
         $this->actingAs($this->user)->post(route('importacoes.store'), [

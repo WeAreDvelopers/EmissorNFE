@@ -21,7 +21,11 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  */
 class ImportadorClientes
 {
-    public const LIMITE_LINHAS = 2000;
+    /** Máximo de linhas por planilha (config nfse.limite_linhas_importacao). */
+    public static function limite(): int
+    {
+        return (int) config('nfse.limite_linhas_importacao', 50);
+    }
 
     /** Cabeçalho do modelo => campo. A leitura aceita variações (sem acento, maiúsculas, "E-mail"/"E-mails"). */
     public const COLUNAS = [
@@ -83,7 +87,7 @@ class ImportadorClientes
             ['• E-mails: separe por vírgula ou ponto e vírgula. O primeiro é o principal e vai no XML da nota; o aviso de nota emitida vai para todos.'],
             ['• UF com 2 letras (ex.: SP). O código IBGE do município é descoberto sozinho pelo nome e pela UF (ou pelo CEP).'],
             ['• Linhas com problema são listadas depois da importação; as demais são importadas normalmente.'],
-            ['• Até '.self::LIMITE_LINHAS.' linhas por arquivo.'],
+            ['• Até '.self::limite().' linhas por arquivo. Para importar mais, divida em mais de um arquivo.'],
         ];
         foreach ($linhas as $i => $l) {
             $ajuda->setCellValue([1, $i + 1], $l[0]);
@@ -300,9 +304,20 @@ class ImportadorClientes
 
     private function linhas(Worksheet $aba, array $cab, int $linhaCab = 1): array
     {
-        $ultima = min($aba->getHighestRow(), self::LIMITE_LINHAS + 1);
-        if ($aba->getHighestRow() > self::LIMITE_LINHAS + 1) {
-            throw new \RuntimeException('A planilha passou de '.self::LIMITE_LINHAS.' linhas. Divida em mais de um arquivo.');
+        // linhas de dados = última linha menos as de cabeçalho (e a do emitente, no modelo novo)
+        $ultima = $aba->getHighestRow();
+        $limite = self::limite();
+        $dados = 0;
+        for ($r = $linhaCab + 1; $r <= $ultima; $r++) {
+            foreach ($cab as $c) {
+                if (trim((string) $aba->getCell([$c, $r])->getValue()) !== '') {
+                    $dados++;
+                    break;
+                }
+            }
+        }
+        if ($dados > $limite) {
+            throw new \RuntimeException("A planilha tem {$dados} linhas e o limite é de {$limite} por importação. Divida em mais de um arquivo e importe um de cada vez.");
         }
 
         $saida = [];

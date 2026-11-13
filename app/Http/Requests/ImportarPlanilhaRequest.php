@@ -64,6 +64,13 @@ class ImportarPlanilhaRequest extends FormRequest
 
             if ($planilha['linhas'] === []) {
                 $v->errors()->add('planilha', 'A planilha não tem nenhuma nota: os dados começam na linha 3.');
+
+                return;
+            }
+
+            $limite = (int) config('nfse.limite_linhas_importacao', 50);
+            if (count($planilha['linhas']) > $limite) {
+                $v->errors()->add('planilha', 'A planilha tem '.count($planilha['linhas'])." linhas e o limite é de {$limite} por importação. Divida em mais de um arquivo e importe um de cada vez.");
             }
         }];
     }

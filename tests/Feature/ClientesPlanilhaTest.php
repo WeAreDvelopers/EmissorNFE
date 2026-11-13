@@ -123,6 +123,15 @@ class ClientesPlanilhaTest extends TestCase
         $this->get(route('tomadores.index'))->assertSee(route('tomadores.importar.tela'), false);
     }
 
+    public function test_planilha_de_tomadores_aceita_ate_50_linhas_e_recusa_mais_que_isso(): void
+    {
+        $linhas = fn (int $n) => array_map(fn ($i) => [sprintf('%011d', $i), "Cliente $i", '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', "c$i@x.com", ''], range(1, $n));
+
+        $this->importar($this->planilha($linhas(51)))->assertSessionHasErrors('planilha');
+        $this->assertStringContainsString('limite é de 50', session('errors')->first('planilha'));
+        $this->assertSame(0, $this->clientes()->count());
+    }
+
     public function test_campo_grande_demais_vira_erro_da_linha_e_as_outras_entram_sem_mostrar_erro_de_banco(): void
     {
         $longo = str_repeat('Serviços ', 60);   // passa de 300 caracteres

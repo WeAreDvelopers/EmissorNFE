@@ -75,7 +75,7 @@ class TomadorController extends Controller
 
         return view('tomadores.importar', [
             'empresa'   => app(\App\Support\Tenancy\EmitenteAtual::class)->emitente(),
-            'limite'    => ImportadorClientes::LIMITE_LINHAS,
+            'limite'    => ImportadorClientes::limite(),
             'temVideo'  => is_file(public_path('videos/tutorial-planilha-tomadores.mp4')),
         ]);
     }

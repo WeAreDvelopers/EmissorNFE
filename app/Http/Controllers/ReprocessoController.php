@@ -19,7 +19,6 @@ use Illuminate\Support\Facades\DB;
  */
 class ReprocessoController extends Controller
 {
-    private const LIMITE_LINHAS = 5000;
 
     /** Copia as linhas do lote enviado para um lote novo, em edição. */
     public function reprocessar(Importacao $importacao)
@@ -99,9 +98,9 @@ class ReprocessoController extends Controller
         abort_unless($importacao->status === 'conferir', 422, 'Este lote não está mais em edição.');
 
         $request->validate([
-            'linhas'   => ['present', 'array', 'max:'.self::LIMITE_LINHAS],
+            'linhas'   => ['present', 'array', 'max:'.config('nfse.limite_linhas_importacao', 50)],
             'linhas.*' => ['array'],
-        ], ['linhas.max' => 'Cada lote aceita até '.self::LIMITE_LINHAS.' linhas.']);
+        ], ['linhas.max' => 'Cada lote aceita até '.config('nfse.limite_linhas_importacao', 50).' linhas. Divida em mais de uma importação.']);
 
         $emitente = $importacao->emitente;
 
