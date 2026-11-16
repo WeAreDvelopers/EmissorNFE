@@ -142,7 +142,7 @@ class EmitenteController extends Controller
             'codigo_municipio'    => ['required', 'digits:7'],
             'enviar_email_automatico' => ['nullable', 'boolean'],
             'email_copia'         => ['nullable', 'email', 'max:255'],
-            'codigo_tributacao_municipal' => ['nullable', 'required_unless:op_simples_nacional,2', 'digits:3'],
+            'codigo_tributacao_municipal' => ['nullable', 'digits:3'],
             'codigo_servico_padrao' => ['nullable', 'digits:6', fn ($a, $v, $f) => ListaServicoNacional::existe((string) $v) ?: $f('Esse código não existe na lista nacional de serviços.')],
             'descricao_servico_padrao' => ['nullable', 'string', 'max:2000'],
             'codigo_nbs_padrao'   => ['nullable', 'digits:9'],
@@ -173,7 +173,7 @@ class EmitenteController extends Controller
             'tp_ret_pis_cofins'   => [$federal ? 'required' : 'nullable', 'in:0,2'],
             'aliquota_pis'        => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
             'aliquota_cofins'     => ['nullable', $pisComAliquota ? 'required' : 'nullable', 'numeric', 'between:0,100'],
-            'serie_dps'           => [$request->boolean('informar_serie_dps') ? 'required' : 'nullable', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
+            'serie_dps'           => ['required', 'regex:/^\d{1,5}$/', fn ($a, $v, $f) => ((int) $v >= 1 && (int) $v <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
             'ambiente'            => ['required', 'in:1,2'],
             'logo'                => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'remover_logo'        => ['nullable', 'boolean'],
@@ -196,9 +196,14 @@ class EmitenteController extends Controller
         if ($codigos->pluck('codigo')->duplicates()->isNotEmpty()) {
             throw ValidationException::withMessages(['codigos' => 'O código '.$codigos->pluck('codigo')->duplicates()->first().' aparece mais de uma vez na lista de códigos municipais.']);
         }
-        if (filled($dados['codigo_tributacao_municipal'] ?? null) && ! $codigos->contains('codigo', $dados['codigo_tributacao_municipal'])) {
+        // A tela só tem a lista: o primeiro código dela é o padrão da empresa (campo legado só entra se a lista vier vazia)
+        if ($codigos->isEmpty() && filled($dados['codigo_tributacao_municipal'] ?? null)) {
             $codigos->push(['codigo' => $dados['codigo_tributacao_municipal'], 'descricao' => null, 'codigo_servico' => null]);
         }
+        if ($op !== 2 && $codigos->isEmpty()) {
+            throw ValidationException::withMessages(['codigos' => 'Cadastre ao menos um código complementar municipal (exceto para MEI).']);
+        }
+        $dados['codigo_tributacao_municipal'] = $op === 2 ? null : $codigos->first()['codigo'];
 
         // Tributação municipal padrão: as mesmas travas da SEFIN valem para a empresa (E0172, E0435, E0436, E0438, E0441, E0580, E0583, E0588)
         $trib = (int) $dados['trib_issqn'];
@@ -253,9 +258,10 @@ class EmitenteController extends Controller
         if (! $pisComAliquota) {
             $dados['aliquota_pis'] = $dados['aliquota_cofins'] = null;
         }
-        // Sem "informar série e número", vale a série padrão (00001) e a numeração é toda automática
+        // A série é sempre a da empresa (planilhas e notas rápidas usam a numeração automática dela).
+        // "Informar série e número" só diz se a nota manual pergunta os dois na emissão.
         $dados['informar_serie_dps'] = $request->boolean('informar_serie_dps');
-        $dados['serie_dps'] = str_pad($dados['informar_serie_dps'] ? $dados['serie_dps'] : '1', 5, '0', STR_PAD_LEFT);
+        $dados['serie_dps'] = str_pad($dados['serie_dps'], 5, '0', STR_PAD_LEFT);
 
         // Sem certificado não há como assinar nem emitir: produção só com certificado cadastrado
         if ((int) $dados['ambiente'] === 1 && ! $request->hasFile('certificado') && ! $emitente->certificado_arquivo) {
@@ -353,7 +359,7 @@ class EmitenteController extends Controller
 
         $resposta = $novo
             ? redirect()->route('inicio')->with('ok', 'Empresa cadastrada. Agora é só importar a sua primeira planilha.')
-            : redirect()->route('emitentes.editar', $emitente)->with('confirmacao', 'Empresa atualizada com sucesso.')->with('confirmacao_destino', route('emitentes.index'));
+            : redirect()->route('emitentes.editar', $emitente)->with('confirmacao', 'Empresa atualizada com sucesso.');
 
         // Salvou sem certificado: tudo bem por ora, mas avisa em destaque que ainda falta
         if (! $emitente->fresh()->certificado_arquivo) {

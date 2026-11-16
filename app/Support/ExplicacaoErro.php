@@ -73,8 +73,67 @@ class ExplicacaoErro
         ];
     }
 
+    /** Elementos do XML (XSD) que vêm direto de um campo que a pessoa digitou. */
+    private const XSD_CAMPOS = [
+        'xDescServ' => ['descricao', 'A descrição do serviço não está num formato aceito (tamanho ou caracteres).'],
+        'xNome'     => ['tomador_nome', 'O nome ou razão social do cliente não está num formato aceito (tamanho ou caracteres).'],
+        'cTribNac'  => ['codigo_servico', 'O código de serviço não está num formato aceito (são 6 números).'],
+        'cNBS'      => ['codigo_nbs', 'O código NBS não está num formato aceito (são 9 números).'],
+        'vServ'     => ['valor', 'O valor da nota não está num formato aceito.'],
+        'CPF'       => ['tomador_documento', 'O CPF do cliente não está num formato aceito.'],
+        'CNPJ'      => ['tomador_documento', 'O CNPJ do cliente não está num formato aceito.'],
+        'email'     => ['tomador_email', 'O e-mail do cliente não está num formato aceito.'],
+        'dCompet'   => ['data_competencia', 'A data de competência não está num formato aceito.'],
+    ];
+
+    /**
+     * A nota nem saiu: o sistema conferiu o documento contra o padrão oficial (XSD) antes de enviar e ele não passou.
+     * Não é recusa da prefeitura. Se o elemento é um campo digitado, a pessoa corrige; senão é problema do sistema.
+     */
+    private static function foraDoPadrao(array $tecnico): array
+    {
+        $campos = [];
+        $quando = [];
+        foreach ($tecnico as $linha) {
+            if (preg_match("/Element '(?:\{[^}]*\})?(\w+)'/", (string) $linha, $m) && isset(self::XSD_CAMPOS[$m[1]])) {
+                [$campo, $msg] = self::XSD_CAMPOS[$m[1]];
+                $campos[$campo] = $campo;
+                $quando[$msg] = $msg;
+            }
+        }
+
+        if ($campos) {
+            return [
+                'titulo'          => 'Dado fora do formato aceito',
+                'rotulo'          => 'Dado fora do formato',
+                'o_que_aconteceu' => implode(' ', $quando).' A nota não foi enviada.',
+                'como_resolver'   => 'Corrija o campo abaixo e reenvie.',
+                'campos'          => array_values($campos),
+                'reenviar_direto' => false,
+                'tecnico'         => $tecnico,
+            ];
+        }
+
+        return [
+            'titulo'          => 'Não foi enviada: erro no sistema',
+            'rotulo'          => 'Erro no sistema',
+            'o_que_aconteceu' => 'A nota não chegou a ser enviada para a prefeitura. O sistema montou o documento fora do padrão da NFS-e. Não é problema nos dados do cliente nem da nota.',
+            'como_resolver'   => 'Não há nada para corrigir aqui. Avise o suporte informando o número desta nota (#'.'%id%'.') e depois use Reenviar.',
+            'campos'          => [],
+            'reenviar_direto' => true,
+            'tecnico'         => $tecnico,
+        ];
+    }
+
     private static function rejeitada(NotaFiscal $nota, array $tecnico): array
     {
+        if ($tecnico && collect($tecnico)->every(fn ($t) => str_starts_with((string) $t, 'XSD:'))) {
+            $r = self::foraDoPadrao($tecnico);
+            $r['como_resolver'] = str_replace('%id%', (string) $nota->id, $r['como_resolver']);
+
+            return $r;
+        }
+
         $texto = implode(' | ', $tecnico);
 
         $mapa = [

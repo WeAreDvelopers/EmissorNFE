@@ -149,7 +149,7 @@ class EmitenteCertificadoTest extends TestCase
         $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'serie_dps' => '49999']);
     }
 
-    public function test_sem_informar_serie_vale_a_00001(): void
+    public function test_serie_e_sempre_obrigatoria_e_independe_da_opcao_de_informar_na_nota(): void
     {
         $dados = [
             'cnpj' => '00.000.000/0001-91', 'razao_social' => 'PADARIA TESTE LTDA', 'codigo_municipio' => '3549904',
@@ -157,8 +157,11 @@ class EmitenteCertificadoTest extends TestCase
             'tributos_aprox' => ['federal' => '', 'estadual' => '', 'municipal' => ''],
             'ambiente' => 2, 'codigo_tributacao_municipal' => '001',
         ];
-        $this->actingAs($this->usuarioDono())->post(route('emitentes.store'), $dados)->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'serie_dps' => '00001', 'informar_serie_dps' => 0]);
+        $this->actingAs($this->usuarioDono())->post(route('emitentes.store'), $dados)->assertSessionHasErrors('serie_dps');
+
+        // a série vale mesmo com a opção desmarcada
+        $this->post(route('emitentes.store'), $dados + ['serie_dps' => '12'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('emitentes', ['cnpj' => '00000000000191', 'serie_dps' => '00012', 'informar_serie_dps' => 0]);
     }
 
     public function test_producao_exige_certificado_cadastrado(): void

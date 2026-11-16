@@ -236,7 +236,7 @@ class TomadorController extends Controller
             'nome'          => ['required', 'string', 'max:300'],
             'nome_fantasia' => ['nullable', 'string', 'max:300'],
             'logradouro'    => ['required', 'string', 'max:255'],
-            'numero'        => ['required', 'string', 'max:60'],
+            'numero'        => ['required', 'string', 'max:60', fn ($a, $v, $f) => Tomador::numeroEnderecoValido((string) $v) ?: $f('Informe o número do endereço só com números (ex.: 123, 123-A) ou S/N se não tiver.')],
             'complemento'   => ['nullable', 'string', 'max:156'],
             'bairro'        => ['required', 'string', 'max:156'],
             'municipio'     => ['required', 'string', 'max:120'],
@@ -266,6 +266,7 @@ class TomadorController extends Controller
 
         $novos = collect($dados)->map(fn ($v) => is_string($v) ? (trim($v) === '' ? null : trim($v)) : $v)->all();
         $novos['nome'] = $dados['nome'];
+        $novos['numero'] = Tomador::normalizarNumeroEndereco($novos['numero'] ?? null);
         $novos['uf'] = isset($novos['uf']) ? strtoupper($novos['uf']) : null;
         $novos['cep'] = isset($novos['cep']) ? (preg_replace('/\D/', '', $novos['cep']) ?: null) : null;
         $novos['emails'] = $emails->all() ?: null;

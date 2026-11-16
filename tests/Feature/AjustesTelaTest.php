@@ -292,6 +292,30 @@ João;10
         $this->assertStringContainsString('contador', $ex['como_resolver']);
     }
 
+    public function test_erro_de_xsd_nao_aparece_como_recusa_da_prefeitura(): void
+    {
+        $imp = $this->lote(1);
+        $nota = $imp->notas()->firstOrFail();
+
+        // falha do sistema (versão do leiaute): nada a corrigir pela pessoa, é só avisar o suporte e reenviar
+        $nota->update(['status' => StatusNota::Rejeitada, 'erros' => [
+            "XSD: Element 'DPS', attribute 'versao': [facet 'maxLength'] The value 'Versão DPS' has a length of '10'; this exceeds the allowed maximum length of '4'.",
+        ]]);
+        $ex = \App\Support\ExplicacaoErro::para($nota->fresh());
+        $this->assertSame('Erro no sistema', $ex['rotulo']);
+        $this->assertStringNotContainsString('prefeitura recusou', $ex['o_que_aconteceu']);
+        $this->assertTrue($ex['reenviar_direto']);
+        $this->assertSame([], $ex['campos']);
+        $this->assertStringContainsString('#'.$nota->id, $ex['como_resolver']);
+        $this->assertStringContainsString('Versão DPS', implode(' ', $ex['tecnico']));   // o detalhe técnico continua disponível
+
+        // campo digitado fora do formato: a pessoa corrige
+        $nota->update(['erros' => ["XSD: Element '{http://www.sped.fazenda.gov.br/nfse}xDescServ': [facet 'maxLength'] The value is too long."]]);
+        $ex = \App\Support\ExplicacaoErro::para($nota->fresh());
+        $this->assertSame(['descricao'], $ex['campos']);
+        $this->assertSame('Dado fora do formato', $ex['rotulo']);
+    }
+
     // ---------- logo da empresa ----------
 
     private function dadosEmpresa(array $extra = []): array

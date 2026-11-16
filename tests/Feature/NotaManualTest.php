@@ -49,6 +49,7 @@ class NotaManualTest extends TestCase
         return $extra + [
             'emitente_id' => $this->emitente->id,
             'tomador_documento' => '19566539000130', 'tomador_nome' => 'Malix Automóveis Ltda', 'tomador_email' => 'financeiro@malix.com.br',
+            'cep' => '01310-100', 'logradouro' => 'Avenida Paulista', 'numero' => '1578', 'bairro' => 'Bela Vista', 'municipio' => 'São Paulo', 'uf' => 'SP',
             'codigo_servico' => '010302', 'descricao' => 'Hospedagem de dados.', 'codigo_nbs' => '115090000',
             'valor' => '452,50', 'data_competencia' => now()->toDateString(), 'confirmo' => '1',
         ];
@@ -73,24 +74,56 @@ class NotaManualTest extends TestCase
         $this->assertNull($nota->importacao_id);
         $this->assertSame('010302', $nota->codigo_servico);
         $this->assertSame('452.50', (string) $nota->valor);
-        // Cliente novo criado só com nome e e-mail: sem endereço completo a nota espera o cadastro (não vai para a fila)
-        $this->assertSame(StatusNota::Invalida, $nota->status);
-        $this->assertStringContainsString('Cadastro do cliente incompleto', $nota->erros[0]);
+        // Cliente novo é cadastrado já com o endereço da tela, completo: a nota segue direto para a fila
         $this->assertNotNull($nota->tomador_id);
-        $this->assertSame('Malix Automóveis Ltda', Tomador::firstOrFail()->nome);
-        Queue::assertNothingPushed();
+        $cliente = Tomador::firstOrFail();
+        $this->assertSame('Malix Automóveis Ltda', $cliente->nome);
+        $this->assertSame('01310100', $cliente->cep);
+        $this->assertSame('3550308', $cliente->codigo_municipio);
+        $this->assertFalse((bool) $cliente->pendente);
+        $this->assertSame(StatusNota::Pendente, $nota->status);   // modo teste: sem custo, vai direto para a fila
+        Queue::assertPushed(EmitirNfseJob::class);
     }
 
-    public function test_cliente_completo_vai_direto_para_a_fila(): void
+    public function test_nota_com_destinatario_exige_endereco_completo_e_valido(): void
     {
-        $this->actingAs($this->user)->post(route('notas.manual.store'), $this->dados())->assertSessionHasNoErrors();
-        Tomador::firstOrFail()->update(['logradouro' => 'Rua A', 'numero' => '1', 'bairro' => 'Centro', 'municipio' => 'São Paulo', 'uf' => 'SP', 'codigo_municipio' => '3550308', 'cep' => '01001000']);
+        $semEndereco = ['cep' => '', 'logradouro' => '', 'numero' => '', 'bairro' => '', 'municipio' => '', 'uf' => ''];
 
-        $nota = NotaFiscal::firstOrFail();
-        $this->actingAs($this->user)->post(route('notas.reenviar', $nota))->assertRedirect();
+        // sem endereço: nem confere nem emite
+        $this->actingAs($this->user)->post(route('notas.manual.conferir'), $this->dados($semEndereco))
+            ->assertSessionHasErrors(['cep', 'logradouro', 'numero', 'bairro', 'municipio', 'uf']);
+        $this->post(route('notas.manual.store'), $this->dados($semEndereco))->assertSessionHasErrors(['cep', 'numero']);
+        $this->assertSame(0, NotaFiscal::count());
+        $this->assertSame(0, Tomador::count());
 
-        $this->assertSame(StatusNota::Pendente, $nota->fresh()->status);   // modo teste: sem custo, vai direto para a fila
-        Queue::assertPushed(EmitirNfseJob::class);
+        // endereço preenchido mas inválido
+        $this->post(route('notas.manual.conferir'), $this->dados(['cep' => '123']))->assertSessionHasErrors('cep');
+        $this->post(route('notas.manual.conferir'), $this->dados(['numero' => 'A']))->assertSessionHasErrors('numero');
+        $this->post(route('notas.manual.conferir'), $this->dados(['uf' => 'S']))->assertSessionHasErrors('uf');
+        $this->post(route('notas.manual.conferir'), $this->dados(['municipio' => 'Cidade Que Nao Existe', 'uf' => 'SP', 'cep' => '00000000']))->assertSessionHasErrors('municipio');
+
+        // "sn" vira S/N e vale; a conferência mostra o endereço
+        $this->post(route('notas.manual.conferir'), $this->dados(['numero' => 'sn']))->assertOk()->assertSee('Avenida Paulista, S/N', false);
+
+        // sem destinatário não pede endereço
+        $this->post(route('notas.manual.store'), $this->dados($semEndereco + ['sem_tomador' => '1']))->assertSessionHasNoErrors();
+        $this->assertSame(1, NotaFiscal::count());
+    }
+
+    public function test_cliente_ja_cadastrado_tem_o_endereco_atualizado_pela_nota_e_fica_no_historico(): void
+    {
+        $this->actingAs($this->user)->post(route('notas.manual.store'), $this->dados(['numero' => '10']))->assertSessionHasNoErrors();
+
+        // a busca devolve o endereço para a tela carregar
+        $this->getJson(route('tomadores.buscar', ['q' => 'malix']))
+            ->assertOk()->assertJsonFragment(['logradouro' => 'Avenida Paulista', 'numero' => '10', 'cep' => '01310-100']);
+
+        // nova nota com o número corrigido: o cadastro do cliente acompanha e o histórico registra a mudança
+        $this->post(route('notas.manual.store'), $this->dados(['numero' => '1578', 'confirmar_duplicidade' => '1']))->assertSessionHasNoErrors();
+
+        $t = Tomador::firstOrFail();
+        $this->assertSame('1578', $t->numero);
+        $this->assertSame(1, $t->alteracoes()->count());
     }
 
     public function test_campos_do_servico_em_branco_caem_nos_padroes_da_empresa(): void

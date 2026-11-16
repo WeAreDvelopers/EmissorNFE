@@ -48,7 +48,9 @@ class DpsBuilder
         $doc->preserveWhiteSpace = false;
 
         $dps = $doc->createElementNS(self::NS, 'DPS');
-        $dps->setAttribute('versao', config('nfse.versao_dps'));
+        // O XSD só aceita 1.00 ou 1.01 (TSVerAplic/versao). Valor estranho no .env do servidor não pode derrubar a emissão.
+        $versao = (string) config('nfse.versao_dps');
+        $dps->setAttribute('versao', preg_match('/^1\.(00|01)$/', $versao) ? $versao : '1.01');
         $doc->appendChild($dps);
 
         $inf = $this->el($doc, $dps, 'infDPS');

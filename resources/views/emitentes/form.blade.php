@@ -8,12 +8,12 @@
 
     <div class="max-w-[1120px] mx-auto px-4 sm:px-8 py-8 space-y-6"
          x-data="{
-            historico: false,
+            historico: false, numerosDps: false, ajustesDpsAberto: false,
             op: '{{ $op }}',
             modo: @js(old('modo_tributos_aprox', $emitente->exists ? $emitente->modoTributosAprox() : '')),
             cst: @js(old('pis_cofins_cst', $emitente->pis_cofins_cst ?: '00')),
             trib: @js((string) old('trib_issqn', $emitente->trib_issqn ?: 1)),
-            codigos: @js(old('codigos', $emitente->listaCodigosMunicipais())),
+            codigos: @js(old('codigos', $emitente->listaCodigosMunicipais() ?: [['codigo' => '', 'descricao' => '', 'servico' => '']])),
             addCodigo() { this.codigos.push({ codigo: '', descricao: '', servico: '' }); },
             removerCodigo(i) { this.codigos.splice(i, 1); },
             ded: @js(old('deducao_tipo', $emitente->deducao_tipo ?: 'none')),
@@ -27,6 +27,13 @@
             munPrest: @js(old('municipio_prestacao', $emitente->codigo_municipio_prestacao ? strtok((string) \App\Support\MunicipiosIbge::rotulo($emitente->codigo_municipio_prestacao), '/') : '')),
             cidadesPrest: [],
             localPrest: @js(old('local_prestacao', $emitente->local_prestacao ?: 'emitente')),
+            serie: @js((string) old('serie_dps', $emitente->serie_dps ?: '00001')),
+            get serieErro() {
+                if (this.serie === '') return 'Informe a série.';
+                if (!/^\d{1,5}$/.test(this.serie)) return 'A série tem só números (até 5 dígitos).';
+                const n = parseInt(this.serie, 10);
+                return (n < 1 || n > 49999) ? 'Série deve estar entre 00001 e 49999 (E0010).' : '';
+            },
             informarSerie: @js((bool) old('informar_serie_dps', $emitente->exists ? $emitente->informar_serie_dps : false)),
             async carregarCidadesPrest() {
                 if (!this.ufPrest) { this.cidadesPrest = []; return; }
@@ -72,7 +79,7 @@
                 <p class="text-[15px] text-ink-700">O certificado digital A1 assina as suas notas. A gente lê os dados dele para você não digitar nada.</p>
             </div>
             @if ($emitente->exists)
-                <button type="button" class="btn" @click="historico = ! historico" :aria-expanded="historico" aria-controls="historico-alteracoes" title="Ver o cadastro inicial e as alterações desta empresa">
+                <button type="button" class="btn" @click="historico = ! historico" :aria-expanded="historico" aria-haspopup="dialog" title="Ver o cadastro inicial e as alterações desta empresa">
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
                     <span x-text="historico ? 'Ocultar histórico' : 'Histórico de alterações'">Histórico de alterações</span>
                     @if (($alteracoes ?? collect())->count())<span class="text-xs rounded-full bg-gray-100 px-2 py-0.5">{{ $alteracoes->count() }}</span>@endif
@@ -80,14 +87,13 @@
             @endif
         </div>
 
+
         @if ($emitente->exists)
             @php
                 $rotulosHist = \App\Models\EmitenteAlteracao::CAMPOS;
                 $fmtHist = fn ($v) => is_array($v) ? collect($v)->map(fn ($x, $k) => (is_string($k) ? $k.': ' : '').$x)->implode(' · ') : ($v === null || $v === '' ? '—' : (is_bool($v) ? ($v ? 'Sim' : 'Não') : $v));
             @endphp
-            <section id="historico-alteracoes" x-show="historico" x-cloak class="card p-5 sm:p-6">
-                <h2 class="text-base font-semibold">Histórico de alterações</h2>
-                <p class="text-[13px] text-ink-600 mt-0.5">O primeiro cadastro e cada alteração, com data, usuário, o que havia antes e o que passou a valer. Senhas e o arquivo do certificado nunca são guardados.</p>
+            <x-historico-modal>
                 @forelse (($alteracoes ?? collect()) as $a)
                     <div class="tabela-linha py-3 text-sm">
                         <div class="text-xs text-ink-600"><b>{{ $a->origem === 'cadastro' ? 'Primeiro cadastro' : 'Alteração' }}</b> · {{ $a->created_at->format('d/m/Y H:i') }}@if ($a->user) · {{ $a->user->name }}@endif</div>
@@ -98,9 +104,9 @@
                         @endforeach
                     </div>
                 @empty
-                    <p class="text-sm text-ink-600 mt-3">Sem alterações registradas ainda. A partir de agora, cada alteração desta empresa fica guardada aqui.</p>
+                    <p class="text-sm text-ink-600 mt-4">Sem alterações registradas ainda. A partir de agora, cada alteração desta empresa fica guardada aqui.</p>
                 @endforelse
-            </section>
+            </x-historico-modal>
         @endif
 
         <div class="flex flex-wrap gap-6 items-start">
@@ -335,21 +341,17 @@
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <x-busca-servico class="sm:col-span-2" nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="old('codigo_servico_padrao', $emitente->codigo_servico_padrao)" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
-                        <x-campo nome="codigo_tributacao_municipal" obrigatorio list="lista-codigos-municipais" autocomplete="off" rotulo="Código complementar municipal (3 dígitos)" :valor="$emitente->codigo_tributacao_municipal" maxlength="3" mono x-bind:required="op != 2" x-bind:disabled="op == 2" ajuda="Obrigatório, exceto para MEI. É o número que a prefeitura acrescenta ao código do serviço: no código 01.07.01.001, é o 001. Na dúvida, veja como aparece no Emissor Nacional ou pergunte à contabilidade." />
-                        <div class="sm:col-span-2 space-y-3 rounded-xl border border-gray-200 p-4">
+                        <div class="sm:col-span-2 space-y-3" x-show="op != 2">
                             <div>
-                                <h3 class="text-sm font-semibold">Lista de códigos complementares da prefeitura</h3>
-                                <p class="campo-ajuda">Opcional. Se a empresa usa mais de um código complementar, cadastre-os aqui (código de 3 dígitos e descrição, como no Emissor Nacional). Eles passam a aparecer como opções no campo acima e ao emitir uma nota completa.</p>
+                                <h3 class="text-sm font-semibold">Lista de códigos complementares da prefeitura <span class="text-red-600" aria-hidden="true">*</span></h3>
+                                <p class="campo-ajuda">Obrigatório, exceto para MEI: cadastre ao menos um. É o número de 3 dígitos que a prefeitura acrescenta ao código do serviço (no código 01.07.01.001, é o 001), com a descrição como no Emissor Nacional. O primeiro da lista é o padrão das notas; os demais aparecem como opções ao emitir uma nota completa. Na dúvida, pergunte à contabilidade.</p>
                             </div>
-                            <datalist id="lista-codigos-municipais">
-                                <template x-for="c in codigos" :key="c.codigo"><option :value="c.codigo" x-text="c.descricao"></option></template>
-                            </datalist>
                             <template x-for="(c, i) in codigos" :key="i">
                                 <div class="grid grid-cols-12 gap-2 items-start">
-                                    <input :name="`codigos[${i}][codigo]`" x-model="c.codigo" maxlength="3" inputmode="numeric" placeholder="001" aria-label="Código" class="campo-entrada font-mono col-span-3 sm:col-span-2 !mt-0">
+                                    <input :name="`codigos[${i}][codigo]`" x-model="c.codigo" maxlength="3" inputmode="numeric" placeholder="001" aria-label="Código" x-bind:required="op != 2 && i === 0" class="campo-entrada font-mono col-span-3 sm:col-span-2 !mt-0">
                                     <input :name="`codigos[${i}][descricao]`" x-model="c.descricao" placeholder="Descrição, como na prefeitura" aria-label="Descrição" class="campo-entrada col-span-9 sm:col-span-5 !mt-0">
                                     <input :name="`codigos[${i}][servico]`" x-model="c.servico" maxlength="6" inputmode="numeric" placeholder="Serviço (opcional)" aria-label="Código de serviço a que pertence" class="campo-entrada font-mono col-span-9 sm:col-span-4 !mt-0">
-                                    <button type="button" @click="removerCodigo(i)" class="btn-excluir col-span-3 sm:col-span-1 !px-2" aria-label="Remover este código" title="Remover">
+                                    <button type="button" @click="removerCodigo(i)" x-show="codigos.length > 1" class="btn-excluir col-span-3 sm:col-span-1 !px-2" aria-label="Remover este código" title="Remover">
                                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
                                     </button>
                                 </div>
@@ -365,7 +367,7 @@
                         <div class="sm:col-span-2">
                             <label for="descricao_servico_padrao" class="campo-rotulo">Descrição padrão do serviço</label>
                             <textarea id="descricao_servico_padrao" name="descricao_servico_padrao" rows="2" class="campo-entrada" placeholder="Ex.: Manutenção de programas de computação.">{{ old('descricao_servico_padrao', $emitente->descricao_servico_padrao) }}</textarea>
-                            <p class="campo-ajuda">Vai em toda nota cuja linha da planilha não tiver descrição própria (coluna R).</p>
+                            <p class="campo-ajuda">Texto para todas as notas da planilha (coluna R) que não tiverem conteúdo informado.</p>
                         </div>
                         <x-campo nome="email_copia" tipo="email" rotulo="E-mail da empresa (cópia das notas)" :valor="$emitente->email_copia" ajuda="Recebe cópia de toda NFS-e enviada ao cliente, para a empresa ter ciência." />
                         <div class="sm:col-span-2">
@@ -375,19 +377,18 @@
                                 <span><b>Enviar a NFS-e ao cliente por e-mail assim que for emitida</b><span class="block text-[13px] text-ink-600">PDF e XML vão para os e-mails do cadastro do cliente. Só funciona em produção: em modo teste o envio é sempre manual.</span></span>
                             </label>
                         </div>
-                        <div class="space-y-3">
-                            <label class="flex items-start gap-2.5 text-sm cursor-pointer">
-                                <input type="checkbox" name="informar_serie_dps" value="1" x-model="informarSerie" class="mt-0.5 rounded text-brand-600 focus:ring-brand-600">
-                                <span><b>Informar série e número da DPS</b><span class="block text-[13px] text-ink-600">Como no Emissor Nacional. Desmarcado, a série é a 00001 e a numeração é toda automática.</span></span>
-                            </label>
-                            <div x-show="informarSerie" x-cloak>
-                                <x-campo nome="serie_dps" obrigatorio rotulo="Série" :valor="$emitente->informar_serie_dps ? $emitente->serie_dps : '00001'" maxlength="5" mono ajuda="De 00001 a 49999. Já vem 00001; só mude se o seu contador pedir." x-bind:required="informarSerie" />
+                        <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                            <div>
+                                <x-campo nome="serie_dps" obrigatorio required rotulo="Série" :valor="$emitente->serie_dps ?: '00001'" maxlength="5" mono ajuda="De 00001 a 49999. É a série das notas desta empresa, com numeração automática. Já vem 00001; só mude se o seu contador pedir."
+                                         x-model="serie" inputmode="numeric" x-on:input="serie = serie.replace(/\D/g, '')" x-bind:class="serieErro && 'campo-invalido'" x-bind:aria-invalid="serieErro ? 'true' : null"
+                                         x-effect="$el.setCustomValidity(serieErro)" />
+                                <p class="erro-campo -mt-2" role="alert" x-show="serieErro && serie !== ''" x-text="serieErro" x-cloak></p>
                             </div>
+                            <label class="flex items-start gap-2.5 text-sm cursor-pointer sm:pt-7">
+                                <input type="checkbox" name="informar_serie_dps" value="1" x-model="informarSerie" class="mt-0.5 rounded text-brand-600 focus:ring-brand-600">
+                                <span><b>Informar série e número da DPS</b><span class="block text-[13px] text-ink-600">Como no Emissor Nacional. Marcado, a emissão de nota manual (Nota Rápida) pergunta a série e o número da DPS, já preenchidos com a série da empresa e o próximo número automático, e você pode alterar. Desmarcado, a nota usa a série e a numeração automática.</span></span>
+                            </label>
                         </div>
-                        <x-campo nome="ambiente" obrigatorio tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera com o certificado cadastrado e depois de emitir uma nota em teste.">
-                            <option value="2" @selected(old('ambiente', $emitente->ambiente ?? 2) == 2)>Teste (as notas não têm valor fiscal)</option>
-                            <option value="1" @selected(old('ambiente', $emitente->ambiente ?? 2) == 1)>Produção (notas com valor fiscal)</option>
-                        </x-campo>
                     </div>
                 </section>
 
@@ -396,6 +397,14 @@
                     <p class="text-[13px] text-ink-600 mt-1 mb-4">Os valores abaixo são os do cadastro salvo; depois de salvar, refletem as mudanças acima.</p>
                     <x-resumo-fiscal :grupos="$emitente->camposFiscais()" :legenda="false" />
                 </details>
+
+                <section class="card p-5 sm:p-6 space-y-4">
+                    <h2 class="text-lg font-semibold">5. Ambiente</h2>
+                    <x-campo nome="ambiente" obrigatorio tipo="select" rotulo="Ambiente" ajuda="Comece em teste. A produção só libera com o certificado cadastrado e depois de emitir uma nota em teste.">
+                        <option value="2" @selected(old('ambiente', $emitente->ambiente ?? 2) == 2)>Teste (as notas não têm valor fiscal)</option>
+                        <option value="1" @selected(old('ambiente', $emitente->ambiente ?? 2) == 1)>Produção (notas com valor fiscal)</option>
+                    </x-campo>
+                </section>
 
                 <div class="flex items-center gap-4">
                     <button class="btn btn-primary btn-lg">Salvar{{ $semEmpresaAinda ? ' e continuar' : '' }}</button>
@@ -426,24 +435,24 @@
                         <p class="text-[12px] text-ink-600">Só o dono ajusta. Não dá para voltar a um número que já foi usado.</p>
 
                         @if ($historicoDps->isNotEmpty())
-                            <details>
-                                <summary class="cursor-pointer text-sm font-medium">Números já usados</summary>
-                                <div class="mt-2 text-[13px] divide-y divide-gray-100">
+                            <button type="button" class="btn btn-sm" @click="numerosDps = true" aria-haspopup="dialog">Números já usados</button>
+                            <x-historico-modal var="numerosDps" titulo="Números já usados">
+                                <div class="text-[13px] divide-y divide-gray-100">
                                     @foreach ($historicoDps as $h)
                                         <div class="py-1.5 flex justify-between gap-2"><span class="font-mono">{{ $h->ambiente == 1 ? 'Prod.' : 'Teste' }} · DPS {{ $h->numero_dps }}</span><span class="text-ink-600">{{ $h->numero_nfse ? 'NFS-e nº '.$h->numero_nfse : $h->status->label() }}</span></div>
                                     @endforeach
                                 </div>
-                            </details>
+                            </x-historico-modal>
                         @endif
                         @if ($ajustesDps->isNotEmpty())
-                            <details>
-                                <summary class="cursor-pointer text-sm font-medium">Ajustes manuais</summary>
-                                <div class="mt-2 text-[13px] divide-y divide-gray-100">
+                            <button type="button" class="btn btn-sm" @click="ajustesDpsAberto = true" aria-haspopup="dialog">Ajustes manuais</button>
+                            <x-historico-modal var="ajustesDpsAberto" titulo="Ajustes manuais">
+                                <div class="text-[13px] divide-y divide-gray-100">
                                     @foreach ($ajustesDps as $a)
                                         <div class="py-1.5">{{ \Illuminate\Support\Carbon::parse($a->created_at)->format('d/m/Y H:i') }} · {{ $a->ambiente == 1 ? 'produção' : 'teste' }}: próximo {{ $a->de }} → {{ $a->para }}</div>
                                     @endforeach
                                 </div>
-                            </details>
+                            </x-historico-modal>
                         @endif
                     </div>
                 @endisset

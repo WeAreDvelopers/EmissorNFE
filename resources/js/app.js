@@ -86,6 +86,8 @@ Alpine.data('notaManual', (cfg) => ({
     init() {
         this.$watch('emitente', () => {
             this.adv = this.padroesFiscais();   // outra empresa: os valores do formulário seguem o cadastro dela
+            this.cod = this.f.cod_trib_mun || '';
+            this.dpsSerie = this.p.dps?.serie || ''; this.dpsNumero = this.p.dps?.numero || '';
             if (!this.temPadrao) this.usarPadrao = false; else if (this.usarPadrao) this.aplicarPadrao();
         });
         this.$watch('usarPadrao', (v) => { if (v) this.aplicarPadrao(); });
@@ -108,7 +110,18 @@ Alpine.data('notaManual', (cfg) => ({
     },
     escolherCliente(c) {
         this.doc = c.documento; this.nome = c.nome; this.email = c.email || '';
+        this.end = { cep: c.cep || '', logradouro: c.logradouro || '', numero: c.numero || '', complemento: c.complemento || '', bairro: c.bairro || '', municipio: c.municipio || '', uf: c.uf || '' };
         this.q = ''; this.abertoCli = false; this.semTomador = false;
+    },
+    // Digitou um CPF/CNPJ que já é cliente: carrega nome, e-mail e endereço do cadastro
+    async carregarPorDocumento() {
+        const d = String(this.doc || '').replace(/\D/g, '');
+        if (d.length !== 11 && d.length !== 14) return;
+        try {
+            const r = await fetch(`${this.urlClientes}?q=${encodeURIComponent(d)}`, { headers: { Accept: 'application/json' } });
+            const c = (await r.json()).find((x) => String(x.documento).replace(/\D/g, '') === d);
+            if (c) this.escolherCliente(c);
+        } catch (e) { /* sem rede: segue com o que foi digitado */ }
     },
 }));
 

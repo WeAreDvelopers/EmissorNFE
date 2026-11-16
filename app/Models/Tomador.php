@@ -124,4 +124,27 @@ class Tomador extends Model
 
         return $falta;
     }
+
+    /** "S/N", "sn", "s-n"… (sem número) */
+    private static function ehSemNumero(string $v): bool
+    {
+        return (bool) preg_match('/^s\s*[\/.\-]?\s*n$/i', trim($v));
+    }
+
+    /**
+     * Número do endereço aceito no cadastro: S/N, ou algo que tenha ao menos um algarismo (123, 123-A, 45 fundos, KM 12).
+     * A API aceita qualquer texto de 1 a 60 caracteres (TSNumeroEndereco); a regra é do sistema, para não salvar lixo como "A".
+     */
+    public static function numeroEnderecoValido(string $v): bool
+    {
+        $v = trim($v);
+
+        return $v !== '' && (self::ehSemNumero($v) || (bool) preg_match('/^(?=.*\d)[\p{L}\d\s\-\/.ºª,]{1,60}$/u', $v));
+    }
+
+    /** Grava sempre "S/N" para as variações de sem número. */
+    public static function normalizarNumeroEndereco(?string $v): ?string
+    {
+        return $v !== null && self::ehSemNumero($v) ? 'S/N' : $v;
+    }
 }

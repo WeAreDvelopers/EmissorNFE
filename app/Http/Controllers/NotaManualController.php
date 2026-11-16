@@ -28,7 +28,7 @@ class NotaManualController extends Controller
     /** Campos que viajam do formulário para a conferência e de volta. */
     private const CAMPOS_FORM = [
         'emitente_id', 'sem_tomador', 'tomador_documento', 'tomador_nome', 'tomador_email',
-        'usar_padrao', 'codigo_servico', 'descricao', 'codigo_nbs', 'valor', 'data_competencia', 'avancado', 'ajustes',
+        'usar_padrao', 'codigo_servico', 'descricao', 'codigo_nbs', 'valor', 'data_competencia', 'cod_trib_mun', 'dps_serie', 'dps_numero', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'uf', 'avancado', 'ajustes',
     ];
 
     public function criar()
@@ -46,6 +46,7 @@ class NotaManualController extends Controller
                 'teste'     => $e->ehHomologacao(),
                 'sem_custo' => $e->semCobranca(),
                 'fiscal'    => $this->fiscalPadrao($e),
+                'dps'       => $this->dpsPadrao($e),
             ]]),
         ]);
     }
@@ -63,6 +64,14 @@ class NotaManualController extends Controller
         $erros = $validador->errors();
         if ($validadorAjustes) {
             $erros->merge($validadorAjustes->errors()->toArray());
+        }
+        [$dpsSerie, $dpsNumero, $validadorDps] = $this->dpsInformada($request, $emitente);
+        if ($validadorDps) {
+            $erros->merge($validadorDps->errors()->toArray());
+        }
+        [$endereco, $validadorEndereco] = $this->enderecoDoCliente($request, $dados);
+        if ($validadorEndereco) {
+            $erros->merge($validadorEndereco->errors()->toArray());
         }
         if ($erros->isNotEmpty()) {
             return redirect()->route('notas.manual')->withInput($request->only(self::CAMPOS_FORM))->withErrors($erros);
@@ -90,6 +99,8 @@ class NotaManualController extends Controller
             ],
             'parecida'   => $parecida,
             'ajustes'    => $linhasAjuste,
+            'dps'        => $dpsNumero ? ['serie' => $dpsSerie, 'numero' => $dpsNumero] : null,
+            'endereco'   => $endereco,
         ]);
     }
 
@@ -123,6 +134,13 @@ class NotaManualController extends Controller
                 'nome'      => $t->nome,
                 'email'     => $t->emailPrincipal(),
                 'cidade'    => $t->municipio ? "{$t->municipio}/{$t->uf}" : null,
+                'cep'         => $t->cep ? substr($t->cep, 0, 5).'-'.substr($t->cep, 5) : '',
+                'logradouro'  => (string) $t->logradouro,
+                'numero'      => (string) $t->numero,
+                'complemento' => (string) $t->complemento,
+                'bairro'      => (string) $t->bairro,
+                'municipio'   => (string) $t->municipio,
+                'uf'          => (string) $t->uf,
             ])
         );
     }
@@ -146,14 +164,22 @@ class NotaManualController extends Controller
         if ($validadorAjustes) {
             $erros->merge($validadorAjustes->errors()->toArray());
         }
+        [$dpsSerie, $dpsNumero, $validadorDps] = $this->dpsInformada($request, $emitente);
+        if ($validadorDps) {
+            $erros->merge($validadorDps->errors()->toArray());
+        }
+        [$endereco, $validadorEndereco] = $this->enderecoDoCliente($request, $dados);
+        if ($validadorEndereco) {
+            $erros->merge($validadorEndereco->errors()->toArray());
+        }
         if ($erros->isNotEmpty()) {
             return $volta()->withErrors($erros);
         }
 
         $nota = null;
         try {
-            DB::transaction(function () use (&$nota, $dados, $emitente, $detector, $request, $parametros) {
-                $tomadorId = $dados['sem_tomador'] ? null : $this->cliente($dados)->id;
+            DB::transaction(function () use (&$nota, $dados, $emitente, $detector, $request, $parametros, $dpsSerie, $dpsNumero, $endereco) {
+                $tomadorId = $dados['sem_tomador'] ? null : $this->cliente($dados, $endereco ?? [])->id;
 
                 $nota = NotaFiscal::create([
                     ...ValidadorLinha::paraGravar($dados),
@@ -161,10 +187,14 @@ class NotaManualController extends Controller
                     'emitente_id' => $emitente->id,
                     'tomador_id'  => $tomadorId,
                     'origem'      => 'web',
-                    'serie_dps'   => $emitente->serie_dps,
+                    'serie_dps'   => $dpsSerie ?? $emitente->serie_dps,
                     'parametros_dps' => $parametros ?: null,
                     'status'      => StatusNota::Rascunho,
                 ]);
+
+                if ($dpsNumero) {   // série e número informados na tela: reserva e avança o contador da série
+                    app(\App\Services\Nfse\NumeracaoDps::class)->reservarInformado($nota, $dpsNumero);
+                }
 
                 // Parecida com uma nota já emitida ou na fila: só segue se a pessoa confirmou que é outra cobrança.
                 if ($detector->marcar($nota) && ! $request->boolean('confirmar_duplicidade')) {
@@ -189,6 +219,55 @@ class NotaManualController extends Controller
         return redirect()->route('notas.index')->with('ok', $msg);
     }
 
+    /** Série e próximo número automático da empresa: o que a tela mostra já preenchido quando ela pergunta a série e o número. */
+    private function dpsPadrao(Emitente $e): array
+    {
+        $serie = (string) ($e->serie_dps ?: '00001');
+        $ambiente = (int) $e->ambiente ?: 2;
+
+        return [
+            'informar' => (bool) $e->informar_serie_dps,
+            'serie'    => $serie,
+            'numero'   => (string) app(\App\Services\Nfse\NumeracaoDps::class)->proximoDe($e->id, $serie, $ambiente),
+        ];
+    }
+
+    /**
+     * Série e número da DPS digitados na nota (só quando a empresa marcou "Informar série e número da DPS").
+     * Regras da API: série de 1 a 5 dígitos na faixa 00001 a 49999 (E0010); nDPS de 1 a 15 dígitos, sem zero à esquerda (XSD TSNumDPS);
+     * série + número não podem repetir (E0014).
+     *
+     * @return array{0: ?string, 1: ?int, 2: ?\Illuminate\Contracts\Validation\Validator} [série com 5 dígitos, número, validador com erros]
+     */
+    private function dpsInformada(Request $request, Emitente $e): array
+    {
+        if (! $e->informar_serie_dps) {
+            return [null, null, null];
+        }
+        $serie = preg_replace('/\D/', '', (string) $request->input('dps_serie'));
+        $numero = preg_replace('/\D/', '', (string) $request->input('dps_numero'));
+        $v = Validator::make(['dps_serie' => $serie, 'dps_numero' => $numero], [
+            'dps_serie'  => ['required', 'regex:/^\d{1,5}$/', fn ($a, $x, $f) => ((int) $x >= 1 && (int) $x <= 49999) ?: $f('Série deve estar entre 00001 e 49999 (E0010).')],
+            'dps_numero' => ['required', 'regex:/^[1-9]\d{0,14}$/'],
+        ], [
+            'dps_serie.required'  => 'Informe a série da DPS.',
+            'dps_serie.regex'     => 'A série tem só números (até 5 dígitos).',
+            'dps_numero.required' => 'Informe o número da DPS.',
+            'dps_numero.regex'    => 'O número da DPS tem de 1 a 15 dígitos e não começa com zero.',
+        ]);
+        $v->after(function ($v) use ($e, $serie, $numero) {
+            $serie5 = str_pad($serie, 5, '0', STR_PAD_LEFT);
+            if ($v->errors()->isEmpty() && app(\App\Services\Nfse\NumeracaoDps::class)->existe($e->id, $serie5, (int) $e->ambiente ?: 2, (int) $numero)) {
+                $v->errors()->add('dps_numero', "O número {$numero} já foi usado na série {$serie5} (E0014). Use outro.");
+            }
+        });
+        if ($v->fails()) {
+            return [null, null, $v];
+        }
+
+        return [str_pad($serie, 5, '0', STR_PAD_LEFT), (int) $numero, null];
+    }
+
     /** Valores do cadastro da empresa que a nota completa personalizada abre para ajuste só numa nota. */
     private function fiscalPadrao(Emitente $e): array
     {
@@ -206,17 +285,17 @@ class NotaManualController extends Controller
             'cod_trib_mun'     => (string) $e->codigo_tributacao_municipal,
             'codigos'          => $e->listaCodigosMunicipais(),
             'regime_especial'  => (string) (int) $e->regime_especial,
-            'aliquota_simples' => $e->aliquota_simples !== null ? (string) (float) $e->aliquota_simples : '',
-            'trib_federal'     => isset($t['federal']) ? (string) (float) $t['federal'] : '',
-            'trib_estadual'    => isset($t['estadual']) ? (string) (float) $t['estadual'] : '',
-            'trib_municipal'   => isset($t['municipal']) ? (string) (float) $t['municipal'] : '',
+            'aliquota_simples' => $this->decimal($e->aliquota_simples),
+            'trib_federal'     => $this->decimal($t['federal'] ?? null),
+            'trib_estadual'    => $this->decimal($t['estadual'] ?? null),
+            'trib_municipal'   => $this->decimal($t['municipal'] ?? null),
             'retencao'         => (string) (int) ($e->retencao_issqn ?: 1),
             'mun_prestacao'    => $cidade,
             'uf_prestacao'     => $uf,
             'trib_issqn'       => (string) (int) ($e->trib_issqn ?: 1),
             'tp_imunidade'     => $e->tp_imunidade ? (string) (int) $e->tp_imunidade : '',
             'deducao_tipo'     => $e->deducao_tipo ?: 'none',
-            'deducao_valor'    => $e->deducao_valor !== null ? (string) (float) $e->deducao_valor : '',
+            'deducao_valor'    => $this->decimal($e->deducao_valor),
             'modo'             => $e->modoTributosAprox(),
             'modos'            => Emitente::modosPermitidos($op),
             'val_federal'      => '',
@@ -225,13 +304,19 @@ class NotaManualController extends Controller
             'pis_cst'          => $e->pis_cofins_cst ?: '00',
             'pis_ret'          => (string) (int) $e->tp_ret_pis_cofins,
             'pis_bc'           => '',
-            'pis_aliq_pis'     => $e->aliquota_pis !== null ? (string) (float) $e->aliquota_pis : '',
-            'pis_aliq_cofins'  => $e->aliquota_cofins !== null ? (string) (float) $e->aliquota_cofins : '',
+            'pis_aliq_pis'     => $this->decimal($e->aliquota_pis),
+            'pis_aliq_cofins'  => $this->decimal($e->aliquota_cofins),
             'ret_irrf'         => '',
             'ret_csll'         => '',
             'ret_cp'           => '',
             'fixos'            => $this->camposDeLeitura($e, $rotulo),
         ];
+    }
+
+    /** Número como o brasileiro digita: vírgula e duas casas (13,45 · 0,00 · 2,70). Vazio continua vazio. */
+    private function decimal(mixed $v): string
+    {
+        return $v === null || $v === '' ? '' : number_format((float) $v, 2, ',', '');
     }
 
     /** Campos que a nota completa só mostra: identidade da empresa e o que o Emissor Nacional bloqueia. */
@@ -270,6 +355,55 @@ class NotaManualController extends Controller
      * @return array{0: array, 1: list<array{0:string,1:string,2:string}>, 2: ?\Illuminate\Contracts\Validation\Validator} [parametros, linhas (rótulo, de, para), validador com erros]
      */
     private function ajustes(Request $request, Emitente $e, array $dados): array
+    {
+        // O código complementar municipal fica no bloco do serviço e vale em qualquer nota (simples ou completa)
+        [$parCodigo, $linhaCodigo, $erroCodigo] = $this->ajusteCodigoMunicipal($request, $e);
+        [$parametros, $linhas, $validador] = $this->ajustesCompletos($request, $e, $dados);
+        if ($erroCodigo) {
+            foreach ($erroCodigo->errors()->toArray() as $campo => $msgs) {
+                $validador ??= Validator::make([], []);
+                foreach ($msgs as $m) {
+                    $validador->errors()->add($campo, $m);
+                }
+            }
+            if ($validador->errors()->isNotEmpty()) {
+                return [[], [], $validador];
+            }
+        }
+
+        return [$validador ? [] : $parCodigo + $parametros, $validador ? [] : [...$linhaCodigo, ...$linhas], $validador];
+    }
+
+    /** @return array{0: array, 1: list<array>, 2: ?\Illuminate\Contracts\Validation\Validator} */
+    private function ajusteCodigoMunicipal(Request $request, Emitente $e): array
+    {
+        $base = $this->fiscalPadrao($e);
+        if ($base['op'] === 2 || ! $request->has('cod_trib_mun')) {
+            return [[], [], null];
+        }
+        $novo = preg_replace('/\D/', '', (string) $request->input('cod_trib_mun'));
+        $lista = collect($base['codigos'])->pluck('codigo');
+        $validador = Validator::make(['cod_trib_mun' => $novo], ['cod_trib_mun' => ['required', 'regex:/^\d{1,3}$/']], [
+            'cod_trib_mun.required' => 'Escolha o código complementar municipal.',
+            'cod_trib_mun.regex'    => 'O código complementar municipal tem até 3 números (ex.: 001).',
+        ]);
+        $validador->after(function ($v) use ($novo, $lista) {
+            if ($novo !== '' && $lista->isNotEmpty() && ! $lista->contains(str_pad($novo, 3, '0', STR_PAD_LEFT))) {
+                $v->errors()->add('cod_trib_mun', 'Esse código não está na lista de códigos da empresa.');
+            }
+        });
+        if ($validador->fails()) {
+            return [[], [], $validador];
+        }
+        $novo = str_pad($novo, 3, '0', STR_PAD_LEFT);
+        if ($novo === str_pad(preg_replace('/\D/', '', $base['cod_trib_mun']), 3, '0', STR_PAD_LEFT)) {
+            return [[], [], null];
+        }
+
+        return [['codigo_tributacao_municipal' => $novo], [['Código complementar municipal', $base['cod_trib_mun'] ?: 'não usado', $novo]], null];
+    }
+
+    private function ajustesCompletos(Request $request, Emitente $e, array $dados): array
     {
         if (! $request->boolean('avancado')) {
             return [[], [], null];
@@ -310,9 +444,6 @@ class NotaManualController extends Controller
         } elseif ($deducao === 'valor') {
             $regras['ajustes.deducao_valor'] = ['required', 'numeric', 'gt:0', 'lt:'.max($valorNota, 0.01)];
         }
-        if ($op !== 2) {
-            $regras['ajustes.cod_trib_mun'] = ['nullable', 'regex:/^\d{1,3}$/'];
-        }
         if ($modo === 'simples') {
             $regras['ajustes.aliquota_simples'] = $pct;
         }
@@ -341,7 +472,6 @@ class NotaManualController extends Controller
 
         $codigoPrestacao = null;
         $validador = Validator::make(['ajustes' => $in], $regras, [
-            'ajustes.cod_trib_mun.regex'    => 'O código complementar municipal tem até 3 números (ex.: 001).',
             'ajustes.*.between'             => 'Informe um percentual entre 0 e 100.',
             'ajustes.*.numeric'             => 'Informe só números (ex.: 13,45).',
             'ajustes.*.required'            => 'Preencha este campo ou volte aos padrões da empresa.',
@@ -415,17 +545,10 @@ class NotaManualController extends Controller
 
         $parametros = [];
         $linhas = [];
-        $num = fn ($v) => (float) $v;
-        $pct2 = fn ($v) => number_format((float) $v, 2, ',', '.').'%';
-        $brl = fn ($v) => 'R$ '.number_format((float) $v, 2, ',', '.');
+        $num = fn ($v) => (float) str_replace(',', '.', (string) $v);
+        $pct2 = fn ($v) => number_format((float) str_replace(',', '.', (string) $v), 2, ',', '.').'%';
+        $brl = fn ($v) => 'R$ '.number_format((float) str_replace(',', '.', (string) $v), 2, ',', '.');
 
-        if ($op !== 2) {
-            $novo = preg_replace('/\D/', '', (string) ($in['cod_trib_mun'] ?? ''));
-            if ($novo !== preg_replace('/\D/', '', $base['cod_trib_mun'])) {
-                $parametros['codigo_tributacao_municipal'] = $novo === '' ? '' : str_pad($novo, 3, '0', STR_PAD_LEFT);
-                $linhas[] = ['Código complementar municipal', $base['cod_trib_mun'] ?: 'não usado', $novo === '' ? 'não usado' : str_pad($novo, 3, '0', STR_PAD_LEFT)];
-            }
-        }
         if ($trib !== $base['trib_issqn'] || ($trib === '2' && (string) (int) ($in['tp_imunidade'] ?? 0) !== $base['tp_imunidade'])) {
             $parametros['trib_issqn'] = (int) $trib;
             $linhas[] = ['Tributação do ISSQN', TabelasDps::TRIBUTACAO_ISSQN[(int) $base['trib_issqn']] ?? '—', TabelasDps::TRIBUTACAO_ISSQN[(int) $trib]];
@@ -528,18 +651,88 @@ class NotaManualController extends Controller
         ], $emitente);
     }
 
-    /** Cliente da conta pelo CPF/CNPJ; se ainda não existe, é cadastrado com o que foi digitado (o endereço pode ser completado depois em Clientes). */
-    private function cliente(array $dados): Tomador
+    /**
+     * Endereço do cliente: obrigatório, completo e válido para a nota sair com destinatário (sem destinatário não pede).
+     * CEP com 8 números, logradouro, número (ou S/N), bairro, município e UF; o código IBGE do município tem de ser reconhecido.
+     *
+     * @return array{0: ?array, 1: ?\Illuminate\Contracts\Validation\Validator} [endereço limpo, validador com erros]
+     */
+    private function enderecoDoCliente(Request $request, array $dados): array
+    {
+        if ($dados['sem_tomador']) {
+            return [null, null];
+        }
+        $e = [
+            'cep'         => preg_replace('/\D/', '', (string) $request->input('cep')),
+            'logradouro'  => trim((string) $request->input('logradouro')),
+            'numero'      => Tomador::normalizarNumeroEndereco(trim((string) $request->input('numero'))) ?? '',
+            'complemento' => trim((string) $request->input('complemento')),
+            'bairro'      => trim((string) $request->input('bairro')),
+            'municipio'   => trim((string) $request->input('municipio')),
+            'uf'          => strtoupper(trim((string) $request->input('uf'))),
+        ];
+        $v = Validator::make($e, [
+            'cep'         => ['required', 'digits:8'],
+            'logradouro'  => ['required', 'string', 'max:255'],
+            'numero'      => ['required', 'string', 'max:60', fn ($a, $x, $f) => Tomador::numeroEnderecoValido((string) $x) ?: $f('Informe o número só com números (ex.: 123, 123-A) ou S/N se não tiver.')],
+            'complemento' => ['nullable', 'string', 'max:156'],
+            'bairro'      => ['required', 'string', 'max:156'],
+            'municipio'   => ['required', 'string', 'max:120'],
+            'uf'          => ['required', 'size:2'],
+        ], [
+            'cep.required' => 'Informe o CEP do cliente.', 'cep.digits' => 'O CEP tem 8 números (ex.: 01310-100).',
+            'logradouro.required' => 'Informe o logradouro do cliente (rua, avenida…).',
+            'numero.required' => 'Informe o número do endereço (use S/N se não tiver).',
+            'bairro.required' => 'Informe o bairro do cliente.',
+            'municipio.required' => 'Informe o município do cliente.',
+            'uf.required' => 'Informe a UF do cliente.', 'uf.size' => 'A UF tem 2 letras (ex.: SP).',
+        ]);
+        $codigo = null;
+        $v->after(function ($v) use ($e, &$codigo) {
+            if ($v->errors()->has('municipio') || $v->errors()->has('uf')) {
+                return;
+            }
+            $codigo = Tomador::descobrirCodigoMunicipio($e['municipio'], $e['uf'], $e['cep']);
+            if (! $codigo) {
+                $v->errors()->add('municipio', 'Município não reconhecido: confira o nome e a UF do cliente.');
+            }
+        });
+        if ($v->fails()) {
+            return [null, $v];
+        }
+
+        return [$e + ['codigo_municipio' => $codigo], null];
+    }
+
+    /** Cliente da conta pelo CPF/CNPJ. Se não existe, é cadastrado; se existe, o endereço da tela vale e fica no histórico dele. */
+    private function cliente(array $dados, array $endereco): Tomador
     {
         $t = Tomador::firstOrNew(['documento' => $dados['tomador_documento']]);
-        if (! $t->exists) {
+        $novo = ! $t->exists;
+        if ($novo) {
             $t->fill([
                 'conta_id' => app(ContaAtual::class)->id(),
                 'nome'     => $dados['tomador_nome'],
                 'emails'   => $dados['tomador_email'] ? [$dados['tomador_email']] : [],
             ]);
-            $t->pendente = true;
-            $t->save();
+        }
+
+        $historico = [];
+        foreach ($endereco as $campo => $valor) {
+            $valor = $valor === '' ? null : $valor;
+            if ($t->{$campo} !== $valor && ! (blank($t->{$campo}) && blank($valor))) {
+                $historico[$campo] = [$t->{$campo}, $valor];
+            }
+        }
+        $t->fill($endereco);
+        $t->pendente = ! $t->enderecoCompleto();
+        $t->save();
+
+        if ($historico && ! $novo) {
+            \App\Models\TomadorAlteracao::create([
+                'conta_id' => $t->conta_id, 'tomador_id' => $t->id, 'user_id' => auth()->id(),
+                'origem' => 'manual', 'campos' => $historico,
+            ]);
         }
 
         return $t;

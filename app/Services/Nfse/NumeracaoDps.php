@@ -40,6 +40,45 @@ class NumeracaoDps
         });
     }
 
+    /** Esse número já foi usado nesta empresa, série e ambiente? */
+    public function existe(int $emitenteId, string $serie, int $ambiente, int $numero): bool
+    {
+        return NotaFiscal::semIsolamento()->where(['emitente_id' => $emitenteId, 'serie_dps' => $serie, 'ambiente' => $ambiente, 'numero_dps' => $numero])->exists();
+    }
+
+    /** Próximo número automático da série (o que o app daria se ninguém informasse nada). */
+    public function proximoDe(int $emitenteId, string $serie, int $ambiente): int
+    {
+        return max((int) DB::table('sequencias_dps')->where(['emitente_id' => $emitenteId, 'serie' => $serie, 'ambiente' => $ambiente])->value('ultimo_numero'), $this->maiorUsado($emitenteId, $serie, $ambiente)) + 1;
+    }
+
+    /**
+     * Número da DPS informado pela pessoa na nota manual ("Informar série e número da DPS").
+     * A série já está na nota. Se o número passar do contador, o contador acompanha, para a numeração
+     * automática seguinte nunca repetir esse número.
+     */
+    public function reservarInformado(NotaFiscal $nota, int $numero): int
+    {
+        return DB::transaction(function () use ($nota, $numero) {
+            $ambiente = (int) Emitente::semIsolamento()->whereKey($nota->emitente_id)->value('ambiente') ?: 2;
+
+            $this->garantirLinha($nota->emitente_id, $nota->serie_dps, $ambiente);
+            $seq = DB::table('sequencias_dps')
+                ->where(['emitente_id' => $nota->emitente_id, 'serie' => $nota->serie_dps, 'ambiente' => $ambiente])
+                ->lockForUpdate()->first();
+
+            if ($this->existe($nota->emitente_id, $nota->serie_dps, $ambiente, $numero)) {
+                throw ValidationException::withMessages(['dps_numero' => "O número {$numero} já foi usado na série {$nota->serie_dps}."]);
+            }
+            if ($numero > (int) $seq->ultimo_numero) {
+                DB::table('sequencias_dps')->where('id', $seq->id)->update(['ultimo_numero' => $numero, 'updated_at' => now()]);
+            }
+            $nota->forceFill(['numero_dps' => $numero, 'ambiente' => $ambiente])->save();
+
+            return $numero;
+        });
+    }
+
     /** Último número usado e próximo, por ambiente, para a tela da empresa. */
     public function situacao(Emitente $emitente): array
     {

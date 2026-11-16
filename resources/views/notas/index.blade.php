@@ -66,7 +66,7 @@
                     <div class="font-mono sm:text-right">R$ {{ number_format($n->valor, 2, ',', '.') }}</div>
                     <div>
                         @php $dica = $n->status->grupo() === 'atencao' ? \App\Support\ExplicacaoErro::para($n) : null; @endphp
-                        <span class="pill {{ $n->status->selo() }}" @if ($dica) title="{{ $dica['titulo'] }}: {{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 220) }}" @endif>{{ $n->status->label() }}</span>
+                        <span class="pill {{ $n->status->selo() }}" @if ($dica) title="{{ $dica['titulo'] }}: {{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 220) }}" @endif>{{ $dica['rotulo'] ?? $n->status->label() }}</span>
                         @if (in_array($n->status, [\App\Enums\StatusNota::Emitida, \App\Enums\StatusNota::Cancelada], true) && $n->numero_nfse)<div class="text-[13px] mt-1">NFS-e nº <b class="font-mono">{{ $n->numero_nfse }}</b></div>@endif
                         @if ($dica)<div class="text-xs text-warn-900 mt-1 leading-snug">{{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 90) }}</div>@endif
                         @if ($n->status === \App\Enums\StatusNota::Cancelada)<div class="text-xs text-ink-600 mt-0.5">Cancelada em {{ $n->cancelada_em?->timezone('America/Sao_Paulo')->format('d/m/Y') }}</div>@endif

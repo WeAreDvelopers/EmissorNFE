@@ -44,6 +44,9 @@
                     @else
                         <div class="font-medium">{{ $dados['tomador_nome'] }}</div>
                         <div class="text-sm text-ink-700"><span class="font-mono">{{ \App\Support\Documento::formatar($dados['tomador_documento']) }}</span>@if ($dados['tomador_email']) · {{ $dados['tomador_email'] }}@endif</div>
+                        @if ($endereco)
+                            <div class="text-sm text-ink-700 mt-1">{{ $endereco['logradouro'] }}, {{ $endereco['numero'] }}@if ($endereco['complemento']) · {{ $endereco['complemento'] }}@endif · {{ $endereco['bairro'] }} · {{ $endereco['municipio'] }}/{{ $endereco['uf'] }} · CEP {{ substr($endereco['cep'], 0, 5) }}-{{ substr($endereco['cep'], 5) }}</div>
+                        @endif
                         <div class="text-[13px] text-ink-600 mt-1">{{ $cliente ? 'Cliente já cadastrado.' : 'Cliente novo: será cadastrado com estes dados.' }}</div>
                     @endif
                 </div>
@@ -64,6 +67,13 @@
                         </div>
                     @endif
                 </div>
+
+                @if ($dps)
+                    <div class="p-5 sm:p-6">
+                        <div class="text-[13px] text-ink-600">Série e número da DPS</div>
+                        <div class="font-mono font-medium">{{ $dps['serie'] }} · {{ $dps['numero'] }}</div>
+                    </div>
+                @endif
 
                 <div class="p-5 sm:p-6">
                     <div class="text-[13px] text-ink-600">Dados fiscais</div>

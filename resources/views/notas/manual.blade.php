@@ -9,7 +9,7 @@
         $erro = fn ($campo) => $errors->first($campo);
         $avancado = $voltou && (bool) old('avancado');
         $fiscal = $p['fiscal'] ?? ['op' => 0];
-        $adv = array_merge(\Illuminate\Support\Arr::only($fiscal, array_keys(array_diff_key($fiscal, ['fixos' => 1, 'op' => 1, 'deducao_ok' => 1]))), $avancado ? (array) old('ajustes', []) : []);
+        $adv = array_merge(\Illuminate\Support\Arr::only($fiscal, array_keys(array_diff_key($fiscal, ['fixos' => 1, 'op' => 1, 'deducao_ok' => 1]))), ['modo_tributos_aprox' => $fiscal['modo'] ?? ''], $avancado ? (array) old('ajustes', []) : []);
         if ($avancado) { $usarPadrao = false; }
     @endphp
 
@@ -31,7 +31,9 @@
                   nbs: @js((string) old('codigo_nbs', $usarPadrao ? $p['nbs'] : '')),
                   descricao: @js((string) old('descricao', $usarPadrao ? $p['descricao'] : '')),
                   semTomador: @js((bool) old('sem_tomador', false)),
-                  avancado: @js($avancado), adv: @js($adv),
+                  avancado: @js($avancado), adv: @js($adv), cod: @js((string) old('cod_trib_mun', $fiscal['cod_trib_mun'] ?? '')),
+                  end: @js(['cep' => (string) old('cep'), 'logradouro' => (string) old('logradouro'), 'numero' => (string) old('numero'), 'complemento' => (string) old('complemento'), 'bairro' => (string) old('bairro'), 'municipio' => (string) old('municipio'), 'uf' => (string) old('uf')]),
+                  dpsSerie: @js((string) old('dps_serie', $p['dps']['serie'] ?? '')), dpsNumero: @js((string) old('dps_numero', $p['dps']['numero'] ?? '')),
                   doc: @js((string) old('tomador_documento', '')), nome: @js((string) old('tomador_nome', '')), email: @js((string) old('tomador_email', '')),
                   urlClientes: @js(route('tomadores.buscar')),
               })">
@@ -94,7 +96,7 @@
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label for="tomador_documento" class="campo-rotulo obrigatorio">CPF ou CNPJ do cliente</label>
-                            <input id="tomador_documento" name="tomador_documento" x-model="doc" inputmode="numeric" autocomplete="off" @class(['campo-entrada font-mono', 'campo-invalido' => $erro('tomador_documento')])>
+                            <input id="tomador_documento" name="tomador_documento" x-model="doc" @change="carregarPorDocumento()" inputmode="numeric" autocomplete="off" @class(['campo-entrada font-mono', 'campo-invalido' => $erro('tomador_documento')])>
                             @if ($erro('tomador_documento'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('tomador_documento') }}</p>@endif
                         </div>
                         <div>
@@ -107,7 +109,57 @@
                         <label for="tomador_email" class="campo-rotulo">E-mail do cliente (opcional)</label>
                         <input id="tomador_email" name="tomador_email" type="email" x-model="email" autocomplete="off" @class(['campo-entrada', 'campo-invalido' => $erro('tomador_email')])>
                         @if ($erro('tomador_email'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('tomador_email') }}</p>@endif
-                        <p class="campo-ajuda">Cliente novo é cadastrado com estes dados. O endereço pode ser completado depois em Tomadores (Clientes).</p>
+                        <p class="campo-ajuda">Cliente novo é cadastrado com estes dados.</p>
+                    </div>
+
+                    {{-- Endereço: obrigatório para a nota com destinatário. Vem do cadastro quando o cliente já existe; o CEP completa o resto. --}}
+                    <div class="space-y-3" x-data="enderecoCep(@js(route('cep.buscar', '__CEP__')))">
+                        <h3 class="text-base font-semibold">Endereço do cliente</h3>
+                        <p class="campo-ajuda">Sem endereço completo e válido a nota não é enviada. Já vem do cadastro quando o cliente existe; o que você ajustar aqui atualiza o cadastro dele.</p>
+                        <div class="grid gap-4 sm:grid-cols-6">
+                            <div class="sm:col-span-2">
+                                <label for="cep" class="campo-rotulo obrigatorio">CEP</label>
+                                <input id="cep" name="cep" x-model="end.cep" x-mascara="cep" @input="buscar($event.target.value)" maxlength="9" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" @class(['campo-entrada font-mono', 'campo-invalido' => $erro('cep')])>
+                                @if ($erro('cep'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('cep') }}</p>@endif
+                                <p class="campo-ajuda" x-show="estado" x-cloak aria-live="polite">
+                                    <span x-show="estado === 'buscando'">Buscando o endereço…</span>
+                                    <span x-show="estado === 'ok'" class="text-ok-800">Endereço preenchido. Confira e informe o número.</span>
+                                    <span x-show="estado === 'erro'" class="text-warn-900">CEP não localizado. Confirme com o cliente.</span>
+                                </p>
+                            </div>
+                            <div class="sm:col-span-4">
+                                <label for="logradouro" class="campo-rotulo obrigatorio">Logradouro</label>
+                                <input id="logradouro" name="logradouro" x-model="end.logradouro" autocomplete="off" @class(['campo-entrada', 'campo-invalido' => $erro('logradouro')])>
+                                @if ($erro('logradouro'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('logradouro') }}</p>@endif
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="numero" class="campo-rotulo obrigatorio">Número</label>
+                                <input id="numero" name="numero" x-model="end.numero" maxlength="60" autocomplete="off" placeholder="123 ou S/N" @class(['campo-entrada', 'campo-invalido' => $erro('numero')])>
+                                @if ($erro('numero'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('numero') }}</p>@endif
+                            </div>
+                            <div class="sm:col-span-4">
+                                <label for="complemento" class="campo-rotulo">Complemento</label>
+                                <input id="complemento" name="complemento" x-model="end.complemento" autocomplete="off" class="campo-entrada">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="bairro" class="campo-rotulo obrigatorio">Bairro</label>
+                                <input id="bairro" name="bairro" x-model="end.bairro" autocomplete="off" @class(['campo-entrada', 'campo-invalido' => $erro('bairro')])>
+                                @if ($erro('bairro'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('bairro') }}</p>@endif
+                            </div>
+                            <div class="sm:col-span-3">
+                                <label for="municipio" class="campo-rotulo obrigatorio">Município</label>
+                                <input id="municipio" name="municipio" x-model="end.municipio" autocomplete="off" @class(['campo-entrada', 'campo-invalido' => $erro('municipio')])>
+                                @if ($erro('municipio'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('municipio') }}</p>@endif
+                            </div>
+                            <div class="sm:col-span-1">
+                                <label for="uf" class="campo-rotulo obrigatorio">UF</label>
+                                <select id="uf" name="uf" x-model="end.uf" @class(['campo-entrada', 'campo-invalido' => $erro('uf')])>
+                                    <option value="">UF</option>
+                                    @foreach (['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] as $sigla)<option value="{{ $sigla }}">{{ $sigla }}</option>@endforeach
+                                </select>
+                                @if ($erro('uf'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('uf') }}</p>@endif
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -127,6 +179,16 @@
                 <x-busca-servico nome="codigo_servico" rotulo="Código de serviço" obrigatorio :valor="old('codigo_servico', $usarPadrao ? $p['codigo'] : '')" somenteLeitura="usarPadrao" />
                 @if ($erro('codigo_servico'))<p class="-mt-2 text-[13px] text-warn-800" role="alert">{{ $erro('codigo_servico') }}</p>@endif
 
+                <div x-show="f.op != 2" x-cloak>
+                    <label for="cod_trib_mun" class="campo-rotulo obrigatorio">Código complementar municipal</label>
+                    <select id="cod_trib_mun" name="cod_trib_mun" x-model="cod" :disabled="f.op == 2" @class(['campo-entrada font-mono', 'campo-invalido' => $erro('cod_trib_mun')])>
+                        <option value="" x-show="!(f.codigos || []).length">Nenhum código cadastrado na empresa</option>
+                        <template x-for="c in (f.codigos || [])" :key="c.codigo"><option :value="c.codigo" :selected="c.codigo === cod" x-text="c.codigo + (c.descricao ? ' - ' + c.descricao : '')"></option></template>
+                    </select>
+                    @if ($erro('cod_trib_mun'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('cod_trib_mun') }}</p>@endif
+                    <p class="campo-ajuda">Lista cadastrada na empresa (Emitentes). Já vem o código padrão.</p>
+                </div>
+
                 <div>
                     <label for="descricao" class="campo-rotulo obrigatorio">Descrição do serviço</label>
                     <textarea id="descricao" name="descricao" rows="3" x-model="descricao" :readonly="usarPadrao" :class="{ 'bg-gray-100 text-ink-700': usarPadrao }" @class(['campo-entrada', 'campo-invalido' => $erro('descricao')])></textarea>
@@ -136,6 +198,24 @@
                 <x-busca-servico nome="codigo_nbs" rotulo="NBS (opcional)" :valor="old('codigo_nbs', $usarPadrao ? $p['nbs'] : '')" somenteLeitura="usarPadrao"
                                  :url="route('nbs.buscar')" :tam="9" evento="definir-nbs" vazio="Selecione o item da NBS (código ou nome do serviço)" nenhum="Nenhum item da NBS encontrado. Tente outra palavra." />
                 @if ($erro('codigo_nbs'))<p class="-mt-2 text-[13px] text-warn-800" role="alert">{{ $erro('codigo_nbs') }}</p>@endif
+            </section>
+
+            {{-- Série e número da DPS: só quando a empresa marcou "Informar série e número da DPS" --}}
+            <section x-show="p.dps?.informar" x-cloak class="card p-5 sm:p-6 space-y-4">
+                <h2 class="text-lg font-semibold">Série e número da DPS</h2>
+                <p class="text-[13px] text-ink-600">Já vêm com a série da empresa e o próximo número automático. Altere só se precisar. Série de 00001 a 49999; o número não pode repetir na série.</p>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="dps_serie" class="campo-rotulo obrigatorio">Série</label>
+                        <input id="dps_serie" name="dps_serie" x-model="dpsSerie" :disabled="!p.dps?.informar" maxlength="5" inputmode="numeric" autocomplete="off" @input="dpsSerie = dpsSerie.replace(/\D/g, '')" @class(['campo-entrada font-mono', 'campo-invalido' => $erro('dps_serie')])>
+                        @if ($erro('dps_serie'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('dps_serie') }}</p>@endif
+                    </div>
+                    <div>
+                        <label for="dps_numero" class="campo-rotulo obrigatorio">Número da DPS</label>
+                        <input id="dps_numero" name="dps_numero" x-model="dpsNumero" :disabled="!p.dps?.informar" maxlength="15" inputmode="numeric" autocomplete="off" @input="dpsNumero = dpsNumero.replace(/\D/g, '')" @class(['campo-entrada font-mono', 'campo-invalido' => $erro('dps_numero')])>
+                        @if ($erro('dps_numero'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('dps_numero') }}</p>@endif
+                    </div>
+                </div>
             </section>
 
             {{-- 4. Valor e data --}}
@@ -195,13 +275,6 @@
                                 <label for="aj-uf" class="campo-rotulo">UF</label>
                                 <input id="aj-uf" name="ajustes[uf_prestacao]" x-model="adv.uf_prestacao" :disabled="!avancado" maxlength="2" autocomplete="off" @class(['campo-entrada font-mono uppercase', 'campo-invalido' => $erro('ajustes.uf_prestacao')])>
                                 @if ($erro('ajustes.uf_prestacao'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('ajustes.uf_prestacao') }}</p>@endif
-                            </div>
-                            <div class="sm:col-span-3" x-show="f.op != 2">
-                                <label for="aj-ctm" class="campo-rotulo">Código complementar municipal</label>
-                                <input id="aj-ctm" list="aj-ctm-lista" name="ajustes[cod_trib_mun]" x-model="adv.cod_trib_mun" :disabled="!avancado || f.op == 2" maxlength="3" inputmode="numeric" placeholder="001" autocomplete="off" @class(['campo-entrada font-mono', 'campo-invalido' => $erro('ajustes.cod_trib_mun')])>
-                                @if ($erro('ajustes.cod_trib_mun'))<p class="mt-1 text-[13px] text-warn-800" role="alert">{{ $erro('ajustes.cod_trib_mun') }}</p>@endif
-                                <datalist id="aj-ctm-lista"><template x-for="c in (f.codigos || [])" :key="c.codigo"><option :value="c.codigo" x-text="c.descricao"></option></template></datalist>
-                                <p class="campo-ajuda" x-show="(f.codigos || []).find(c => c.codigo === adv.cod_trib_mun)?.descricao" x-text="(f.codigos || []).find(c => c.codigo === adv.cod_trib_mun)?.descricao"></p>
                             </div>
                         </div>
                     </div>

@@ -52,7 +52,7 @@ class NotaManualCamposFiscaisTest extends TestCase
     {
         $e = app(ContaAtual::class)->como($this->conta->id, fn () => Emitente::create($extra + [
             'cnpj' => '19534920000118'.'', 'razao_social' => 'BR Controle Ltda', 'codigo_municipio' => '3550308',
-            'op_simples_nacional' => 1, 'regime_apuracao_sn' => 1, 'regime_especial' => 0, 'serie_dps' => '00001', 'informar_serie_dps' => '1', 'ambiente' => 2,
+            'op_simples_nacional' => 1, 'regime_apuracao_sn' => 1, 'regime_especial' => 0, 'serie_dps' => '00001', 'informar_serie_dps' => false, 'ambiente' => 2,
             'codigo_servico_padrao' => '010701', 'descricao_servico_padrao' => 'Manutenção de programas de computação.', 'codigo_nbs_padrao' => '115080000',
             'codigo_tributacao_municipal' => '001', 'tributos_aprox' => ['federal' => 13.45, 'estadual' => 0, 'municipal' => 2.70],
         ]));
@@ -66,6 +66,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         return $extra + [
             'emitente_id' => $this->emitente->id,
             'tomador_documento' => '19566539000130', 'tomador_nome' => 'Malix Automóveis Ltda', 'tomador_email' => 'fin@malix.com.br',
+            'cep' => '01310-100', 'logradouro' => 'Avenida Paulista', 'numero' => '1578', 'bairro' => 'Bela Vista', 'municipio' => 'São Paulo', 'uf' => 'SP',
             'codigo_servico' => '010701', 'descricao' => 'Manutenção de programas de computação.', 'codigo_nbs' => '115080000',
             'valor' => '452,50', 'data_competencia' => now()->toDateString(),
         ];
@@ -116,8 +117,12 @@ class NotaManualCamposFiscaisTest extends TestCase
     {
         $html = $this->get(route('notas.manual'))->assertOk()->getContent();
 
-        foreach (['Nota fiscal completa personalizada', 'Voltar à nota simples', 'BR Controle Ltda', '00 - Nenhum', 'ajustes[cod_trib_mun]', 'ajustes[retencao]', 'ajustes[trib_federal]'] as $texto) {
+        foreach (['Nota fiscal completa personalizada', 'Voltar à nota simples', 'BR Controle Ltda', '00 - Nenhum', 'name="cod_trib_mun"', 'ajustes[retencao]', 'ajustes[trib_federal]'] as $texto) {
             $this->assertStringContainsString($texto, $html, $texto);
+        }
+        $this->assertStringContainsString('modo_tributos_aprox\u0022:\u0022percentual', $html);   // a forma de informar o valor aproximado dos tributos já vem marcada
+        foreach (['trib_federal\u0022:\u002213,45\u0022', 'trib_estadual\u0022:\u00220,00\u0022', 'trib_municipal\u0022:\u00222,70\u0022'] as $fmt) {
+            $this->assertStringContainsString($fmt, $html, $fmt);   // percentuais da empresa no formato brasileiro: vírgula e duas casas
         }
         $this->assertStringNotContainsString('Como a nota vai sair', $html);   // a tela simples não traz resumo: só o botão
         $this->assertStringContainsString('010701', $html);                 // serviço da empresa já aplicado
@@ -142,25 +147,25 @@ class NotaManualCamposFiscaisTest extends TestCase
         ];
     }
 
-    private function conferir(array $ajustes)
+    private function conferir(array $ajustes, array $extra = [])
     {
-        return $this->post(route('notas.manual.conferir'), $this->dados(['avancado' => '1', 'ajustes' => $ajustes]));
+        return $this->post(route('notas.manual.conferir'), $this->dados(['avancado' => '1', 'ajustes' => $ajustes] + $extra));
     }
 
-    private function emitirCom(array $ajustes)
+    private function emitirCom(array $ajustes, array $extra = [])
     {
-        return $this->post(route('notas.manual.store'), $this->dados(['avancado' => '1', 'ajustes' => $ajustes, 'confirmo' => '1']));
+        return $this->post(route('notas.manual.store'), $this->dados(['avancado' => '1', 'ajustes' => $ajustes, 'confirmo' => '1'] + $extra));
     }
 
     public function test_ajustes_aparecem_na_conferencia_e_so_o_que_mudou_e_gravado(): void
     {
-        $ajustes = $this->aj(['cod_trib_mun' => '002', 'trib_federal' => '10,50', 'trib_municipal' => '2,7']);
+        $ajustes = $this->aj(['trib_federal' => '10,50', 'trib_municipal' => '2,7']);
 
-        $this->conferir($ajustes)->assertOk()->assertSee('Diferentes do padrão da empresa, só nesta nota')
+        $this->conferir($ajustes, ['cod_trib_mun' => '002'])->assertOk()->assertSee('Diferentes do padrão da empresa, só nesta nota')
             ->assertSee('Código complementar municipal')->assertSee('10,50%')
-            ->assertSee('name="ajustes[cod_trib_mun]"', false)->assertDontSee('Regime especial de tributação:');
+            ->assertSee('name="cod_trib_mun"', false)->assertDontSee('Regime especial de tributação:');
 
-        $this->emitirCom($ajustes)->assertRedirect(route('notas.index'));
+        $this->emitirCom($ajustes, ['cod_trib_mun' => '002'])->assertRedirect(route('notas.index'));
         $this->assertEquals(['codigo_tributacao_municipal' => '002', 'tributos_aprox' => ['federal' => 10.5, 'estadual' => 0.0, 'municipal' => 2.7]], NotaFiscal::firstOrFail()->parametros_dps);
         $this->assertSame('001', $this->emitente->fresh()->codigo_tributacao_municipal);   // o cadastro da empresa não muda
     }
@@ -174,9 +179,9 @@ class NotaManualCamposFiscaisTest extends TestCase
 
     public function test_valores_invalidos_voltam_ao_formulario_com_o_botao_aberto(): void
     {
-        $r = $this->conferir($this->aj(['cod_trib_mun' => '12345', 'trib_federal' => '150', 'trib_estadual' => 'abc']));
+        $r = $this->conferir($this->aj(['trib_federal' => '150', 'trib_estadual' => 'abc']), ['cod_trib_mun' => '12345']);
 
-        $r->assertRedirect(route('notas.manual'))->assertSessionHasErrors(['ajustes.cod_trib_mun', 'ajustes.trib_federal', 'ajustes.trib_estadual']);
+        $r->assertRedirect(route('notas.manual'))->assertSessionHasErrors(['cod_trib_mun', 'ajustes.trib_federal', 'ajustes.trib_estadual']);
         $this->get(route('notas.manual'))->assertSee('avancado: true', false)->assertSee('Informe um percentual entre 0 e 100.');
     }
 
@@ -639,9 +644,13 @@ class NotaManualCamposFiscaisTest extends TestCase
 
         // a tela da empresa e a nota completa oferecem a lista
         $html = $this->get(route('emitentes.editar', $this->emitente))->assertOk()->getContent();
-        $this->assertStringContainsString('lista-codigos-municipais', $html);
+        $this->assertStringContainsString('Lista de códigos complementares da prefeitura', $html);
         $this->assertStringContainsString('Suporte tecnico em informatica', $html);
-        $this->get(route('notas.manual'))->assertOk()->assertSee('aj-ctm-lista', false)->assertSee('Suporte tecnico em informatica', false);
+        $this->get(route('notas.manual'))->assertOk()->assertSee('<select id="cod_trib_mun"', false)->assertSee('Suporte tecnico em informatica', false);
+
+        // sem nenhum código (e sem ser MEI) não salva; o primeiro da lista vira o padrão da empresa
+        $this->put($url, $this->dadosEmpresa(['codigo_tributacao_municipal' => '', 'codigos' => []]))->assertSessionHasErrors('codigos');
+        $this->assertSame('001', $this->emitente->fresh()->codigo_tributacao_municipal);
 
         // salvar de novo troca a lista (remover um código funciona)
         $this->put($url, $this->dadosEmpresa(['codigos' => [['codigo' => '001', 'descricao' => 'Novo texto', 'servico' => '']]]))->assertSessionHasNoErrors();
@@ -668,5 +677,50 @@ class NotaManualCamposFiscaisTest extends TestCase
         $outra = $this->empresa(['cnpj' => '07445371000126']);
         $this->assertSame([], $outra->codigosMunicipais()->pluck('codigo')->all());
         $this->assertSame([], $outra->listaCodigosMunicipais());
+    }
+
+    public function test_nota_manual_pergunta_serie_e_numero_quando_a_empresa_marcou(): void
+    {
+        $this->emitente->forceFill(['informar_serie_dps' => true, 'serie_dps' => '00007'])->save();
+
+        // a tela já vem com a série da empresa e o próximo número automático
+        $this->get(route('notas.manual'))->assertOk()->assertSee('name="dps_serie"', false)->assertSee('name="dps_numero"', false)->assertSee('00007');
+
+        // sem preencher: pede
+        $this->post(route('notas.manual.conferir'), $this->dados())->assertSessionHasErrors(['dps_serie', 'dps_numero']);
+
+        // regras da API: série até 49999 (E0010); número de 1 a 15 dígitos, sem zero à esquerda (TSNumDPS)
+        $this->post(route('notas.manual.conferir'), $this->dados(['dps_serie' => '50000', 'dps_numero' => '1']))->assertSessionHasErrors('dps_serie');
+        $this->post(route('notas.manual.conferir'), $this->dados(['dps_serie' => '7', 'dps_numero' => '0123']))->assertSessionHasErrors('dps_numero');
+        $this->post(route('notas.manual.conferir'), $this->dados(['dps_serie' => '7', 'dps_numero' => '1234567890123456']))->assertSessionHasErrors('dps_numero');
+
+        // informado: aparece na conferência e vai na nota, e o contador da série acompanha
+        $dps = ['dps_serie' => '7', 'dps_numero' => '150'];
+        $this->post(route('notas.manual.conferir'), $this->dados($dps))->assertOk()->assertSee('00007 · 150');
+        $this->post(route('notas.manual.store'), $this->dados($dps + ['confirmo' => '1']))->assertRedirect(route('notas.index'));
+        $nota = NotaFiscal::firstOrFail();
+        $this->assertSame('00007', $nota->serie_dps);
+        $this->assertSame(150, (int) $nota->numero_dps);
+        $this->assertSame(151, app(\App\Services\Nfse\NumeracaoDps::class)->proximoDe($this->emitente->id, '00007', 2));
+
+        // repetir série + número é recusado (E0014)
+        $this->post(route('notas.manual.conferir'), $this->dados($dps))->assertSessionHasErrors('dps_numero');
+    }
+
+    public function test_serie_da_empresa_e_obrigatoria_mesmo_sem_a_opcao_de_informar(): void
+    {
+        $url = route('emitentes.update', $this->emitente);
+
+        $this->put($url, $this->dadosEmpresa(['informar_serie_dps' => '0', 'serie_dps' => '']))->assertSessionHasErrors('serie_dps');
+        $this->put($url, $this->dadosEmpresa(['informar_serie_dps' => '0', 'serie_dps' => '00009']))->assertSessionHasNoErrors();
+        $this->assertSame('00009', $this->emitente->fresh()->serie_dps);
+        $this->assertFalse((bool) $this->emitente->fresh()->informar_serie_dps);
+    }
+
+    public function test_versao_da_dps_invalida_no_env_cai_em_1_01(): void
+    {
+        config(['nfse.versao_dps' => 'Versão DPS']);
+
+        $this->assertStringContainsString('versao="1.01"', (new DpsBuilder)->montar($this->nota([])));
     }
 }

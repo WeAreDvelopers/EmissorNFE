@@ -13,29 +13,31 @@
                 </span>
                 <div class="min-w-0 leading-tight">
                     <div class="text-[11px] font-semibold uppercase tracking-wide text-brand-600">Empresa que você administra</div>
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span class="text-base font-semibold text-ink-900 truncate max-w-[420px]" title="{{ $cabEmpresa->razao_social }}">{{ $cabEmpresa->razao_social }}</span>
-                        <span class="font-mono text-sm text-ink-700">{{ \App\Support\Documento::formatar($cabEmpresa->cnpj) }}</span>
-                        @if ($cabEmpresa->ambiente == 2)
-                            <span class="pill bg-amber-100 text-amber-900" title="As notas emitidas em modo teste não têm valor fiscal">Modo teste · sem valor fiscal</span>
-                        @else
-                            <span class="pill bg-ok-100 text-ok-800" title="Notas com valor fiscal">Produção</span>
-                        @endif
-                    </div>
+                    @if ($cabEmpresas->count() > 1)
+                        {{-- O nome é o próprio gatilho da troca: um select invisível cobre o texto e a setinha --}}
+                        <form method="POST" action="{{ route('emitentes.administrar', ['emitente' => $cabEmpresa->id]) }}" data-base="{{ route('emitentes.administrar', ['emitente' => '__ID__']) }}" class="relative inline-flex items-center gap-1 max-w-full rounded-md hover:bg-gray-100 focus-within:ring-2 focus-within:ring-brand-600">
+                            @csrf
+                            <span class="text-base font-semibold text-ink-900 truncate max-w-[420px]" title="{{ $cabEmpresa->razao_social }}">{{ $cabEmpresa->razao_social }}</span>
+                            <svg class="w-4 h-4 shrink-0 text-ink-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                            <label for="trocar-empresa" class="sr-only">Trocar de empresa</label>
+                            <select id="trocar-empresa" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    onchange="this.form.action = this.form.dataset.base.replace('__ID__', this.value); this.form.submit();">
+                                @foreach ($cabEmpresas as $e)
+                                    <option value="{{ $e->id }}" @selected($e->id === $cabEmpresa->id)>{{ $e->razao_social }}</option>
+                                @endforeach
+                            </select>
+                        </form>
+                    @else
+                        <div class="text-base font-semibold text-ink-900 truncate max-w-[420px]" title="{{ $cabEmpresa->razao_social }}">{{ $cabEmpresa->razao_social }}</div>
+                    @endif
+                    <div class="font-mono text-sm text-ink-700">{{ \App\Support\Documento::formatar($cabEmpresa->cnpj) }}</div>
                 </div>
             </div>
 
-            @if ($cabEmpresas->count() > 1)
-                <form method="POST" action="{{ route('emitentes.administrar', ['emitente' => $cabEmpresa->id]) }}" data-base="{{ route('emitentes.administrar', ['emitente' => '__ID__']) }}" class="w-full sm:w-[300px]">
-                    @csrf
-                    <label for="trocar-empresa" class="sr-only">Trocar de empresa</label>
-                    <select id="trocar-empresa" class="campo-entrada !mt-0 !py-2 font-medium"
-                            onchange="this.form.action = this.form.dataset.base.replace('__ID__', this.value); this.form.submit();">
-                        @foreach ($cabEmpresas as $e)
-                            <option value="{{ $e->id }}" @selected($e->id === $cabEmpresa->id)>{{ $e->razao_social }}</option>
-                        @endforeach
-                    </select>
-                </form>
+            @if ($cabEmpresa->ambiente == 2)
+                <span class="pill bg-amber-100 text-amber-900" title="As notas emitidas em modo teste não têm valor fiscal">Modo teste · sem valor fiscal</span>
+            @else
+                <span class="pill bg-ok-100 text-ok-800" title="Notas com valor fiscal">Produção</span>
             @endif
         </div>
     </header>

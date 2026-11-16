@@ -15,7 +15,7 @@
                     abrir(el) { const r = el.getBoundingClientRect(); this.cima = (window.innerHeight - r.bottom) < 260; this.x = Math.max(8, Math.min(r.left, window.innerWidth - 336)); this.y = this.cima ? window.innerHeight - r.top : r.bottom; this.aberto = true; } }"
                   @keydown.escape.window="aberto = false" @scroll.window="aberto = false" @resize.window="aberto = false">
                 <span class="pill {{ $nota->status->selo() }} cursor-help" tabindex="0" aria-describedby="dica-{{ $nota->id }}"
-                      @mouseenter="abrir($el)" @mouseleave="aberto = false" @focus="abrir($el)" @blur="aberto = false">{{ $nota->status->label() }}</span>
+                      @mouseenter="abrir($el)" @mouseleave="aberto = false" @focus="abrir($el)" @blur="aberto = false">{{ $dica['rotulo'] ?? $nota->status->label() }}</span>
                 <div x-show="aberto" x-cloak x-transition.opacity.duration.100ms id="dica-{{ $nota->id }}" role="tooltip"
                      :style="`position: fixed; left: ${x}px; ${cima ? 'bottom: ' + (y + 8) : 'top: ' + (y + 8)}px`"
                      class="z-[70] w-80 max-w-[calc(100vw-16px)] rounded-xl bg-ink-900 text-white shadow-[0_12px_32px_rgba(14,42,32,.35)] px-4 py-3 text-[13px] leading-snug text-left font-normal pointer-events-none">

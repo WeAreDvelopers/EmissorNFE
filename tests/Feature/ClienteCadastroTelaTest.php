@@ -284,4 +284,19 @@ class ClienteCadastroTelaTest extends TestCase
         $this->put(route('tomadores.update', $t), $this->dados(['nome' => 'Malix Novo', 'emails' => 'x@x.com']))->assertRedirect(route('tomadores.editar', $t));
         $this->assertSame('Malix Novo', $t->fresh()->nome);
     }
+
+    public function test_numero_do_endereco_aceita_numero_ou_sem_numero_e_recusa_qualquer_outra_coisa(): void
+    {
+        foreach (['A', 'abc', '--', 'sem'] as $ruim) {
+            $this->post(route('tomadores.store'), $this->dados(['numero' => $ruim]))->assertSessionHasErrors('numero');
+        }
+        $this->assertSame(0, Tomador::count());
+
+        // "sn", "s/n"… viram S/N; número com letra ou texto junto passa
+        foreach ([['sn', 'S/N'], ['s/n', 'S/N'], ['S N', 'S/N'], ['123', '123'], ['123-A', '123-A'], ['KM 12', 'KM 12']] as [$digitado, $salvo]) {
+            Tomador::query()->delete();
+            $this->post(route('tomadores.store'), $this->dados(['numero' => $digitado]))->assertSessionHasNoErrors();
+            $this->assertSame($salvo, Tomador::firstOrFail()->numero, $digitado);
+        }
+    }
 }
