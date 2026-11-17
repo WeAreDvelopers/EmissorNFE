@@ -35,6 +35,7 @@
         $grupos = ['Plataforma' => [
             ['master.visao', 'Visão geral', null, 'master.visao', 'visao'],
             ['master.clientes', 'Clientes', null, 'master.cliente*', 'clientes'],
+            ['master.erros', 'Erros da prefeitura', null, 'master.erros', 'notas'],
         ]];
     } elseif ($contaAtiva) {
         $grupos = [

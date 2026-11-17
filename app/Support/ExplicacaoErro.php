@@ -122,6 +122,8 @@ class ExplicacaoErro
             'campos'          => [],
             'reenviar_direto' => true,
             'tecnico'         => $tecnico,
+            'acao'            => 'sistema',
+            'codigos'         => ['XSD'],
         ];
     }
 
@@ -140,9 +142,6 @@ class ExplicacaoErro
             '/E0312/'                        => [['codigo_servico'], 'A prefeitura da empresa não administra o código de serviço %codigo% na data de competência desta nota. Esse código existe na lista nacional, mas cada prefeitura escolhe quais ela aceita.', 'Peça ao seu contador (ou à prefeitura) o código de serviço nacional aceito para esta atividade e corrija aqui. Para descobrir qual ela aceita, veja a lista de serviços no emissor público nacional da sua prefeitura.'],
             '/E0310/'                        => [['codigo_servico'], 'O código de serviço %codigo% não existe na lista nacional de serviços.', 'Use um código de 6 dígitos da lista nacional (ex.: 010701 para manutenção de programas de computação) ou o que seu contador indicou.'],
             '/E0316/'                        => [['codigo_nbs'], 'O código NBS informado não existe ou não combina com o serviço.', 'Corrija o código NBS ou deixe o campo vazio.'],
-            '/E0015/'                        => [['data_competencia'], 'A data de competência não é aceita.', 'Informe uma data de competência que não esteja no futuro.'],
-            '/E0080|E0188|E0206/'            => [['tomador_documento'], 'O CPF/CNPJ do cliente foi recusado.', 'Confira o documento do cliente e corrija.'],
-            '/E0247/'                        => [['tomador_email'], 'O e-mail do cliente foi recusado.', 'Corrija o e-mail ou deixe o campo vazio.'],
         ];
 
         foreach ($mapa as $padrao => [$campos, $quando, $resolver]) {
@@ -156,6 +155,11 @@ class ExplicacaoErro
                     'tecnico'         => $tecnico,
                 ];
             }
+        }
+
+        // Catálogo de erros (Anexo I): ação, texto e destino de cada código
+        if ($explicacao = CatalogoErros::para($tecnico, $nota)) {
+            return $explicacao;
         }
 
         return [

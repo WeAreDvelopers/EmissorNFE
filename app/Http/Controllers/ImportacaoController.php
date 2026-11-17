@@ -248,8 +248,9 @@ class ImportacaoController extends Controller
     public function reenviar(NotaFiscal $nota, EnvioDeNotas $envio)
     {
         $this->authorize('emitir');
-        $cadastro = $nota->status === StatusNota::Invalida && str_starts_with((string) (((array) $nota->erros)[0] ?? ''), EnvioDeNotas::CADASTRO_INCOMPLETO);
-        abort_unless($nota->status === StatusNota::Falhou || $cadastro, 422, 'Só notas com falha técnica ou cadastro de cliente incompleto podem ser reenviadas.');
+        // Reenvio direto: falha técnica, cadastro do cliente incompleto ou erro que se corrige fora da nota (cadastro da empresa/cliente, prefeitura, sistema)
+        $reenviavel = in_array($nota->status, [StatusNota::Falhou, StatusNota::Invalida, StatusNota::Rejeitada], true) && \App\Support\ExplicacaoErro::para($nota)['reenviar_direto'];
+        abort_unless($reenviavel, 422, 'Esta nota precisa de correção antes de ser reenviada.');
 
         $envio->enviarNota($nota);
 

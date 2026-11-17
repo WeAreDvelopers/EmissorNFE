@@ -129,6 +129,7 @@ class EmitirNfseJob implements ShouldQueue
     {
         $nota->update(['status' => StatusNota::Rejeitada, 'erros' => $erros]);
         $creditos->estornar($nota);
+        \App\Support\CatalogoErros::registrar($erros, $nota->id);
     }
 
     private function marcarEmitida(NotaFiscal $nota, array $retorno, CarteiraService $creditos): void

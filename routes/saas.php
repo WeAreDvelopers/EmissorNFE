@@ -128,6 +128,7 @@ Route::middleware(['auth', 'conta'])->group(function () {
 
     // Notas que precisam de ação, correção e reenvio
     Route::get('/pendencias', [NotaController::class, 'pendencias'])->name('pendencias');
+    Route::post('/pendencias/reenviar-lote', [NotaController::class, 'reenviarLote'])->name('pendencias.reenviar-lote');
     Route::patch('/notas/{nota}', [NotaController::class, 'corrigir'])->name('notas.corrigir');
     Route::delete('/notas/{nota}', [NotaController::class, 'excluir'])->name('notas.excluir');
     Route::post('/notas/{nota}/duplicidade/aprovar', [NotaController::class, 'aprovarDuplicidade'])->name('notas.duplicidade.aprovar');

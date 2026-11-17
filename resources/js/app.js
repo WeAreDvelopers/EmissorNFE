@@ -202,4 +202,18 @@ Alpine.data('enderecoCep', (url) => ({
     },
 }));
 
+// Link de correção ("?destacar=campo"): rola até o campo, destaca e põe o foco nele
+window.addEventListener('load', () => {
+    const alvo = new URLSearchParams(location.search).get('destacar');
+    if (!alvo) return;
+    setTimeout(() => {
+        const el = document.getElementById(alvo) || document.querySelector(`[name="${alvo.replace(/"/g, '')}"]`);
+        if (!el) return;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        el.classList.add('destaque-campo');
+        if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+        setTimeout(() => el.classList.remove('destaque-campo'), 8000);
+    }, 400);
+});
+
 Alpine.start();

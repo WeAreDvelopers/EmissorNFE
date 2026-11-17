@@ -15,6 +15,17 @@
             <p class="mt-1 text-[15px] text-ink-700">Notas de todas as importações que dependem de uma ação sua.@cobranca Nenhuma delas gastou crédito.@endcobranca</p>
         </div>
 
+        @can('emitir')
+            @foreach ($lotes as $l)
+                <form method="POST" action="{{ route('pendencias.reenviar-lote') }}" class="rounded-xl bg-info-50 border border-info-200 px-4 py-3 text-sm text-info-900 flex flex-wrap items-center gap-3" data-carregando="Reenviando…">
+                    @csrf
+                    <input type="hidden" name="codigo" value="{{ $l['codigo'] }}">
+                    <span class="flex-1 min-w-[240px]"><b>{{ $l['qtd'] }} notas</b> estão paradas pelo mesmo motivo: {{ $l['titulo'] }}. Se você já corrigiu, reenvie todas de uma vez.</span>
+                    <button class="btn btn-primary btn-sm">Reenviar as {{ $l['qtd'] }}</button>
+                </form>
+            @endforeach
+        @endcan
+
         <div class="flex flex-wrap items-start gap-5">
             @php $versao = md5(json_encode($contagem).'|'.$grupo.'|'.($selecionada?->id).'|'.$notas->getCollection()->map(fn ($n) => $n->id.$n->status->value.$n->updated_at?->timestamp)->implode(',')); @endphp
             <section class="card flex-[999_1_620px] min-w-0 pt-4 pb-1.5" data-regiao="lista" data-versao="{{ $versao }}">

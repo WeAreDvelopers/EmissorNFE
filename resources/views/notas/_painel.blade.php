@@ -20,6 +20,26 @@
         <div class="mt-2"><b>Como resolver:</b> {{ $ex['como_resolver'] }}</div>
     </div>
 
+    @if (! empty($ex['destino']) || ! empty($ex['contador']) || ! empty($ex['suporte']))
+        <div class="space-y-2.5">
+            @if (! empty($ex['destino']))
+                @can($ex['destino']['permissao'])
+                    <a href="{{ $ex['destino']['url'] }}" class="btn btn-lg w-full no-underline">{{ $ex['destino']['rotulo'] }} →</a>
+                @endcan
+            @endif
+            @foreach ([['contador', 'Copiar mensagem para o contador'], ['suporte', 'Copiar mensagem para o suporte']] as [$chave, $rotuloCopiar])
+                @if (! empty($ex[$chave]))
+                    <div x-data="{ copiado: false }">
+                        <button type="button" class="btn w-full"
+                                @click="navigator.clipboard.writeText(@js($ex[$chave])).then(() => { copiado = true; setTimeout(() => copiado = false, 2500) })">
+                            <span x-show="!copiado">{{ $rotuloCopiar }}</span><span x-show="copiado" x-cloak>Copiado. É só colar na conversa.</span>
+                        </button>
+                    </div>
+                @endif
+            @endforeach
+        </div>
+    @endif
+
     @can('emitir')
         @if ($ex['reenviar_direto'])
             <form method="POST" action="{{ route('notas.reenviar', $nota) }}" data-ajax data-ajax-texto="Reenviando…" data-fechar-painel>@csrf<button class="btn btn-primary btn-lg w-full">Reenviar</button></form>

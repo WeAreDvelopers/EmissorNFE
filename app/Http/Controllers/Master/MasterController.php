@@ -156,6 +156,22 @@ class MasterController extends Controller
 
     // ------------------------------------------------------------------ clientes
 
+    /** Erros da prefeitura que já apareceram, os sem tradução primeiro: o que falta no catálogo (resources/data/erros-nfse.php). */
+    public function erros(Request $request)
+    {
+        $so = $request->boolean('sem_traducao');
+        $erros = \Illuminate\Support\Facades\DB::table('erros_nfse_vistos')
+            ->when($so, fn ($q) => $q->where('sem_traducao', true))
+            ->orderByDesc('sem_traducao')->orderByDesc('ocorrencias')->limit(300)->get()
+            ->map(function ($e) {
+                $e->entrada = \App\Support\CatalogoErros::entrada($e->codigo);
+
+                return $e;
+            });
+
+        return view('master.erros', compact('erros', 'so'));
+    }
+
     public function clientes(Request $request)
     {
         $mes = now()->startOfMonth();

@@ -194,7 +194,7 @@
                                     <option value="">UF</option>
                                     @foreach (['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] as $sigla)<option>{{ $sigla }}</option>@endforeach
                                 </select>
-                                <input list="lista-cidades" x-model="cidadeNome" placeholder="Digite o nome da cidade" @change="escolherCidade($event.target.value)" class="campo-entrada !mt-0" :disabled="!cidades.length" aria-label="Cidade">
+                                <input id="cidade-emitente" list="lista-cidades" x-model="cidadeNome" placeholder="Digite o nome da cidade" @change="escolherCidade($event.target.value)" class="campo-entrada !mt-0" :disabled="!cidades.length" aria-label="Cidade">
                                 <datalist id="lista-cidades"><template x-for="c in cidades" :key="c.id"><option :value="c.nome"></option></template></datalist>
                             </div>
                             <p class="campo-ajuda"><span x-show="cidade" x-text="cidade"></span><span x-show="!cidade">Escolha o estado e depois a cidade.</span> · código IBGE <b class="font-mono" x-text="municipio || '—'"></b></p>
@@ -341,7 +341,7 @@
                     <h2 class="text-lg font-semibold">4. Emissão</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <x-busca-servico class="sm:col-span-2" nome="codigo_servico_padrao" rotulo="Código de serviço padrão (opcional)" :valor="old('codigo_servico_padrao', $emitente->codigo_servico_padrao)" ajuda="Usado nas linhas da planilha sem código de serviço. Digite o código ou parte do nome da atividade (ex.: manutenção de programas) e escolha na lista." />
-                        <div class="sm:col-span-2 space-y-3" x-show="op != 2">
+                        <div id="lista-codigos" class="sm:col-span-2 space-y-3" x-show="op != 2">
                             <div>
                                 <h3 class="text-sm font-semibold">Lista de códigos complementares da prefeitura <span class="text-red-600" aria-hidden="true">*</span></h3>
                                 <p class="campo-ajuda">Obrigatório, exceto para MEI: cadastre ao menos um. É o número de 3 dígitos que a prefeitura acrescenta ao código do serviço (no código 01.07.01.001, é o 001), com a descrição como no Emissor Nacional. O primeiro da lista é o padrão das notas; os demais aparecem como opções ao emitir uma nota completa. Na dúvida, pergunte à contabilidade.</p>

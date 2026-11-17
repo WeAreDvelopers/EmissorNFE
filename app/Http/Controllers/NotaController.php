@@ -35,7 +35,34 @@ class NotaController extends Controller
             ? NotaFiscal::with('emitente')->find($request->integer('nota'))
             : null;
 
-        return view('notas.pendencias', compact('notas', 'grupo', 'contagem', 'selecionada'));
+        // Notas recusadas pelo mesmo motivo que se resolve fora da nota (cadastro, prefeitura, sistema): reenvio em lote depois de corrigir
+        $lotes = NotaFiscal::where('status', StatusNota::Rejeitada)->limit(500)->get()
+            ->map(fn (NotaFiscal $n) => ExplicacaoErro::para($n))
+            ->filter(fn ($e) => ! empty($e['reenviar_direto']) && ! empty($e['codigos']))
+            ->groupBy(fn ($e) => $e['codigos'][0])
+            ->map(fn ($g, $codigo) => ['codigo' => $codigo, 'titulo' => $g->first()['titulo'], 'qtd' => $g->count()])
+            ->filter(fn ($l) => $l['qtd'] >= 2)->values();
+
+        return view('notas.pendencias', compact('notas', 'grupo', 'contagem', 'selecionada', 'lotes'));
+    }
+
+    /** Reenvia de uma vez as notas recusadas por um mesmo erro (depois de corrigir o cadastro, por exemplo). */
+    public function reenviarLote(Request $request, EnvioDeNotas $envio)
+    {
+        $this->authorize('emitir');
+        $codigo = (string) $request->input('codigo');
+        abort_unless(preg_match('/^(E\d{4}|XSD)$/', $codigo) === 1, 422);
+
+        $qtd = 0;
+        NotaFiscal::with('emitente')->where('status', StatusNota::Rejeitada)->eachById(function (NotaFiscal $nota) use ($codigo, $envio, &$qtd) {
+            $e = ExplicacaoErro::para($nota);
+            if (! empty($e['reenviar_direto']) && in_array($codigo, $e['codigos'] ?? [], true)) {
+                $envio->enviarNota($nota);
+                $qtd++;
+            }
+        });
+
+        return back()->with('ok', $qtd ? "{$qtd} notas reenviadas." : 'Nenhuma nota para reenviar.');
     }
 
     /**
