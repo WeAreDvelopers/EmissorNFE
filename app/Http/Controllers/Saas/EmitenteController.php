@@ -92,7 +92,7 @@ class EmitenteController extends Controller
         ], ['proximo.required' => 'Informe o próximo número.', 'proximo.integer' => 'O próximo número precisa ser um número inteiro.', 'proximo.min' => 'O próximo número precisa ser 1 ou maior.']);
 
         $numeracao->ajustar($emitente, (int) $dados['ambiente'], (int) $dados['proximo'], $request->user()?->id);
-        \App\Models\Auditoria::registrar('numeracao_ajustada', "Próximo número da DPS de {$emitente->razao_social} ajustado para {$dados['proximo']} (".($dados['ambiente'] == 1 ? 'produção' : 'teste').').', ['emitente' => $emitente->id, 'serie' => $emitente->serie_dps, 'proximo' => (int) $dados['proximo']]);
+        \App\Models\Auditoria::registrar('numeracao_ajustada', "Próximo número da DPS de {$emitente->razao_social} ajustado para {$dados['proximo']} (".($dados['ambiente'] == 1 ? 'produção' : 'teste').').', ['emitente' => $emitente->id, 'serie' => $emitente->serie_dps, 'proximo' => (int) $dados['proximo']], emitenteId: $emitente->id);
 
         return back()->with('ok', 'Numeração ajustada. A próxima DPS será a nº '.number_format((int) $dados['proximo'], 0, ',', '.').'.');
     }
@@ -350,7 +350,7 @@ class EmitenteController extends Controller
             ]);
         }
         if ($novo || $mudancas) {
-            \App\Models\Auditoria::registrar($novo ? 'empresa_criada' : 'empresa_alterada', ($novo ? 'Empresa cadastrada: ' : 'Empresa alterada: ').$emitente->razao_social.'.', $novo ? ['cnpj' => $emitente->cnpj, 'ambiente' => (int) $emitente->ambiente] : $mudancas);
+            \App\Models\Auditoria::registrar($novo ? 'empresa_criada' : 'empresa_alterada', ($novo ? 'Empresa cadastrada: ' : 'Empresa alterada: ').$emitente->razao_social.'.', $novo ? ['cnpj' => $emitente->cnpj, 'ambiente' => (int) $emitente->ambiente] : $mudancas, emitenteId: $emitente->id);
         }
 
         if ($logoAntiga && ($novaLogo || $request->boolean('remover_logo'))) {

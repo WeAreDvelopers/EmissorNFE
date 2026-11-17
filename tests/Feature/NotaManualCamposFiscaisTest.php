@@ -131,7 +131,7 @@ class NotaManualCamposFiscaisTest extends TestCase
 
     public function test_sem_o_botao_a_nota_sai_so_com_os_padroes_da_empresa(): void
     {
-        $this->post(route('notas.manual.store'), $this->dados(['confirmo' => '1']))->assertRedirect(route('notas.index'));
+        $this->post(route('notas.manual.store'), $this->dados(['confirmo' => '1']))->assertRedirectContains('/resultado');
 
         $this->assertNull(NotaFiscal::firstOrFail()->parametros_dps);
     }
@@ -165,14 +165,14 @@ class NotaManualCamposFiscaisTest extends TestCase
             ->assertSee('Código complementar municipal')->assertSee('10,50%')
             ->assertSee('name="cod_trib_mun"', false)->assertDontSee('Regime especial de tributação:');
 
-        $this->emitirCom($ajustes, ['cod_trib_mun' => '002'])->assertRedirect(route('notas.index'));
+        $this->emitirCom($ajustes, ['cod_trib_mun' => '002'])->assertRedirectContains('/resultado');
         $this->assertEquals(['codigo_tributacao_municipal' => '002', 'tributos_aprox' => ['federal' => 10.5, 'estadual' => 0.0, 'municipal' => 2.7]], NotaFiscal::firstOrFail()->parametros_dps);
         $this->assertSame('001', $this->emitente->fresh()->codigo_tributacao_municipal);   // o cadastro da empresa não muda
     }
 
     public function test_botao_aberto_sem_nenhuma_mudanca_nao_grava_ajustes(): void
     {
-        $this->emitirCom($this->aj(['mun_prestacao' => 'São Paulo', 'uf_prestacao' => 'SP']))->assertRedirect(route('notas.index'));
+        $this->emitirCom($this->aj(['mun_prestacao' => 'São Paulo', 'uf_prestacao' => 'SP']))->assertRedirectContains('/resultado');
 
         $this->assertNull(NotaFiscal::firstOrFail()->parametros_dps);
     }
@@ -193,7 +193,7 @@ class NotaManualCamposFiscaisTest extends TestCase
             'documento' => '19566539000130', 'nome' => 'Malix Automóveis Ltda', 'logradouro' => 'Avenida Paulista', 'numero' => '1578', 'bairro' => 'Bela Vista',
             'cep' => '01310100', 'municipio' => 'São Paulo', 'uf' => 'SP', 'codigo_municipio' => '3550308',
         ]));
-        $this->emitirCom($this->aj(['retencao' => '2']))->assertRedirect(route('notas.index'));
+        $this->emitirCom($this->aj(['retencao' => '2']))->assertRedirectContains('/resultado');
 
         $this->assertSame(['retencao_issqn' => 2], NotaFiscal::firstOrFail()->parametros_dps);
     }
@@ -283,7 +283,7 @@ class NotaManualCamposFiscaisTest extends TestCase
     {
         $this->emitente = $this->empresa(['cnpj' => '07445371000126', 'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1, 'aliquota_simples' => 6, 'tributos_aprox' => null]);
         // campos federais enviados por engano são ignorados: nada é gravado e a DPS segue sem tribFed
-        $this->emitirCom($this->aj(['aliquota_simples' => '6', 'pis_cst' => '01', 'ret_irrf' => '5']))->assertRedirect(route('notas.index'));
+        $this->emitirCom($this->aj(['aliquota_simples' => '6', 'pis_cst' => '01', 'ret_irrf' => '5']))->assertRedirectContains('/resultado');
 
         $this->assertNull(NotaFiscal::firstOrFail()->parametros_dps);
     }
@@ -358,7 +358,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $this->conferir($this->aj(['modo_tributos_aprox' => 'simples']))->assertSessionHasErrors('ajustes.modo_tributos_aprox');   // E0713
 
         $this->conferir($this->aj(['modo_tributos_aprox' => 'monetario', 'val_federal' => '900']))->assertSessionHasErrors('ajustes.val_federal');   // E0702: no máximo o valor do serviço
-        $this->emitirCom($this->aj(['modo_tributos_aprox' => 'monetario', 'val_federal' => '60,83', 'val_estadual' => '', 'val_municipal' => '12,22']))->assertRedirect(route('notas.index'));
+        $this->emitirCom($this->aj(['modo_tributos_aprox' => 'monetario', 'val_federal' => '60,83', 'val_estadual' => '', 'val_municipal' => '12,22']))->assertRedirectContains('/resultado');
         $this->assertEquals(['modo_tributos_aprox' => 'monetario', 'valores_tributos' => ['federal' => 60.83, 'estadual' => 0.0, 'municipal' => 12.22]], NotaFiscal::firstOrFail()->parametros_dps);
 
         // monetário sem digitar nada: sem ajuste de valores, a DPS calcula pelo percentual da empresa
@@ -380,7 +380,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $this->assertStringNotContainsString('name="ajustes[regime_especial]"', $html);   // cinza no portal: vem do cadastro da empresa
         $this->assertStringContainsString('Regime especial de tributa', $html);           // aparece junto do prestador (acentos escapados no JS)
 
-        $this->emitirCom($this->aj())->assertRedirect(route('notas.index'));              // e a nota sai sem ele no formulário
+        $this->emitirCom($this->aj())->assertRedirectContains('/resultado');              // e a nota sai sem ele no formulário
         $this->assertNull(NotaFiscal::firstOrFail()->parametros_dps);
     }
 
@@ -393,7 +393,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $this->assertSame([], (new ValidadorXsd)->erros($xml));
 
         // na tela o painel já vem com o padrão da empresa e só grava o que mudar
-        $this->emitirCom($this->aj(['pis_cst' => '01', 'pis_ret' => '2', 'pis_aliq_pis' => '0,65', 'pis_aliq_cofins' => '3']))->assertRedirect(route('notas.index'));
+        $this->emitirCom($this->aj(['pis_cst' => '01', 'pis_ret' => '2', 'pis_aliq_pis' => '0,65', 'pis_aliq_cofins' => '3']))->assertRedirectContains('/resultado');
         $this->assertNull(NotaFiscal::firstOrFail()->parametros_dps);
 
         NotaFiscal::query()->delete();
@@ -579,7 +579,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         $this->get(route('notas.manual'))->assertOk()->assertSee('deducao_tipo', false)->assertSee('percentual', false);
 
         // sem mexer, a nota sai com o padrão da empresa e não grava ajuste
-        $this->emitirCom($this->aj(['deducao_tipo' => 'percentual', 'deducao_valor' => '10']))->assertRedirect(route('notas.index'));
+        $this->emitirCom($this->aj(['deducao_tipo' => 'percentual', 'deducao_valor' => '10']))->assertRedirectContains('/resultado');
         $this->assertNull(NotaFiscal::firstOrFail()->parametros_dps);
 
         // a nota decide não aplicar a dedução da empresa
@@ -591,7 +591,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         // empresa imune: a nota pode voltar a tributável, gravando só isso
         NotaFiscal::query()->delete();
         $this->emitente = $this->empresa(['cnpj' => '11222333000181', 'trib_issqn' => 2, 'tp_imunidade' => 2]);
-        $this->emitirCom($this->aj(['trib_issqn' => '2', 'tp_imunidade' => '2']))->assertRedirect(route('notas.index'));
+        $this->emitirCom($this->aj(['trib_issqn' => '2', 'tp_imunidade' => '2']))->assertRedirectContains('/resultado');
         $this->assertNull(NotaFiscal::firstOrFail()->parametros_dps);
         NotaFiscal::query()->delete();
         $this->emitirCom($this->aj(['trib_issqn' => '1']));
@@ -697,7 +697,7 @@ class NotaManualCamposFiscaisTest extends TestCase
         // informado: aparece na conferência e vai na nota, e o contador da série acompanha
         $dps = ['dps_serie' => '7', 'dps_numero' => '150'];
         $this->post(route('notas.manual.conferir'), $this->dados($dps))->assertOk()->assertSee('00007 · 150');
-        $this->post(route('notas.manual.store'), $this->dados($dps + ['confirmo' => '1']))->assertRedirect(route('notas.index'));
+        $this->post(route('notas.manual.store'), $this->dados($dps + ['confirmo' => '1']))->assertRedirectContains('/resultado');
         $nota = NotaFiscal::firstOrFail();
         $this->assertSame('00007', $nota->serie_dps);
         $this->assertSame(150, (int) $nota->numero_dps);

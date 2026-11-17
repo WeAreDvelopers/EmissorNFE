@@ -17,11 +17,11 @@
 
         @can('emitir')
             @foreach ($lotes as $l)
-                <form method="POST" action="{{ route('pendencias.reenviar-lote') }}" class="rounded-xl bg-info-50 border border-info-200 px-4 py-3 text-sm text-info-900 flex flex-wrap items-center gap-3" data-carregando="Reenviando…">
+                <form method="POST" action="{{ route('pendencias.reenviar-lote') }}" class="rounded-xl bg-perigo-50 border border-perigo-200 px-4 py-3.5 text-sm text-perigo-800 flex flex-wrap items-center gap-3" role="alert" data-carregando="Reenviando…">
                     @csrf
                     <input type="hidden" name="codigo" value="{{ $l['codigo'] }}">
                     <span class="flex-1 min-w-[240px]"><b>{{ $l['qtd'] }} notas</b> estão paradas pelo mesmo motivo: {{ $l['titulo'] }}. Se você já corrigiu, reenvie todas de uma vez.</span>
-                    <button class="btn btn-primary btn-sm">Reenviar as {{ $l['qtd'] }}</button>
+                    <button class="btn btn-sm !bg-perigo-600 !border-perigo-600 !text-white hover:!bg-perigo-700">Reenviar as {{ $l['qtd'] }}</button>
                 </form>
             @endforeach
         @endcan

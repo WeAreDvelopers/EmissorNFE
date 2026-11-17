@@ -57,16 +57,16 @@
                 <div class="tabela-linha px-5 sm:px-6 py-3.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_104px_150px_112px] gap-x-4 gap-y-1.5 items-center text-sm">
                     <div class="min-w-0">
                         <div class="font-medium truncate">{{ $n->tomador_rotulo }}</div>
-                        <div class="text-xs text-ink-600 truncate">@unless ($n->sem_tomador)<span class="font-mono">{{ \App\Support\Documento::formatar($n->tomador_documento) }}</span> · @endunless{{ $n->emitente?->razao_social }}</div>
+                        <div class="text-xs text-ink-600 truncate">@if ($n->sem_tomador)Sem dados cadastrais.@else<span class="font-mono">{{ \App\Support\Documento::formatar($n->tomador_documento) }}</span> · {{ $n->emitente?->razao_social }}@endif</div>
                     </div>
                     <div class="text-xs text-ink-600">
-                        Competência {{ $n->data_competencia?->format('d/m/Y') }}
+                        {{ $n->data_competencia?->format('d/m/Y') }}
                         @if ($n->importacao)<div><a href="{{ route('importacoes.show', $n->importacao) }}" class="link text-xs">{{ \Illuminate\Support\Str::limit($n->importacao->arquivo_nome, 26) }}</a></div>@endif
                     </div>
                     <div class="font-mono sm:text-right">R$ {{ number_format($n->valor, 2, ',', '.') }}</div>
                     <div>
                         @php $dica = $n->status->grupo() === 'atencao' ? \App\Support\ExplicacaoErro::para($n) : null; @endphp
-                        <span class="pill {{ $n->status->selo() }}" @if ($dica) title="{{ $dica['titulo'] }}: {{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 220) }}" @endif>{{ $dica['rotulo'] ?? $n->status->label() }}</span>
+                        <x-selo-situacao :nota="$n" :dica="$dica" />
                         @if (in_array($n->status, [\App\Enums\StatusNota::Emitida, \App\Enums\StatusNota::Cancelada], true) && $n->numero_nfse)<div class="text-[13px] mt-1">NFS-e nº <b class="font-mono">{{ $n->numero_nfse }}</b></div>@endif
                         @if ($dica)<div class="text-xs text-warn-900 mt-1 leading-snug">{{ \Illuminate\Support\Str::limit($dica['o_que_aconteceu'], 90) }}</div>@endif
                         @if ($n->status === \App\Enums\StatusNota::Cancelada)<div class="text-xs text-ink-600 mt-0.5">Cancelada em {{ $n->cancelada_em?->timezone('America/Sao_Paulo')->format('d/m/Y') }}</div>@endif

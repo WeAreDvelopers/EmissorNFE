@@ -149,7 +149,7 @@ class AuditoriaTest extends TestCase
 
     public function test_so_o_dono_ve_a_auditoria_e_so_a_da_propria_conta(): void
     {
-        Auditoria::registrar('empresa_alterada', 'Mudança visível do dono', ['serie_dps' => ['de' => '1', 'para' => '2']], $this->conta->id);
+        Auditoria::registrar('empresa_alterada', 'Mudança visível do dono', ['serie_dps' => ['de' => '1', 'para' => '2']], $this->conta->id, $this->emitente->id);
         $outra = Conta::create(['revenda_id' => Revenda::first()->id, 'nome' => 'Profitcar', 'documento' => '11444777000161', 'email_financeiro' => 'p@x.com']);
         Auditoria::registrar('empresa_alterada', 'Mudança de outra conta', [], $outra->id);
 
@@ -164,8 +164,8 @@ class AuditoriaTest extends TestCase
 
     public function test_filtro_por_acao_e_texto(): void
     {
-        Auditoria::registrar('empresa_alterada', 'Alteração A', [], $this->conta->id);
-        Auditoria::registrar('nota_excluida', 'Exclusão B', [], $this->conta->id);
+        Auditoria::registrar('empresa_alterada', 'Alteração A', [], $this->conta->id, $this->emitente->id);
+        Auditoria::registrar('nota_excluida', 'Exclusão B', [], $this->conta->id, $this->emitente->id);
 
         $this->actingAs($this->dono)->get(route('auditoria.index', ['acao' => 'nota_excluida']))->assertOk()->assertSee('Exclusão B')->assertDontSee('Alteração A');
         $this->get(route('auditoria.index', ['q' => 'Alteração']))->assertOk()->assertSee('Alteração A')->assertDontSee('Exclusão B');
@@ -177,5 +177,49 @@ class AuditoriaTest extends TestCase
 
         $this->expectException(\LogicException::class);
         Auditoria::semIsolamento()->firstOrFail()->delete();
+    }
+
+    // ---------- filtros: empresa selecionada, usuário, período e total ----------
+
+    public function test_auditoria_respeita_a_empresa_selecionada_e_mostra_os_registros_gerais_da_conta(): void
+    {
+        $outraEmpresa = app(ContaAtual::class)->como($this->conta->id, fn () => Emitente::create([
+            'cnpj' => '00000000000191', 'razao_social' => 'Outra Empresa Ltda', 'codigo_municipio' => '3550308', 'op_simples_nacional' => 3, 'regime_apuracao_sn' => 1,
+            'regime_especial' => 0, 'aliquota_simples' => 6, 'serie_dps' => '00001', 'ambiente' => 2,
+        ]));
+        Auditoria::registrar('empresa_alterada', 'Registro da empresa do topo', [], $this->conta->id, $this->emitente->id);
+        Auditoria::registrar('empresa_alterada', 'Registro da outra empresa', [], $this->conta->id, $outraEmpresa->id);
+        Auditoria::registrar('usuario_convidado', 'Convite geral da conta', [], $this->conta->id);
+
+        $this->dono->forceFill(['emitente_atual_id' => $this->emitente->id])->save();
+        $this->actingAs($this->dono)->get(route('auditoria.index'))->assertOk()
+            ->assertSee('Registro da empresa do topo')->assertSee('Convite geral da conta')->assertDontSee('Registro da outra empresa')
+            ->assertSee('Moneycar Ltda');
+
+        $this->dono->forceFill(['emitente_atual_id' => $outraEmpresa->id])->save();
+        $this->get(route('auditoria.index'))->assertSee('Registro da outra empresa')->assertSee('Convite geral da conta')->assertDontSee('Registro da empresa do topo');
+    }
+
+    public function test_filtro_por_usuario_e_por_periodo_e_total_no_titulo(): void
+    {
+        $outro = User::factory()->create(['name' => 'Maria Operadora']);
+        $this->conta->usuarios()->attach($outro->id, ['papel' => Papel::Operador->value]);
+
+        $this->actingAs($this->dono);
+        Auditoria::registrar('empresa_alterada', 'Feito pelo dono', [], $this->conta->id, $this->emitente->id);
+        $this->actingAs($outro);
+        Auditoria::registrar('nota_excluida', 'Feito pela Maria', [], $this->conta->id, $this->emitente->id);
+        \Illuminate\Support\Facades\DB::table('auditoria')->where('descricao', 'Feito pelo dono')->update(['created_at' => '2026-10-01 15:00:00']);
+        $this->actingAs($this->dono);
+
+        // total no título
+        $this->get(route('auditoria.index'))->assertOk()->assertSee('(2 lançamentos)');
+
+        // usuário
+        $this->get(route('auditoria.index', ['usuario' => $outro->id]))->assertSee('Feito pela Maria')->assertDontSee('Feito pelo dono')->assertSee('(1 lançamento)');
+
+        // período (inclusivo)
+        $this->get(route('auditoria.index', ['de' => '2026-10-01', 'ate' => '2026-10-01']))->assertSee('Feito pelo dono')->assertDontSee('Feito pela Maria');
+        $this->get(route('auditoria.index', ['de' => '2026-10-02']))->assertSee('Feito pela Maria')->assertDontSee('Feito pelo dono');
     }
 }

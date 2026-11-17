@@ -137,6 +137,8 @@ Route::middleware(['auth', 'conta'])->group(function () {
     Route::get('/notas/{nota}/xml', [NotaDocumentoController::class, 'xml'])->name('notas.xml');
     Route::get('/notas/{nota}/danfse', [NotaDocumentoController::class, 'danfse'])->name('notas.danfse');
     Route::post('/notas/{nota}/email', [NotaDocumentoController::class, 'email'])->name('notas.email');
+    Route::get('/notas/{nota}/resultado', [\App\Http\Controllers\NotaManualController::class, 'resultado'])->name('notas.resultado');
+    Route::get('/notas/{nota}/situacao', [\App\Http\Controllers\NotaManualController::class, 'situacao'])->name('notas.situacao');
     Route::post('/notas/{nota}/reenviar', [ImportacaoController::class, 'reenviar'])->name('notas.reenviar');
 });
 

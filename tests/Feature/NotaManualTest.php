@@ -67,7 +67,7 @@ class NotaManualTest extends TestCase
     public function test_emite_com_os_padroes_e_cria_o_cliente(): void
     {
         $this->actingAs($this->user)->post(route('notas.manual.store'), $this->dados())
-            ->assertRedirect(route('notas.index'))->assertSessionHasNoErrors();
+            ->assertRedirectContains('/resultado')->assertSessionHasNoErrors();
 
         $nota = NotaFiscal::firstOrFail();
         $this->assertSame('web', $nota->origem);
@@ -177,7 +177,7 @@ class NotaManualTest extends TestCase
         $this->assertSame(1, NotaFiscal::count());
 
         $this->actingAs($this->user)->post(route('notas.manual.store'), $this->dados(['confirmar_duplicidade' => '1']))
-            ->assertRedirect(route('notas.index'));
+            ->assertRedirectContains('/resultado');
         $this->assertSame(2, NotaFiscal::count());
     }
 

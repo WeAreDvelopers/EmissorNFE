@@ -246,4 +246,51 @@ class CatalogoErrosTest extends TestCase
         $this->assertTrue((bool) DB::table('erros_nfse_vistos')->where('codigo', 'E9999')->value('sem_traducao'));
         $this->assertSame(['E9999'], CatalogoErros::desconhecidos([self::E0116, 'E9999 novo']));
     }
+
+    public function test_lista_de_notas_tambem_mostra_o_tooltip_com_o_que_fazer(): void
+    {
+        $nota = $this->recusar($this->lote(1)->notas()->firstOrFail(), self::E0116);
+
+        $this->actingAs($this->user)->get(route('notas.index'))->assertOk()
+            ->assertSee('role="tooltip"', false)->assertSee('Falta a inscrição municipal da empresa')->assertSee('O que fazer:')
+            ->assertSee('Ajuste no cadastro da empresa');
+    }
+
+    public function test_card_do_reenvio_em_lote_e_vermelho(): void
+    {
+        $notas = $this->lote(2)->notas()->get();
+        $this->recusar($notas[0], self::E0116);
+        $this->recusar($notas[1], self::E0116);
+
+        $this->actingAs($this->user)->get(route('pendencias'))->assertSee('bg-perigo-50', false)->assertSee('Reenviar as 2');
+    }
+
+    public function test_pop_up_de_resultado_da_emissao(): void
+    {
+        $nota = $this->lote(1)->notas()->firstOrFail();
+
+        // ainda enviando: o pop-up acompanha
+        $nota->update(['status' => StatusNota::Pendente]);
+        $this->actingAs($this->user)->get(route('notas.resultado', $nota))->assertOk()->assertSee('Acompanhando o envio');
+        $this->getJson(route('notas.situacao', $nota))->assertJson(['fim' => false, 'resultado' => 'enviando']);
+
+        // deu certo
+        $nota->update(['status' => StatusNota::Emitida, 'numero_nfse' => '123']);
+        $this->getJson(route('notas.situacao', $nota))->assertJson(['fim' => true, 'resultado' => 'ok', 'titulo' => 'Nota Emitida !!']);
+
+        // deu erro: leva para ver e corrigir
+        $this->recusar($nota, self::E0116);
+        $this->getJson(route('notas.situacao', $nota))->assertJson([
+            'fim' => true, 'resultado' => 'erro', 'titulo' => 'Nota Rejeitada !! Ver erro e corrigir.', 'corrigir' => route('pendencias', ['nota' => $nota->id]),
+        ]);
+    }
+
+    public function test_nota_sem_destinatario_mostra_sem_dados_cadastrais_e_nao_o_nome_da_empresa(): void
+    {
+        $nota = $this->lote(1)->notas()->firstOrFail();
+        $nota->update(['sem_tomador' => true, 'tomador_documento' => '', 'tomador_nome' => '', 'status' => StatusNota::Emitida]);
+
+        $this->actingAs($this->user)->get(route('notas.index'))->assertOk()
+            ->assertSee('Sem dados cadastrais.</div>', false);   // sem o nome da empresa na linha de baixo
+    }
 }

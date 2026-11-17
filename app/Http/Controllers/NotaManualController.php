@@ -216,7 +216,46 @@ class NotaManualController extends Controller
             ? 'Nota criada. Ela vai para a fila assim que houver crédito.'
             : 'Nota enviada para emissão. O resultado aparece em Notas.';
 
-        return redirect()->route('notas.index')->with('ok', $msg);
+        // Pop-up com o resultado (emitida ou rejeitada) antes de seguir para a lista de notas
+        return redirect()->route('notas.resultado', $nota);
+    }
+
+    /** Tela do pop-up: acompanha a nota até ela ser emitida ou recusada e só então leva para Notas. */
+    public function resultado(NotaFiscal $nota)
+    {
+        $this->authorize('consultar');
+
+        return view('notas.resultado', ['nota' => $nota, 'estado' => $this->estadoDaEmissao($nota)]);
+    }
+
+    public function situacao(NotaFiscal $nota)
+    {
+        $this->authorize('consultar');
+
+        return response()->json($this->estadoDaEmissao($nota));
+    }
+
+    /** Texto provisório do pop-up: "Nota Emitida !!" / "Nota Rejeitada !! Ver erro e corrigir." */
+    private function estadoDaEmissao(NotaFiscal $nota): array
+    {
+        $nota->refresh();
+
+        if ($nota->status === StatusNota::Emitida) {
+            return ['fim' => true, 'resultado' => 'ok', 'titulo' => 'Nota Emitida !!',
+                'texto' => 'A NFS-e'.($nota->numero_nfse ? " nº {$nota->numero_nfse}" : '').' foi emitida'.($nota->emitente?->ehHomologacao() ? ' (modo teste, sem valor fiscal).' : '.'), 'corrigir' => null];
+        }
+        if (in_array($nota->status, [StatusNota::Rejeitada, StatusNota::Invalida, StatusNota::Falhou], true)) {
+            $ex = \App\Support\ExplicacaoErro::para($nota);
+
+            return ['fim' => true, 'resultado' => 'erro', 'titulo' => 'Nota Rejeitada !! Ver erro e corrigir.',
+                'texto' => $ex['titulo'].'. '.$ex['o_que_aconteceu'], 'corrigir' => route('pendencias', ['nota' => $nota->id])];
+        }
+        if ($nota->status === StatusNota::AguardandoCredito) {
+            return ['fim' => true, 'resultado' => 'espera', 'titulo' => 'Nota na fila',
+                'texto' => 'Sem crédito agora: ela sai sozinha assim que houver crédito. O resultado aparece em Notas.', 'corrigir' => null];
+        }
+
+        return ['fim' => false, 'resultado' => 'enviando', 'titulo' => 'Enviando a nota…', 'texto' => 'Aguarde o retorno da prefeitura.', 'corrigir' => null];
     }
 
     /** Série e próximo número automático da empresa: o que a tela mostra já preenchido quando ela pergunta a série e o número. */

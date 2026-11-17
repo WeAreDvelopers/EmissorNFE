@@ -3,8 +3,8 @@
 
     <div class="max-w-[1160px] mx-auto px-4 sm:px-8 py-8 space-y-6">
         <div>
-            <h1 class="text-3xl font-semibold">Auditoria</h1>
-            <p class="mt-1 text-[15px] text-ink-700">Quem fez o quê na conta: mudanças fiscais, envios, correções, exclusões e usuários. O registro não pode ser alterado nem apagado.</p>
+            <h1 class="text-3xl font-semibold">Auditoria <span class="text-ink-600 font-normal">({{ number_format($registros->total(), 0, ',', '.') }} {{ $registros->total() === 1 ? 'lançamento' : 'lançamentos' }})</span></h1>
+            <p class="mt-1 text-[15px] text-ink-700">Quem fez o quê{{ $emitente ? ' em '.$emitente->razao_social : ' na conta' }}: mudanças fiscais, envios, correções, exclusões e usuários. O registro não pode ser alterado nem apagado.</p>
         </div>
 
         <form method="GET" class="card p-4 sm:p-5 flex flex-wrap gap-4 items-end">
@@ -12,12 +12,28 @@
                 <label for="acao" class="campo-rotulo">Ação</label>
                 <select id="acao" name="acao" class="campo-entrada"><option value="">Todas</option>@foreach ($acoes as $v => $r)<option value="{{ $v }}" @selected($acao === $v)>{{ $r }}</option>@endforeach</select>
             </div>
+            <div class="min-w-[200px]">
+                <label for="usuario" class="campo-rotulo">Usuário</label>
+                <select id="usuario" name="usuario" class="campo-entrada">
+                    <option value="">Todos</option>
+                    @foreach ($usuarios as $u)<option value="{{ $u->id }}" @selected((string) $usuario === (string) $u->id)>{{ $u->name }}</option>@endforeach
+                    <option value="sistema" @selected($usuario === 'sistema')>Sistema (automático)</option>
+                </select>
+            </div>
+            <div>
+                <label for="de" class="campo-rotulo">De</label>
+                <input id="de" name="de" type="date" value="{{ $de }}" class="campo-entrada">
+            </div>
+            <div>
+                <label for="ate" class="campo-rotulo">Até</label>
+                <input id="ate" name="ate" type="date" value="{{ $ate }}" class="campo-entrada">
+            </div>
             <div class="flex-1 min-w-[220px]">
                 <label for="q" class="campo-rotulo">Buscar no texto</label>
                 <input id="q" name="q" value="{{ $busca }}" class="campo-entrada" autocomplete="off">
             </div>
             <div class="flex items-center gap-3 sm:ms-auto">
-                @if (filled($acao) || filled($busca))<a href="{{ route('auditoria.index') }}" class="text-sm text-ink-700 hover:underline">Limpar filtros</a>@endif
+                @if (filled($acao) || filled($busca) || filled($usuario) || filled($de) || filled($ate))<a href="{{ route('auditoria.index') }}" class="text-sm text-ink-700 hover:underline">Limpar filtros</a>@endif
                 <button class="btn btn-primary">Filtrar</button>
             </div>
         </form>
