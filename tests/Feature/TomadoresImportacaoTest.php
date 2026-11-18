@@ -208,9 +208,9 @@ class TomadoresImportacaoTest extends TestCase
         $nota->setRelation('emitente', $this->emitente);
         $this->assertStringContainsString('<IM>000000049049933</IM>', (new DpsBuilder)->montar($nota));
 
-        $this->emitente->inscricao_municipal = '123.456-A';   // com letras/pontuação: vai como está
-        $nota->setRelation('emitente', $this->emitente);
-        $this->assertStringContainsString('<IM>123.456-A</IM>', (new DpsBuilder)->montar($nota));
+        $this->assertSame('000000049049933', DpsBuilder::formatarIm('4.904.993-3'));    // pontuação digitada sai
+        $this->assertSame('000000049049933', DpsBuilder::formatarIm(' 000000049049933 '));
+        $this->assertSame('0000000123456AB', DpsBuilder::formatarIm('123456AB'));        // com letras: só completa
     }
 
     public function test_cliente_pendente_nao_emite_e_a_dps_nunca_leva_endereco_incompleto(): void

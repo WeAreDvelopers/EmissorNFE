@@ -34,6 +34,20 @@ class DpsBuilder
             .str_pad((string) $nota->numero_dps, 15, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * IM no formato do CNC: 15 caracteres, completando com zeros à esquerda (49049933 → 000000049049933).
+     * Pontos, traços e espaços digitados no cadastro (4.904.993-3) são tirados; IM com letras só é completada.
+     */
+    public static function formatarIm(string $im): string
+    {
+        $im = trim($im);
+        if (preg_match('/^[\d.\-\/\s]+$/', $im)) {
+            $im = preg_replace('/\D/', '', $im);
+        }
+
+        return str_pad($im, 15, '0', STR_PAD_LEFT);
+    }
+
     public function montar(NotaFiscal $nota): string
     {
         // Cada CNPJ da conta tem seu regime, município e série. Na emissão manual com "todos os campos"
@@ -75,8 +89,7 @@ class DpsBuilder
         // O CNC guarda a IM com 15 dígitos (o portal nacional manda 000000049049933). Sem o preenchimento
         // com zeros a SEFIN não acha o cadastro e devolve E0116 mesmo com a IM certa.
         if ($p['inscricao_municipal']) {
-            $im = trim((string) $p['inscricao_municipal']);
-            $this->el($doc, $prest, 'IM', ctype_digit($im) ? str_pad($im, 15, '0', STR_PAD_LEFT) : $im);
+            $this->el($doc, $prest, 'IM', self::formatarIm((string) $p['inscricao_municipal']));
         }
         $reg = $this->el($doc, $prest, 'regTrib');
         $this->el($doc, $reg, 'opSimpNac', (string) $p['op_simples_nacional']);
