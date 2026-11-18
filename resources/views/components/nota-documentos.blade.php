@@ -42,8 +42,8 @@
 @can('emitir')
     {{-- Envio por e-mail: já vem com os e-mails do cliente, mas dá para trocar só para este envio (ex.: mandar para o nosso e-mail para testar) --}}
     <div x-data="{ aberto: false }" x-on:abrir-email-{{ $nota->id }}.window="aberto = true" @keydown.escape.window="aberto = false">
-        <div x-show="aberto" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Enviar NFS-e por e-mail">
-            <form method="POST" action="{{ route('notas.email', $nota) }}" @click.outside="aberto = false" class="card w-full max-w-md p-5 space-y-3 text-left">
+        <div x-show="aberto" x-cloak @click.self="aberto = false" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Enviar NFS-e por e-mail">
+            <form method="POST" action="{{ route('notas.email', $nota) }}" class="card w-full max-w-md p-5 space-y-3 text-left">
                 @csrf
                 <h2 class="text-lg font-semibold">Enviar NFS-e nº {{ $nota->numero_nfse }} por e-mail</h2>
                 <div>
