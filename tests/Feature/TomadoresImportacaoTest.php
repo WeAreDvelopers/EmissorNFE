@@ -198,6 +198,21 @@ class TomadoresImportacaoTest extends TestCase
         $this->assertSame([], (new ValidadorXsd)->erros($xml));
     }
 
+    public function test_ccm_vai_na_dps_com_15_digitos_como_no_portal_nacional(): void
+    {
+        $this->confirmar($this->importar([['doc' => self::GOLDEN, 'nome_ref' => 'Golden Thor', 'valor' => 100]]));
+        $nota = NotaFiscal::semIsolamento()->firstOrFail();
+        $nota->numero_dps = 7;
+
+        $this->emitente->inscricao_municipal = '49049933';
+        $nota->setRelation('emitente', $this->emitente);
+        $this->assertStringContainsString('<IM>000000049049933</IM>', (new DpsBuilder)->montar($nota));
+
+        $this->emitente->inscricao_municipal = '123.456-A';   // com letras/pontuação: vai como está
+        $nota->setRelation('emitente', $this->emitente);
+        $this->assertStringContainsString('<IM>123.456-A</IM>', (new DpsBuilder)->montar($nota));
+    }
+
     public function test_cliente_pendente_nao_emite_e_a_dps_nunca_leva_endereco_incompleto(): void
     {
         $this->confirmar($this->importar([['doc' => self::MALIX, 'nome_ref' => 'Malix', 'valor' => 452.5]]));

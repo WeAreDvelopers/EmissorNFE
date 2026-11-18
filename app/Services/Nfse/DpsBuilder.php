@@ -72,8 +72,11 @@ class DpsBuilder
         // E0116/E0120: IM só vai se o prestador tiver cadastro complementar no CNC do município.
         // Sem cadastro no CNC, enviar IM causa rejeição — deixe a IM do emitente vazia.
         // xNome do prestador NÃO é enviado quando tpEmit = 1 (E0121).
+        // O CNC guarda a IM com 15 dígitos (o portal nacional manda 000000049049933). Sem o preenchimento
+        // com zeros a SEFIN não acha o cadastro e devolve E0116 mesmo com a IM certa.
         if ($p['inscricao_municipal']) {
-            $this->el($doc, $prest, 'IM', $p['inscricao_municipal']);
+            $im = trim((string) $p['inscricao_municipal']);
+            $this->el($doc, $prest, 'IM', ctype_digit($im) ? str_pad($im, 15, '0', STR_PAD_LEFT) : $im);
         }
         $reg = $this->el($doc, $prest, 'regTrib');
         $this->el($doc, $reg, 'opSimpNac', (string) $p['op_simples_nacional']);
