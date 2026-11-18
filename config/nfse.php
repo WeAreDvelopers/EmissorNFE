@@ -12,7 +12,8 @@ return [
         2 => ['sefin' => 'https://sefin.producaorestrita.nfse.gov.br/SefinNacional'],
     ],
 
-    'versao_app' => env('NFSE_VERSAO_APP', 'MeuEmissor-1.0'),
+    // TSVerAplic: 1 a 20 caracteres. Um valor maior no .env derrubaria toda emissão no XSD, então corta em 20.
+    'versao_app' => substr(trim((string) env('NFSE_VERSAO_APP', 'MeuEmissor-1.0')) ?: 'MeuEmissor-1.0', 0, 20),
     'versao_dps' => env('NFSE_VERSAO_DPS', '1.01'),
 
     // XSD oficial v1.01 (com ajuste local do pattern da série — ver resources/xsd/LEIA-ME.md)
