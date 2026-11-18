@@ -83,7 +83,7 @@ class ImportadorClientes
             ['• Linha 2: cabeçalhos. Não mude os nomes nem a ordem. Preencha a aba "Clientes" a partir da linha 3, um tomador por linha.'],
             ['• CNPJ/CPF é obrigatório (com ou sem pontuação). Razão Social/Nome é obrigatório para tomador novo.'],
             ['• Tomador que já existe (mesmo CNPJ/CPF): só os campos preenchidos são atualizados. Célula vazia mantém o que já está cadastrado.'],
-            ['• Para emitir nota o tomador precisa de endereço completo (logradouro, número, bairro, município, UF e CEP) e ao menos 1 e-mail.'],
+            ['• Para emitir nota o tomador precisa de endereço completo (logradouro, número, bairro, município, UF e CEP). O e-mail é opcional.'],
             ['• E-mails: separe por vírgula ou ponto e vírgula. O primeiro é o principal e vai no XML da nota; o aviso de nota emitida vai para todos.'],
             ['• UF com 2 letras (ex.: SP). O código IBGE do município é descoberto sozinho pelo nome e pela UF (ou pelo CEP).'],
             ['• Linhas com problema são listadas depois da importação; as demais são importadas normalmente.'],

@@ -126,7 +126,7 @@ class ImportacaoController extends Controller
             }
             $erros = array_values((array) $l->erros);
             if (str_starts_with((string) ($erros[0] ?? ''), \App\Services\Nfse\EnvioDeNotas::CADASTRO_INCOMPLETO)) {
-                $errosCampo[$l->id] = ['tomador_documento' => $erros[0].' Não emitimos nota para cliente sem endereço completo e ao menos 1 e-mail.'];
+                $errosCampo[$l->id] = ['tomador_documento' => $erros[0].' Não emitimos nota para cliente sem endereço completo.'];
                 continue;
             }
             $dados = \App\Support\ValidadorLinha::normalizar($l->only(\App\Support\ValidadorLinha::CAMPOS) + ['data_competencia' => $l->data_competencia?->toDateString()], $importacao->emitente);

@@ -118,9 +118,7 @@ class Tomador extends Model
         if (! $this->codigo_municipio && filled($this->municipio)) {
             $falta[] = 'município não reconhecido (confira nome e UF)';
         }
-        if (blank($this->emails)) {
-            $falta[] = 'e-mail';
-        }
+        // E-mail é opcional: o leiaute da NFS-e Nacional não o exige, então não bloqueia a emissão.
 
         return $falta;
     }

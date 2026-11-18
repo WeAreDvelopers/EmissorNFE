@@ -88,6 +88,15 @@ class CatalogoErros
         $aconteceu = $e['aconteceu'] ?? ($oficial !== '' ? 'A prefeitura informou: '.$oficial : 'A prefeitura recusou esta nota.');
         $resolver = $e['como_resolver'] ?? self::resolverPadrao($acao, $e, $nota);
 
+        // E0116 com a IM já preenchida no cadastro: o texto "o campo está vazio" estaria errado.
+        // Pode ser nota recusada antes de a IM ser salva (basta reenviar) ou IM que a prefeitura não reconhece no CNC.
+        $im = trim((string) $nota->emitente?->inscricao_municipal);
+        if ($e['codigo'] === 'E0116' && $im !== '') {
+            $titulo = 'A prefeitura não reconheceu a inscrição municipal';
+            $aconteceu = "A prefeitura recusou a nota pedindo a inscrição municipal. O cadastro da empresa tem a inscrição {$im}, então ela pode ter sido recusada antes de ser salva, ou não bate com o cadastro da empresa na prefeitura (CNC NFS-e).";
+            $resolver = 'Clique em Reenviar: se a nota foi recusada antes de a inscrição ser salva, ela passa. Se recusar de novo, peça à contabilidade para confirmar a inscrição municipal (CCM) e o cadastro da empresa no CNC NFS-e.';
+        }
+
         $r = [
             'titulo'          => $titulo,
             'rotulo'          => self::ROTULOS[$acao] ?? null,

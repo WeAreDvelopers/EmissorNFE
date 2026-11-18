@@ -19,7 +19,7 @@ class EnvioDeNotas
 
     public const CADASTRO_INCOMPLETO = 'Cadastro do cliente incompleto';
 
-    /** O que falta no cadastro do cliente (endereço completo e ao menos 1 e-mail). Nota sem destinatário não exige cadastro. */
+    /** O que falta no cadastro do cliente (endereço completo; e-mail é opcional). Nota sem destinatário não exige cadastro. */
     public static function faltaNoCadastro(NotaFiscal $nota): array
     {
         if ($nota->sem_tomador) {
@@ -36,7 +36,7 @@ class EnvioDeNotas
     /** Reserva 1 crédito e enfileira. Sem saldo: fica "Aguardando crédito" (volta sozinha após a recarga). */
     public function enviarNota(NotaFiscal $nota): void
     {
-        // Cliente sem endereço completo e e-mail não recebe nota: a nota espera o cadastro ser completado
+        // Cliente sem endereço completo não recebe nota: a nota espera o cadastro ser completado
         if ($falta = self::faltaNoCadastro($nota)) {
             $nota->update(['status' => StatusNota::Invalida, 'erros' => [self::CADASTRO_INCOMPLETO.': falta '.implode(', ', $falta).'.']]);
             $nota->importacao?->recontarInvalidas();

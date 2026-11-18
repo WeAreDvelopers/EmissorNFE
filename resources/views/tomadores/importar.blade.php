@@ -77,7 +77,7 @@
                         ['Linha 2', 'Cabeçalhos. Os tomadores começam na linha 3.'],
                         ['CNPJ/CPF', 'Obrigatório. Razão Social/Nome é obrigatório para tomador novo.'],
                         ['Já existe?', 'Mesmo CNPJ/CPF atualiza só o que veio preenchido. Célula vazia mantém o cadastro.'],
-                        ['Endereço', 'Para emitir nota: logradouro, número, bairro, município, UF, CEP e ao menos 1 e-mail.'],
+                        ['Endereço', 'Para emitir nota: logradouro, número, bairro, município, UF e CEP. O e-mail é opcional.'],
                         ['Regras completas', 'Estão na aba “Como preencher” do modelo (somente leitura).'],
                     ] as [$col, $info])
                         <div class="py-2 grid grid-cols-[84px_1fr] gap-x-3"><dt class="font-medium text-ink-900">{{ $col }}</dt><dd class="text-ink-700">{{ $info }}</dd></div>

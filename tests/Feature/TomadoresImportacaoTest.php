@@ -203,7 +203,7 @@ class TomadoresImportacaoTest extends TestCase
         $this->confirmar($this->importar([['doc' => self::MALIX, 'nome_ref' => 'Malix', 'valor' => 452.5]]));
 
         $nota = NotaFiscal::semIsolamento()->with('tomador')->firstOrFail();
-        // Regra do negócio: cliente sem endereço completo e e-mail não recebe nota (fica à espera do cadastro)
+        // Regra do negócio: cliente sem endereço completo não recebe nota (e-mail é opcional) (fica à espera do cadastro)
         $this->assertSame(StatusNota::Invalida, $nota->status);
         $this->assertStringContainsString('Cadastro do cliente incompleto', $nota->erros[0]);
         Queue::assertNothingPushed();
