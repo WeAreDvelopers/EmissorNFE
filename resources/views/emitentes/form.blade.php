@@ -369,7 +369,7 @@
                             <textarea id="descricao_servico_padrao" name="descricao_servico_padrao" rows="2" class="campo-entrada" placeholder="Ex.: Manutenção de programas de computação.">{{ old('descricao_servico_padrao', $emitente->descricao_servico_padrao) }}</textarea>
                             <p class="campo-ajuda">Texto para todas as notas da planilha (coluna R) que não tiverem conteúdo informado.</p>
                         </div>
-                        <x-campo nome="email_copia" tipo="email" rotulo="E-mail da empresa (cópia das notas)" :valor="$emitente->email_copia" ajuda="Recebe cópia de toda NFS-e enviada ao cliente, para a empresa ter ciência." />
+                        <x-campo nome="email_copia" tipo="email" rotulo="E-mail do Emitente" :valor="$emitente->email_copia" ajuda="Se preenchido, receberá cópia de todas as NFS-e enviadas para tomar ciência do envio" :sem-quebra="true" />
                         <div class="sm:col-span-2">
                             <input type="hidden" name="enviar_email_automatico" value="0">
                             <label class="flex items-start gap-2.5 text-sm cursor-pointer">

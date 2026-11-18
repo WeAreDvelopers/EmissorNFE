@@ -213,6 +213,16 @@ class TomadoresImportacaoTest extends TestCase
         $this->assertSame('0000000123456AB', DpsBuilder::formatarIm('123456AB'));        // com letras: só completa
     }
 
+    public function test_numero_do_endereco_zero_nao_vale_e_sn_vale(): void
+    {
+        foreach (['0', '00', '0-0', '', '  '] as $ruim) {
+            $this->assertFalse(Tomador::numeroEnderecoValido($ruim), "'{$ruim}' deveria ser recusado");
+        }
+        foreach (['S/N', 'sn', '123', '123-A', '10', 'KM 12', '45 fundos'] as $bom) {
+            $this->assertTrue(Tomador::numeroEnderecoValido($bom), "'{$bom}' deveria valer");
+        }
+    }
+
     public function test_cliente_pendente_nao_emite_e_a_dps_nunca_leva_endereco_incompleto(): void
     {
         $this->confirmar($this->importar([['doc' => self::MALIX, 'nome_ref' => 'Malix', 'valor' => 452.5]]));

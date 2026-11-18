@@ -130,14 +130,22 @@ class Tomador extends Model
     }
 
     /**
-     * Número do endereço aceito no cadastro: S/N, ou algo que tenha ao menos um algarismo (123, 123-A, 45 fundos, KM 12).
+     * Número do endereço aceito no cadastro: S/N, ou algo que tenha ao menos um algarismo diferente de zero (123, 123-A, 45 fundos, KM 12).
      * A API aceita qualquer texto de 1 a 60 caracteres (TSNumeroEndereco); a regra é do sistema, para não salvar lixo como "A".
      */
     public static function numeroEnderecoValido(string $v): bool
     {
         $v = trim($v);
 
-        return $v !== '' && (self::ehSemNumero($v) || (bool) preg_match('/^(?=.*\d)[\p{L}\d\s\-\/.ºª,]{1,60}$/u', $v));
+        if ($v === '') {
+            return false;
+        }
+        if (self::ehSemNumero($v)) {
+            return true;
+        }
+
+        // "0", "00", "0-0" não são número de endereço: sem número, o certo é S/N. Exige ao menos um algarismo diferente de zero.
+        return (bool) preg_match('/^(?=.*[1-9])[\p{L}\d\s\-\/.ºª,]{1,60}$/u', $v);
     }
 
     /** Grava sempre "S/N" para as variações de sem número. */
