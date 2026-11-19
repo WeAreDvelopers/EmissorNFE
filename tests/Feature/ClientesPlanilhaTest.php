@@ -139,12 +139,12 @@ class ClientesPlanilhaTest extends TestCase
         $this->get(route('tomadores.index'))->assertSee(route('tomadores.importar.tela'), false);
     }
 
-    public function test_planilha_de_tomadores_aceita_ate_50_linhas_e_recusa_mais_que_isso(): void
+    public function test_planilha_de_tomadores_aceita_ate_1000_linhas_e_recusa_mais_que_isso(): void
     {
         $linhas = fn (int $n) => array_map(fn ($i) => [sprintf('%011d', $i), "Cliente $i", '', 'Rua A', '10', '', 'Centro', 'São Paulo', 'SP', '01001000', "c$i@x.com", ''], range(1, $n));
 
-        $this->importar($this->planilha($linhas(51)))->assertSessionHasErrors('planilha');
-        $this->assertStringContainsString('limite é de 50', session('errors')->first('planilha'));
+        $this->importar($this->planilha($linhas(1001)))->assertSessionHasErrors('planilha');
+        $this->assertStringContainsString('limite é de 1000', session('errors')->first('planilha'));
         $this->assertSame(0, $this->clientes()->count());
     }
 

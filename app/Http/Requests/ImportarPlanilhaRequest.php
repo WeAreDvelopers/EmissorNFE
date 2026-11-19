@@ -56,8 +56,14 @@ class ImportarPlanilhaRequest extends FormRequest
             }
 
             $emitente = \App\Models\Emitente::find($this->input('emitente_id'));
-            if ($emitente && $planilha['cnpj'] !== $emitente->cnpj) {
-                $v->errors()->add('planilha', 'O CNPJ da célula A1 da planilha ('.\App\Support\Documento::formatar($planilha['cnpj']).') não é o da empresa escolhida ('.\App\Support\Documento::formatar($emitente->cnpj).'). Escolha a empresa certa ou use a planilha dela.');
+            if (! $emitente) {
+                $v->errors()->add('planilha', 'Não foi possível identificar a empresa ativa para conferir o CNPJ da célula A1. Escolha a empresa no menu e tente de novo.');
+
+                return;
+            }
+
+            if ($planilha['cnpj'] !== preg_replace('/\D/', '', (string) $emitente->cnpj)) {
+                $v->errors()->add('planilha', 'O CNPJ da célula A1 da planilha ('.($planilha['cnpj'] === '' ? 'vazio' : \App\Support\Documento::formatar($planilha['cnpj'])).') não é o da empresa escolhida ('.\App\Support\Documento::formatar($emitente->cnpj).'). Escolha a empresa certa ou use a planilha dela.');
 
                 return;
             }
@@ -68,7 +74,7 @@ class ImportarPlanilhaRequest extends FormRequest
                 return;
             }
 
-            $limite = (int) config('nfse.limite_linhas_importacao', 50);
+            $limite = (int) config('nfse.limite_linhas_importacao', 1000);
             if (count($planilha['linhas']) > $limite) {
                 $v->errors()->add('planilha', 'A planilha tem '.count($planilha['linhas'])." linhas e o limite é de {$limite} por importação. Divida em mais de um arquivo e importe um de cada vez.");
             }

@@ -94,6 +94,15 @@ class TomadorController extends Controller
         $token = \Illuminate\Support\Str::random(40);
         $caminho = \Illuminate\Support\Facades\Storage::disk('local')->putFileAs('importacoes-clientes', $arquivo, $token.'.'.strtolower($arquivo->getClientOriginalExtension() ?: 'xlsx'));
 
+        // A1 da planilha tem de ser o CNPJ da empresa ativa (evita importar clientes de uma empresa dentro de outra)
+        $empresa = app(\App\Support\Tenancy\EmitenteAtual::class)->emitente();
+        $cnpjPlanilha = $importador->cnpjDoArquivo(\Illuminate\Support\Facades\Storage::disk('local')->path($caminho));
+        if ($empresa && $cnpjPlanilha !== null && $cnpjPlanilha !== preg_replace('/\D/', '', (string) $empresa->cnpj)) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($caminho);
+
+            return back()->withErrors(['planilha' => 'O CNPJ da célula A1 da planilha ('.($cnpjPlanilha === '' ? 'vazio' : \App\Support\Documento::formatar($cnpjPlanilha)).') não é o da empresa ativa ('.\App\Support\Documento::formatar($empresa->cnpj).'). Escolha a empresa certa ou use a planilha dela.']);
+        }
+
         try {
             $importador->analisar(\Illuminate\Support\Facades\Storage::disk('local')->path($caminho));   // só para barrar arquivo ilegível ou grande demais
         } catch (\RuntimeException $e) {

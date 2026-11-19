@@ -98,9 +98,9 @@ class ReprocessoController extends Controller
         abort_unless($importacao->status === 'conferir', 422, 'Este lote não está mais em edição.');
 
         $request->validate([
-            'linhas'   => ['present', 'array', 'max:'.config('nfse.limite_linhas_importacao', 50)],
+            'linhas'   => ['present', 'array', 'max:'.config('nfse.limite_linhas_importacao', 1000)],
             'linhas.*' => ['array'],
-        ], ['linhas.max' => 'Cada lote aceita até '.config('nfse.limite_linhas_importacao', 50).' linhas. Divida em mais de uma importação.']);
+        ], ['linhas.max' => 'Cada lote aceita até '.config('nfse.limite_linhas_importacao', 1000).' linhas. Divida em mais de uma importação.']);
 
         $emitente = $importacao->emitente;
 

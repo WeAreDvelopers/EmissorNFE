@@ -24,7 +24,7 @@ class ImportadorClientes
     /** Máximo de linhas por planilha (config nfse.limite_linhas_importacao). */
     public static function limite(): int
     {
-        return (int) config('nfse.limite_linhas_importacao', 50);
+        return (int) config('nfse.limite_linhas_importacao', 1000);
     }
 
     /** Cabeçalho do modelo => campo. A leitura aceita variações (sem acento, maiúsculas, "E-mail"/"E-mails"). */
@@ -313,6 +313,29 @@ class ImportadorClientes
         }
 
         return Documento::valido($d) ? $d : null;
+    }
+
+    /**
+     * CNPJ da célula A1 (empresa dona da planilha) no modelo atual, onde os cabeçalhos ficam na linha 2.
+     * Devolve null no modelo antigo (cabeçalho na linha 1): ali A1 é só o título da coluna e não há o que conferir.
+     */
+    public function cnpjDoArquivo(string $caminho): ?string
+    {
+        try {
+            $leitor = IOFactory::createReaderForFile($caminho);
+            $leitor->setReadDataOnly(true);
+            $planilha = $leitor->load($caminho);
+        } catch (\Throwable) {
+            return null;   // o analisar() acusa o arquivo ilegível
+        }
+
+        foreach ($planilha->getAllSheets() as $aba) {
+            if (($cab = $this->cabecalho($aba, 2)) && isset($cab['documento'])) {
+                return \App\Support\PlanilhaModelo::cnpjDaCelula($aba->getCell('A1')->getCalculatedValue());
+            }
+        }
+
+        return null;
     }
 
     /** @return array<int,array<string,string>> número da linha na planilha => campos */

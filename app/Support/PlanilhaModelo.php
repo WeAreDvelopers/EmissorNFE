@@ -74,6 +74,21 @@ class PlanilhaModelo
         return self::ler($caminho)['cnpj'];
     }
 
+    /**
+     * Só os 14 dígitos do CNPJ da célula A1. Aceita texto com ou sem máscara e também célula numérica
+     * (o Excel guarda 12345678000195 como número, sem zeros à esquerda e às vezes em notação científica).
+     */
+    public static function cnpjDaCelula(mixed $valor): string
+    {
+        if (is_int($valor) || is_float($valor)) {
+            return str_pad(sprintf('%.0f', $valor), 14, '0', STR_PAD_LEFT);
+        }
+
+        $digitos = preg_replace('/\D/', '', (string) $valor);
+
+        return $digitos !== '' && strlen($digitos) < 14 && ! preg_match('/[.\/-]/', (string) $valor) ? str_pad($digitos, 14, '0', STR_PAD_LEFT) : $digitos;
+    }
+
     /** @return array<string,int> campo => índice da coluna (1 = A) */
     private static function cabecalho(Worksheet $aba): array
     {
@@ -156,7 +171,7 @@ class PlanilhaModelo
 
         return [
             'aba'         => $aba->getTitle(),
-            'cnpj'        => preg_replace('/\D/', '', (string) $aba->getCell('A1')->getValue()),
+            'cnpj'        => self::cnpjDaCelula($aba->getCell('A1')->getCalculatedValue()),
             'total_valor' => is_numeric($t = $aba->getCell('E1')->getCalculatedValue()) ? (float) $t : null,
             'total_ibpt'  => is_numeric($t = $aba->getCell('F1')->getCalculatedValue()) ? (float) $t : null,
             'linhas'      => $linhas,

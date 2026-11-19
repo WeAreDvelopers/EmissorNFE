@@ -35,7 +35,7 @@ return [
 
     // Máximo de envios por minuto à SEFIN, por emitente
     // Máximo de linhas por planilha importada (notas e tomadores) e por lote editado em tabela
-    'limite_linhas_importacao' => (int) env('NFSE_LIMITE_LINHAS_IMPORTACAO', 50),
+    'limite_linhas_importacao' => (int) env('NFSE_LIMITE_LINHAS_IMPORTACAO', 1000),
 
     'limite_por_minuto' => (int) env('NFSE_LIMITE_MINUTO', 60),
 ];
