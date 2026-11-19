@@ -17,7 +17,8 @@ class RelatorioController extends Controller
         $this->authorize('consultar');
         [$inicio, $fim, $mes] = $this->periodo($request);
 
-        $base = fn () => NotaFiscal::query()->whereBetween('data_competencia', [$inicio, $fim]);
+        $ambiente = $this->ambiente();
+        $base = fn () => NotaFiscal::query()->doAmbiente($ambiente)->whereBetween('data_competencia', [$inicio, $fim]);
         $emitidas = fn () => $base()->where('status', StatusNota::Emitida);
 
         $porStatus = $base()->where('status', '!=', StatusNota::Rascunho)->selectRaw('status, count(*) as qtd')->groupBy('status')->pluck('qtd', 'status');
@@ -45,7 +46,7 @@ class RelatorioController extends Controller
         $this->authorize('consultar');
         [$inicio, $fim, $mes] = $this->periodo($request);
 
-        $notas = NotaFiscal::with('emitente')->where('status', StatusNota::Emitida)->whereBetween('data_competencia', [$inicio, $fim])
+        $notas = NotaFiscal::with('emitente')->doAmbiente($this->ambiente())->where('status', StatusNota::Emitida)->whereBetween('data_competencia', [$inicio, $fim])
             ->orderBy('data_competencia')->orderBy('id');
 
         return response()->streamDownload(function () use ($notas) {
@@ -63,6 +64,12 @@ class RelatorioController extends Controller
             });
             fclose($f);
         }, "notas-emitidas-{$mes}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Ambiente da empresa ativa (1 produção | 2 teste): o relatório só conta notas dele. */
+    private function ambiente(): ?int
+    {
+        return ((int) app(\App\Support\Tenancy\EmitenteAtual::class)->emitente()?->ambiente) ?: null;
     }
 
     /** @return array{0:string,1:string,2:string} início, fim (datas) e o mês no formato AAAA-MM */

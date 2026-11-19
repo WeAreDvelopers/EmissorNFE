@@ -41,6 +41,9 @@ class NotaConsultaController extends Controller
     {
         $consulta->where('status', '!=', StatusNota::Rascunho);
 
+        // Teste e produção não se misturam: só as notas do ambiente em que a empresa está agora
+        $consulta->doAmbiente(app(\App\Support\Tenancy\EmitenteAtual::class)->emitente()?->ambiente);
+
         if (filled($q = trim((string) $request->query('q')))) {
             $digitos = preg_replace('/\D/', '', $q);
             $consulta->where(function ($w) use ($q, $digitos) {

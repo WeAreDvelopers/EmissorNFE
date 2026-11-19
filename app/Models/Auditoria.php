@@ -18,7 +18,7 @@ class Auditoria extends Model
 
     public const UPDATED_AT = null;
 
-    protected $fillable = ['conta_id', 'emitente_id', 'user_id', 'acao', 'descricao', 'detalhes', 'ip'];
+    protected $fillable = ['conta_id', 'emitente_id', 'ambiente', 'user_id', 'acao', 'descricao', 'detalhes', 'ip'];
 
     protected $casts = ['detalhes' => 'array'];
 
@@ -66,6 +66,17 @@ class Auditoria extends Model
         return $id ?: app(EmitenteAtual::class)->id();
     }
 
+    /** Ambiente do registro: o da nota citada; senão o que a empresa usa agora. Ações da conta toda não têm ambiente. */
+    private static function ambienteDoRegistro(string $acao, array $detalhes, ?int $emitenteId): ?int
+    {
+        if (in_array($acao, self::ACOES_DA_CONTA, true) || ! $emitenteId) {
+            return null;
+        }
+        $ambiente = isset($detalhes['nota']) ? NotaFiscal::semIsolamento()->whereKey($detalhes['nota'])->value('ambiente') : null;
+
+        return (int) ($ambiente ?: Emitente::semIsolamento()->whereKey($emitenteId)->value('ambiente')) ?: null;
+    }
+
     public static function registrar(string $acao, string $descricao, array $detalhes = [], ?int $contaId = null, ?int $emitenteId = null): void
     {
         $contaId ??= app(ContaAtual::class)->id();
@@ -73,9 +84,12 @@ class Auditoria extends Model
             return;   // sem conta não há onde registrar (ex.: ação da área master, que tem a sua própria trilha)
         }
 
+        $emitenteId ??= self::empresaDoRegistro($acao, $detalhes);
+
         static::create([
             'conta_id'  => $contaId,
-            'emitente_id' => $emitenteId ?? self::empresaDoRegistro($acao, $detalhes),
+            'emitente_id' => $emitenteId,
+            'ambiente'  => self::ambienteDoRegistro($acao, $detalhes, $emitenteId),
             'user_id'   => auth()->id(),
             'acao'      => $acao,
             'descricao' => mb_substr($descricao, 0, 300),

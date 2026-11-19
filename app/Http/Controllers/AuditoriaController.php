@@ -20,8 +20,9 @@ class AuditoriaController extends Controller
         $consulta = Auditoria::with('user')->latest('id');
 
         // Só a empresa em uso (ou, sem empresa selecionada, tudo); ações da conta toda (usuários) valem para qualquer empresa
+        // e, dela, só o ambiente em uso (teste e produção não se misturam)
         if ($emitente) {
-            $consulta->where(fn ($q) => $q->where('emitente_id', $emitente->id)
+            $consulta->where(fn ($q) => $q->where(fn ($e) => $e->where('emitente_id', $emitente->id)->where('ambiente', (int) $emitente->ambiente))
                 ->orWhere(fn ($g) => $g->whereNull('emitente_id')->whereIn('acao', Auditoria::ACOES_DA_CONTA)));
         }
         if (array_key_exists((string) $request->query('acao'), Auditoria::ACOES)) {

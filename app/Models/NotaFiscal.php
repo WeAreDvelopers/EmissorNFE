@@ -37,6 +37,22 @@ class NotaFiscal extends Model
         'duplicidade_aprovada' => 'boolean',
     ];
 
+    protected static function booted(): void
+    {
+        // Toda nota nasce no ambiente (teste/produção) da empresa; ao reservar o número da DPS ele é reafirmado.
+        static::creating(function (NotaFiscal $nota) {
+            if (! $nota->ambiente && $nota->emitente_id) {
+                $nota->ambiente = (int) Emitente::semIsolamento()->whereKey($nota->emitente_id)->value('ambiente') ?: 2;
+            }
+        });
+    }
+
+    /** Só as notas do ambiente informado (1 produção | 2 teste). Sem ambiente (null), não filtra. */
+    public function scopeDoAmbiente($q, ?int $ambiente)
+    {
+        return $ambiente ? $q->where($q->getModel()->qualifyColumn('ambiente'), $ambiente) : $q;
+    }
+
     public function importacao(): BelongsTo
     {
         return $this->belongsTo(Importacao::class);
