@@ -7,6 +7,7 @@ use App\Enums\StatusNota;
 use App\Models\Auditoria;
 use App\Models\Conta;
 use App\Models\Emitente;
+use App\Models\Importacao;
 use App\Models\NotaFiscal;
 use App\Models\Revenda;
 use App\Models\User;
@@ -37,13 +38,20 @@ class AmbienteSeparadoTest extends TestCase
                 'codigo_servico_padrao' => '010302', 'descricao_servico_padrao' => 'Suporte',
             ]);
             $this->dono->forceFill(['emitente_atual_id' => $this->emitente->id])->save();
+            $this->lote('lote-teste.xlsx');
             $this->nota('Cliente Teste', 100);                       // nasce em homologação
             Auditoria::registrar('nota_corrigida', 'Ação feita em teste.', [], emitenteId: $this->emitente->id);
 
             $this->emitente->forceFill(['ambiente' => 1])->save();    // vira produção
+            $this->lote('lote-real.xlsx');
             $this->nota('Cliente Real', 250);
             Auditoria::registrar('nota_corrigida', 'Ação feita em produção.', [], emitenteId: $this->emitente->id);
         });
+    }
+
+    private function lote(string $nome): Importacao
+    {
+        return Importacao::create(['emitente_id' => $this->emitente->id, 'arquivo_nome' => $nome, 'arquivo_caminho' => 'importacoes/'.$nome, 'arquivo_hash' => hash('sha256', $nome), 'status' => 'concluida']);
     }
 
     private function nota(string $cliente, float $valor): NotaFiscal
@@ -58,6 +66,20 @@ class AmbienteSeparadoTest extends TestCase
     private function trocarPara(int $ambiente): void
     {
         $this->emitente->forceFill(['ambiente' => $ambiente])->save();
+    }
+
+    public function test_importacoes_so_mostram_o_ambiente_em_uso(): void
+    {
+        $this->actingAs($this->dono)->get(route('importacoes.index'))->assertSee('lote-real.xlsx')->assertDontSee('lote-teste.xlsx');
+
+        $this->trocarPara(2);
+        $this->actingAs($this->dono)->get(route('importacoes.index'))->assertSee('lote-teste.xlsx')->assertDontSee('lote-real.xlsx');
+    }
+
+    public function test_lote_nasce_no_ambiente_da_empresa(): void
+    {
+        $this->assertSame(2, (int) Importacao::semIsolamento()->where('arquivo_nome', 'lote-teste.xlsx')->value('ambiente'));
+        $this->assertSame(1, (int) Importacao::semIsolamento()->where('arquivo_nome', 'lote-real.xlsx')->value('ambiente'));
     }
 
     public function test_notas_so_mostram_o_ambiente_em_uso(): void

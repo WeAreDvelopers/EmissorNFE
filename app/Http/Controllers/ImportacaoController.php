@@ -27,7 +27,7 @@ class ImportacaoController extends Controller
     public function index(Request $request)
     {
         $this->authorize('consultar');
-        $consulta = Importacao::with('emitente')->latest();
+        $consulta = Importacao::with('emitente')->doAmbiente(app(\App\Support\Tenancy\EmitenteAtual::class)->emitente()?->ambiente)->latest();
         [$ordem, $dir] = Ordenacao::aplicar($consulta, $request, ['arquivo' => 'arquivo_nome', 'data' => 'created_at', 'situacao' => 'status']);
         $importacoes = $consulta->paginate(20)->withQueryString();
 
@@ -62,7 +62,8 @@ class ImportacaoController extends Controller
 
         // Arquivo idêntico já importado para esta empresa: não existe "enviar mesmo assim". As notas dele continuam lá
         // (corrigir, reenviar, consultar); só uma leitura que falhou pode ser refeita com o mesmo arquivo.
-        $repetida = Importacao::where('emitente_id', $request->emitente_id)->where('arquivo_hash', $hash)->where('status', '!=', 'falhou')->latest('id')->first();
+        // (o mesmo arquivo importado em teste não impede importar em produção)
+        $repetida = Importacao::doAmbiente(Emitente::find($request->emitente_id)?->ambiente)->where('emitente_id', $request->emitente_id)->where('arquivo_hash', $hash)->where('status', '!=', 'falhou')->latest('id')->first();
         if ($repetida) {
             $situacao = $repetida->foiEnviada() ? 'e as notas dela já foram enviadas' : 'e ainda aguarda a sua conferência';
 

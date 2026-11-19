@@ -10,4 +10,10 @@ Substitui o pacote `v1.01-20260209`. Mudanças que afetaram a DPS (ver `DpsBuild
 
 Sem isso a SEFIN responde E1235 (falha no esquema XML).
 
+**Atenção: esse leiaute só vale na produção restrita (ambiente 2).** A produção (ambiente 1) ainda valida o leiaute
+anterior (`v1.01-20260209`, guardado em `resources/xsd/producao/`): sem `finNFSe` e com `xDescServ` antes de `cNBS`.
+Mandar o leiaute novo em produção dá E1235 ("invalid child element 'finNFSe'"). O `DpsBuilder` e o `ValidadorXsd`
+escolhem o leiaute pelo ambiente (`config/nfse.php` → `leiaute_novo`). Quando a produção migrar, basta
+`NFSE_LEIAUTE_NOVO_PRODUCAO=true` no `.env` (e `queue:restart`).
+
 Ao baixar uma versão nova, valide uma DPS gerada contra ela (`tests/Feature/DpsXsdTest.php`).

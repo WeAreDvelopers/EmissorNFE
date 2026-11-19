@@ -16,8 +16,16 @@ return [
     'versao_app' => substr(trim((string) env('NFSE_VERSAO_APP', 'NFSe_Flipy_0.0.1')) ?: 'NFSe_Flipy_0.0.1', 0, 20),
     'versao_dps' => env('NFSE_VERSAO_DPS', '1.01'),
 
-    // XSD oficial v1.01 (com ajuste local do pattern da série — ver resources/xsd/LEIA-ME.md)
+    // Leiaute da DPS por ambiente. A restrita (2) já usa o de 20/10/2026; a produção (1) ainda usa o de 09/02/2026
+    // (sem finNFSe, xDescServ antes de cNBS). Quando a produção migrar: NFSE_LEIAUTE_NOVO_PRODUCAO=true.
+    'leiaute_novo' => [
+        1 => (bool) env('NFSE_LEIAUTE_NOVO_PRODUCAO', false),
+        2 => true,
+    ],
+
+    // XSD oficial v1.01 de 20/10/2026 (leiaute novo) e o anterior, de 09/02/2026 (produção) — ver resources/xsd/LEIA-ME.md
     'xsd_dps' => resource_path('xsd/DPS_v1.01.xsd'),
+    'xsd_dps_producao' => resource_path('xsd/producao/DPS_v1.01.xsd'),
 
     // XSD do pedido de registro de evento (cancelamento)
     'xsd_evento' => resource_path('xsd/pedRegEvento_v1.01.xsd'),

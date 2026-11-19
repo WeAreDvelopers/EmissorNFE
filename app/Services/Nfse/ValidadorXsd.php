@@ -15,7 +15,9 @@ class ValidadorXsd
     /** @return string[] lista de erros (vazia = válido) */
     public function erros(string $xml, ?string $xsd = null): array
     {
-        $xsd ??= config('nfse.xsd_dps');
+        // DPS de produção segue o leiaute da produção (o XML traz o ambiente em tpAmb)
+        $producaoAntiga = $xsd === null && str_contains($xml, '<tpAmb>1</tpAmb>') && ! DpsBuilder::leiauteNovo(1);
+        $xsd ??= config($producaoAntiga ? 'nfse.xsd_dps_producao' : 'nfse.xsd_dps');
 
         if (! is_readable($xsd)) {
             throw new RuntimeException("XSD não encontrado em {$xsd}");

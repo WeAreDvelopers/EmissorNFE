@@ -23,6 +23,22 @@ class Importacao extends Model
 
     protected $casts = ['avisos' => 'array', 'atualizacoes' => 'array', 'cadastro_aplicado_em' => 'datetime'];
 
+    protected static function booted(): void
+    {
+        // Todo lote nasce no ambiente (teste/produção) em que a empresa está
+        static::creating(function (Importacao $importacao) {
+            if (! $importacao->ambiente && $importacao->emitente_id) {
+                $importacao->ambiente = (int) Emitente::semIsolamento()->whereKey($importacao->emitente_id)->value('ambiente') ?: 2;
+            }
+        });
+    }
+
+    /** Só os lotes do ambiente informado (1 produção | 2 teste). Sem ambiente (null), não filtra. */
+    public function scopeDoAmbiente($q, ?int $ambiente)
+    {
+        return $ambiente ? $q->where($q->getModel()->qualifyColumn('ambiente'), $ambiente) : $q;
+    }
+
     /** Lote de onde este foi reprocessado (null se veio de uma planilha). */
     public function reprocessadaDe(): BelongsTo
     {

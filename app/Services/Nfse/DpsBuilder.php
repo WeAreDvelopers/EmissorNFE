@@ -48,6 +48,12 @@ class DpsBuilder
         return str_pad($im, 15, '0', STR_PAD_LEFT);
     }
 
+    /** O ambiente já usa o leiaute 20261020? (restrita sim; produção só quando NFSE_LEIAUTE_NOVO_PRODUCAO=true.) */
+    public static function leiauteNovo(int $ambiente): bool
+    {
+        return (bool) config('nfse.leiaute_novo.'.($ambiente === 1 ? 1 : 2));
+    }
+
     public function montar(NotaFiscal $nota): string
     {
         // Cada CNPJ da conta tem seu regime, município e série. Na emissão manual com "todos os campos"
@@ -77,7 +83,9 @@ class DpsBuilder
         $this->el($doc, $inf, 'nDPS', (string) $nota->numero_dps);
         $this->el($doc, $inf, 'dCompet', $nota->data_competencia->format('Y-m-d'));
         $this->el($doc, $inf, 'tpEmit', '1');                // 1 = emitida pelo prestador
-        $this->el($doc, $inf, 'finNFSe', '0');               // 0 = NFS-e regular (obrigatório no leiaute 20261020)
+        if (self::leiauteNovo((int) $nota->emitente->ambiente)) {
+            $this->el($doc, $inf, 'finNFSe', '0');           // 0 = NFS-e regular (obrigatório só no leiaute 20261020; a produção ainda usa o anterior)
+        }
         $this->el($doc, $inf, 'cLocEmi', $p['codigo_municipio']);
 
         // Prestador
@@ -125,11 +133,16 @@ class DpsBuilder
         if (filled($p['codigo_tributacao_municipal'] ?? null) && (int) $p['op_simples_nacional'] !== 2) {
             $this->el($doc, $cServ, 'cTribMun', str_pad($p['codigo_tributacao_municipal'], 3, '0', STR_PAD_LEFT));
         }
+        $novo = self::leiauteNovo((int) $nota->emitente->ambiente);
+        if (! $novo) {
+            $this->el($doc, $cServ, 'xDescServ', $nota->descricao);   // leiaute anterior: xDescServ antes de cNBS
+        }
         if ($nota->codigo_nbs) {
             $this->el($doc, $cServ, 'cNBS', $nota->codigo_nbs);
         }
-        // Leiaute 20261020: xDescServ vem por último em cServ (após cNBS e cIntContrib)
-        $this->el($doc, $cServ, 'xDescServ', $nota->descricao);
+        if ($novo) {
+            $this->el($doc, $cServ, 'xDescServ', $nota->descricao);   // leiaute 20261020: xDescServ por último (após cNBS e cIntContrib)
+        }
 
         // Valores e tributação
         $valores = $this->el($doc, $inf, 'valores');

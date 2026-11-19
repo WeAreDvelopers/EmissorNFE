@@ -19,7 +19,7 @@ class InicioController extends Controller
         $n = fn (StatusNota $s) => (int) ($porStatus[$s->value] ?? 0);
 
         $carteira = $creditos->saldo($contaAtual->id());
-        $recentes = Importacao::with('emitente')->latest()->limit(5)->get();
+        $recentes = Importacao::with('emitente')->doAmbiente(app(\App\Support\Tenancy\EmitenteAtual::class)->emitente()?->ambiente)->latest()->limit(5)->get();
 
         $resumos = NotaFiscal::whereIn('importacao_id', $recentes->pluck('id'))
             ->selectRaw('importacao_id, status, count(*) as total')->groupBy('importacao_id', 'status')->get()

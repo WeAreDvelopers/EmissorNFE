@@ -39,6 +39,27 @@ class DpsXsdTest extends TestCase
         $this->assertSame([], (new ValidadorXsd)->erros($xml));
     }
 
+    public function test_dps_de_producao_segue_o_leiaute_anterior_e_passa_no_xsd(): void
+    {
+        // E1235 em produção: a SEFIN de produção não aceita finNFSe em infDPS (leiaute 20261020 só na restrita)
+        foreach ([null, '115022000'] as $nbs) {
+            $xml = (new DpsBuilder)->montar($this->nota(['codigo_nbs' => $nbs], ['ambiente' => 1]));
+
+            $this->assertStringNotContainsString('finNFSe', $xml);
+            $this->assertMatchesRegularExpression('/<cTribNac>[^<]+<\/cTribNac>(<cTribMun>\d+<\/cTribMun>)?<xDescServ>/', $xml);
+            $this->assertSame([], (new ValidadorXsd)->erros($xml), 'nbs '.($nbs ?? 'sem'));
+        }
+    }
+
+    public function test_dps_de_producao_vai_no_leiaute_novo_quando_configurado(): void
+    {
+        config(['nfse.leiaute_novo.1' => true]);
+        $xml = (new DpsBuilder)->montar($this->nota([], ['ambiente' => 1]));
+
+        $this->assertStringContainsString('<finNFSe>0</finNFSe>', $xml);
+        $this->assertSame([], (new ValidadorXsd)->erros($xml));
+    }
+
     public function test_dps_com_nbs_passa_no_xsd(): void
     {
         $xml = (new DpsBuilder)->montar($this->nota(['codigo_nbs' => '115022000']));
