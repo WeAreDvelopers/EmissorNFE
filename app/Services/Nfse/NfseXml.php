@@ -60,7 +60,9 @@ class NfseXml
             'numero'          => $this->v('nNFSe'),
             'processada_em'   => $this->v('dhProc'),
             'situacao_codigo' => $this->v('cStat'),
-            'ambiente'        => (int) ($this->v('ambGer') ?? $this->v($dps.'tpAmb') ?? 2),
+            // Ambiente = tpAmb da DPS (1 produção | 2 homologação). NÃO é o ambGer: esse diz quem gerou a nota
+            // (1 = prefeitura, 2 = Sefin Nacional) e vale 2 também em produção.
+            'ambiente'        => (int) ($this->v($dps.'tpAmb') ?? 2),
             'municipio_emissor'   => $this->v('xLocEmi'),
             'local_prestacao'     => $this->v('xLocPrestacao'),
             'municipio_incidencia' => $this->v('xLocIncid'),

@@ -89,6 +89,17 @@ class DocumentosNfseTest extends TestCase
         $this->assertSame('26', $d['dps']['numero']);
     }
 
+    public function test_ambiente_vem_do_tpamb_da_dps_e_nao_do_ambger(): void
+    {
+        // Produção gerada pela Sefin Nacional: ambGer = 2 (quem gerou), tpAmb = 1 (ambiente). O DANFSE não pode sair como homologação.
+        $xml = $this->xml();
+        $this->assertStringContainsString('<ambGer>2</ambGer>', $xml);
+        $producao = str_replace('<tpAmb>2</tpAmb>', '<tpAmb>1</tpAmb>', $xml);
+
+        $this->assertSame(1, NfseXml::ler($producao)['ambiente']);
+        $this->assertSame(2, NfseXml::ler($xml)['ambiente']);
+    }
+
     public function test_xml_invalido_da_erro_claro(): void
     {
         $this->expectException(\RuntimeException::class);
