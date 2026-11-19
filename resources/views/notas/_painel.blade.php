@@ -43,10 +43,13 @@
     @can('emitir')
         @if ($ex['reenviar_direto'])
             <form method="POST" action="{{ route('notas.reenviar', $nota) }}" data-ajax data-ajax-texto="Reenviando…" data-fechar-painel>@csrf<button class="btn btn-primary btn-lg w-full">Reenviar</button></form>
-        @elseif ($ex['campos'])
+        @endif
+        @if ($ex['reenviar_direto'] || $ex['campos'])
+            @php $camposForm = $ex['reenviar_direto'] ? array_keys(\App\Support\ExplicacaoErro::ROTULOS) : $ex['campos']; @endphp
+            @if ($ex['reenviar_direto'])<details class="rounded-lg border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-semibold text-ink-800 min-h-8">Editar dados da nota</summary><div class="pt-3">@endif
             <form method="POST" action="{{ route('notas.corrigir', $nota) }}" class="space-y-4" data-ajax data-ajax-texto="{{ $nota->importacao?->status === 'conferir' ? 'Salvando…' : 'Reenviando…' }}" data-fechar-painel>
                 @csrf @method('PATCH')
-                @foreach ($ex['campos'] as $campo)
+                @foreach ($camposForm as $campo)
                     @php $valorAtual = match ($campo) {
                         'data_competencia' => $nota->data_competencia?->format('d/m/Y'),
                         'valor' => $nota->valor > 0 ? number_format($nota->valor, 2, ',', '') : '',
@@ -80,6 +83,7 @@
                 @endcobranca
                 <button class="btn btn-primary btn-lg w-full">{{ $nota->importacao?->status === 'conferir' ? 'Confirmar correção' : 'Corrigir e reenviar' }}</button>
             </form>
+            @if ($ex['reenviar_direto'])</div></details>@endif
         @endif
     @endcan
 

@@ -161,23 +161,27 @@ class NotaController extends Controller
         return $request->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
     }
 
-    /** Tira uma linha do lote antes do envio (nunca gastou crédito). */
+    /** Exclui uma nota que nunca foi emitida (linha de lote ainda não enviado, nota recusada ou que não saiu). */
     public function excluir(Request $request, NotaFiscal $nota)
     {
         $this->authorize('emitir');
 
-        $importacao = $nota->importacao;
-        abort_unless($importacao && $importacao->status === 'conferir'
-            && in_array($nota->status, [StatusNota::Invalida, StatusNota::Rascunho], true), 422, 'Só dá para excluir linhas de um lote que ainda não foi enviado.');
+        abort_unless($nota->podeExcluir(), 422, $nota->status === StatusNota::Falhou && $nota->numero_dps && ! $nota->conciliada_em
+            ? 'Antes de excluir, use "Conferir" para ver se a SEFIN não chegou a autorizar esta nota.'
+            : 'Só dá para excluir notas que nunca foram emitidas. Nota emitida ou cancelada fica guardada.');
 
-        $linha = $nota->linha_planilha;
-        Auditoria::registrar('nota_excluida', "Linha {$linha} excluída do lote {$importacao->arquivo_nome}.", ['cliente' => $nota->tomador_rotulo, 'valor' => (string) $nota->valor, 'lote' => $importacao->id]);
+        $importacao = $nota->importacao;
+        $nome = $nota->origem_rotulo;
+        Auditoria::registrar('nota_excluida', "{$nome} excluída ({$nota->tomador_rotulo}, R$ ".number_format((float) $nota->valor, 2, ',', '.').')'.($importacao ? " do lote {$importacao->arquivo_nome}" : '').'.',
+            ['cliente' => $nota->tomador_rotulo, 'valor' => (string) $nota->valor, 'status' => $nota->status->value, 'numero_dps' => $nota->numero_dps] + ($importacao ? ['lote' => $importacao->id] : []));
         DB::table('movimentos_credito')->where('nota_fiscal_id', $nota->id)->update(['nota_fiscal_id' => null]);
         $nota->delete();
-        $importacao->update(['total_linhas' => $importacao->notas()->count()]);
-        $importacao->recontarInvalidas();
+        if ($importacao) {
+            $importacao->update(['total_linhas' => $importacao->notas()->count()]);
+            $importacao->recontarInvalidas();
+        }
 
-        $msg = "Linha {$linha} excluída do lote.";
+        $msg = "{$nome} excluída.";
 
         return $request->expectsJson() ? response()->json(['ok' => true, 'mensagem' => $msg]) : back()->with('ok', $msg);
     }

@@ -53,6 +53,24 @@ class NotaFiscal extends Model
         return $ambiente ? $q->where($q->getModel()->qualifyColumn('ambiente'), $ambiente) : $q;
     }
 
+    /**
+     * Dá para excluir? Só nota que nunca foi emitida (emitida e cancelada existem de verdade na SEFIN e ficam guardadas).
+     * "Não saiu" com número de DPS só depois de "Conferir": a SEFIN pode ter autorizado e a resposta se perdeu.
+     */
+    public function podeExcluir(): bool
+    {
+        if (! in_array($this->status, [StatusNota::Invalida, StatusNota::Rascunho, StatusNota::Rejeitada, StatusNota::Falhou], true)) {
+            return false;
+        }
+
+        // Rascunho de lote já enviado pode estar no meio do envio: só sai enquanto o lote aguarda conferência
+        if ($this->status === StatusNota::Rascunho && $this->importacao && $this->importacao->status !== 'conferir') {
+            return false;
+        }
+
+        return ! ($this->status === StatusNota::Falhou && $this->numero_dps && ! $this->conciliada_em);
+    }
+
     public function importacao(): BelongsTo
     {
         return $this->belongsTo(Importacao::class);

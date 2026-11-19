@@ -82,8 +82,20 @@
                         @endif
                         @if ($n->status->grupo() === 'atencao')
                             {{-- Nota de importação abre no lote; nota emitida à mão (sem lote) abre no painel "Precisa de você" --}}
-                            <a href="{{ $n->importacao ? route('importacoes.show', [$n->importacao, 'filtro' => 'atencao', 'nota' => $n->id]) : route('pendencias', ['nota' => $n->id]) }}" class="block font-semibold text-brand-600 no-underline hover:underline" title="Ver o erro e corrigir a nota">{{ $n->status === \App\Enums\StatusNota::Falhou ? 'Ver erro e reenviar →' : 'Ver erro e corrigir →' }}</a>
+                            <a href="{{ $n->importacao ? route('importacoes.show', [$n->importacao, 'filtro' => 'atencao', 'nota' => $n->id]) : route('pendencias', ['nota' => $n->id]) }}" class="block font-semibold text-brand-600 no-underline hover:underline" title="Ver o erro e corrigir a nota">{{ $n->status === \App\Enums\StatusNota::Falhou ? 'Ver erro, editar ou reenviar →' : 'Ver erro e corrigir →' }}</a>
                         @endif
+                        @can('emitir')
+                            @if ($n->podeExcluir())
+                                <form method="POST" action="{{ route('notas.excluir', $n) }}" x-data="{ c: false }" class="mt-1">
+                                    @csrf @method('DELETE')
+                                    <button type="button" x-show="!c" @click="c = true" class="btn-excluir" title="Tirar esta nota da lista (ela nunca foi emitida)">Excluir</button>
+                                    <span x-show="c" x-cloak class="inline-flex items-center gap-1.5">
+                                        <button class="btn-excluir confirmando">Excluir mesmo?</button>
+                                        <button type="button" @click="c = false" class="btn-acao">Não</button>
+                                    </span>
+                                </form>
+                            @endif
+                        @endcan
                     </div>
                 </div>
             @empty
